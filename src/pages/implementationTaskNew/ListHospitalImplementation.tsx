@@ -142,7 +142,7 @@ function getStatusDisplay(row: ImplementationTaskListItem, health: string, healt
         bg: "bg-emerald-50 dark:bg-emerald-900/20",
         text: "text-emerald-700 dark:text-emerald-300",
         dot: "bg-emerald-500",
-        label: "Đã chuyển bảo trì",
+        label: "Đã chuyển sang bảo trì",
       };
     }
 
