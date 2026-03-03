@@ -69,7 +69,7 @@ const navItems: NavItem[] = [
     name: "Công việc",
     icon: <TaskIcon />,
     subItems: [
-      { name: "Công việc triển khai", path: "/implementation-tasks", pro: false },
+      // { name: "Công việc triển khai", path: "/implementation-tasks", pro: false },
       { name: "Công việc triển khai mới", path: "/implementation-tasks-new", pro: false },
       // { name: "Công việc DEV", path: "/dev-tasks", pro: false },
       { name: "Công việc bảo trì", path: "/maintenance-tasks", pro: false },
