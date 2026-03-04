@@ -8,6 +8,31 @@ import {
   PencilIcon,
 } from "../../../icons";
 import { searchUsersForDeployment } from "../../../api/api";
+import { getUserAccount } from "../../../api/auth.api";
+
+/** Get current logged-in user id from storage (for default assignee) */
+function getCurrentUserIdFromStorage(): number | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const userIdRaw = localStorage.getItem("userId") || sessionStorage.getItem("userId");
+    if (userIdRaw) {
+      const n = Number(userIdRaw);
+      if (Number.isFinite(n)) return n;
+    }
+    const userJson = localStorage.getItem("user") || sessionStorage.getItem("user");
+    if (userJson) {
+      const parsed = JSON.parse(userJson) as { id?: number | string; userId?: number | string };
+      const candidate = parsed.id ?? parsed.userId;
+      if (candidate != null) {
+        const n = Number(candidate);
+        if (Number.isFinite(n)) return n;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 export type AddTaskFormValues = {
   title: string;
@@ -190,7 +215,22 @@ export default function AddTaskPhaseImplementation({
       const { id: _id, ...rest } = editTask;
       setForm(rest);
     } else {
+      // Create mode: default assignee to current logged-in user
       setForm(initialValues);
+      const userId = getCurrentUserIdFromStorage();
+      if (userId != null) {
+        getUserAccount(userId)
+          .then((user) => {
+            const displayName = (user.fullname || user.username || `User #${userId}`).trim();
+            setForm((prev) => ({
+              ...prev,
+              assignee: displayName,
+              assigneeInitials: toInitials(displayName),
+              assigneeUserId: user.id,
+            }));
+          })
+          .catch(() => {});
+      }
     }
   }, [isOpen, editTask]);
 
