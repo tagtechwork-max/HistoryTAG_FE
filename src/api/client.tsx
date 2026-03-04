@@ -73,6 +73,15 @@ let isRedirecting = false;
 
 // ✅ Helper để check xem user có phải SUPERADMIN không
 function isSuperAdminUser(): boolean {
+  const isSuperAdminRole = (value: unknown): boolean => {
+    if (value == null) return false;
+    const raw = String(value).toUpperCase().trim();
+    const compact = raw
+      .replace(/^ROLE[_\s-]*/i, '')
+      .replace(/[_\s-]/g, '');
+    return compact === 'SUPERADMIN' || compact.includes('SUPERADMIN');
+  };
+
   if (typeof window === 'undefined') return false;
   try {
     // Check pathname
@@ -80,11 +89,11 @@ function isSuperAdminUser(): boolean {
     // Check roles from localStorage/sessionStorage
     const roles = JSON.parse(localStorage.getItem('roles') || sessionStorage.getItem('roles') || '[]');
     if (Array.isArray(roles) && roles.some((r: unknown) => {
-      if (typeof r === 'string') return r.toUpperCase() === 'SUPERADMIN';
+      if (typeof r === 'string') return isSuperAdminRole(r);
       if (r && typeof r === 'object') {
         const rr = r as Record<string, unknown>;
-        const rn = rr.roleName ?? rr.role_name ?? rr.role;
-        return typeof rn === 'string' && rn.toUpperCase() === 'SUPERADMIN';
+        const rn = rr.roleName ?? rr.role_name ?? rr.role ?? rr.name ?? rr.authority;
+        return isSuperAdminRole(rn);
       }
       return false;
     })) {
@@ -98,7 +107,15 @@ function isSuperAdminUser(): boolean {
         if (parts.length >= 2) {
           const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
           const maybeRoles = payload.roles || payload.authorities || payload.role || payload.realm_access && payload.realm_access.roles;
-          if (Array.isArray(maybeRoles) && maybeRoles.some((r: unknown) => typeof r === 'string' && (r as string).toUpperCase() === 'SUPERADMIN')) {
+          if (Array.isArray(maybeRoles) && maybeRoles.some((r: unknown) => {
+            if (typeof r === 'string') return isSuperAdminRole(r);
+            if (r && typeof r === 'object') {
+              const rr = r as Record<string, unknown>;
+              const rn = rr.roleName ?? rr.role_name ?? rr.role ?? rr.name ?? rr.authority;
+              return isSuperAdminRole(rn);
+            }
+            return false;
+          })) {
             return true;
           }
         }

@@ -10,8 +10,6 @@ import { getBusinesses } from "../../api/business.api";
 import api, { getAuthToken } from "../../api/client";
 import toast from "react-hot-toast";
 import Pagination from "../../components/common/Pagination";
-import TetCelebration from "../../components/common/TetCelebration";
-import FlowerFall from "../../components/common/FlowerFall";
 import CSKHReport from "../../components/reports/CSKHReport";
 
 
@@ -53,7 +51,7 @@ export default function SuperAdminHome() {
   const [businessLoading, setBusinessLoading] = useState(false);
   const [totalExpected, setTotalExpected] = useState<number | null>(null);
   const [totalActual, setTotalActual] = useState<number | null>(null);
-  const [totalCommission, setTotalCommission] = useState<number | null>(null);
+  const [, setTotalCommission] = useState<number | null>(null);
   const [conversionRate, setConversionRate] = useState<number | null>(null);
   type BusinessItem = { totalPrice: number; commission: number; status: string; date: Date | null };
   const [businessItems, setBusinessItems] = useState<BusinessItem[]>([]);
@@ -61,7 +59,7 @@ export default function SuperAdminHome() {
   const [aggLabels, setAggLabels] = useState<string[]>([]);
   const [aggExpected, setAggExpected] = useState<number[]>([]);
   const [aggActual, setAggActual] = useState<number[]>([]);
-  const [aggCommission, setAggCommission] = useState<number[]>([]);
+  const [, setAggCommission] = useState<number[]>([]);
   const [hwGroupBy, setHwGroupBy] = useState<'hardware' | 'type' | 'supplier'>('hardware');
   const [hwTopN, setHwTopN] = useState<number>(8);
   const [hwRows, setHwRows] = useState<Array<{ key: string; label: string; revenue: number; quantity: number; taskCount: number; impl: number; dev: number; maint: number; image?: string }>>([]);
@@ -105,8 +103,8 @@ export default function SuperAdminHome() {
         setAvailableTeams(teams);
         // cache for reuse in loadTeamProfile
         setAllUsersCache(uList as UserResponseDTO[]);
-      } catch (err) {
-        // console.warn('Failed to load users on mount', err);
+      } catch {
+        // Failed to load users on mount
         if (mounted) {
           setAvailableTeams([]);
           setAllUsersCache([]);
@@ -749,8 +747,8 @@ export default function SuperAdminHome() {
           if (!userMap.has(key)) userMap.set(key, u);
         });
         setProfileUsers(Array.from(userMap.values()));
-      } catch (err) {
-        // console.warn('load users for team failed', err);
+      } catch {
+        // load users for team failed
         setProfileUsers([]);
       }
 
@@ -2159,7 +2157,7 @@ export default function SuperAdminHome() {
       }
 
       // Add data rows with grouping
-      let currentRow = 3; // Start after title and header rows
+      let _currentRow = 3; // Start after title and header rows
       
       // Handle SALES team differently - export businesses
       if (isSalesSelected) {
@@ -2252,7 +2250,7 @@ export default function SuperAdminHome() {
             bizRow.getCell(8).alignment = { vertical: 'middle', horizontal: 'right' }; // Doanh thu - right aligned
             
             isFirstBusiness = false;
-            currentRow++;
+            _currentRow++;
           }
         }
       } else {
@@ -2318,7 +2316,7 @@ export default function SuperAdminHome() {
           taskRow.getCell(7).alignment = { vertical: 'middle', horizontal: 'center' };
           
           isFirstTask = false;
-          currentRow++;
+          _currentRow++;
         }
       }
       }

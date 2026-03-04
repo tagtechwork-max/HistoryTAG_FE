@@ -12,7 +12,6 @@ import {
   createImplementationTask,
   updateImplementationTask,
   deleteImplementationTask,
-  transferImplementationTask,
   type ImplementationTaskListItem,
   type MilestoneDto,
 } from "../../api/api";
@@ -209,7 +208,7 @@ function getRowDisplay(
     }
 
     if (rawPhaseLabel) {
-      if (/^giai đoạn\s*\d+[\.:]?$/i.test(rawPhaseLabel) && Number.isFinite(row.phase)) {
+      if (/^giai đoạn\s*\d+[.:]?$/i.test(rawPhaseLabel) && Number.isFinite(row.phase)) {
         const fallback = DEFAULT_PHASE_LABELS[row.phase];
         if (fallback) return `Giai đoạn ${row.phase}: ${fallback}`;
       }
@@ -487,10 +486,11 @@ export default function ListHospitalImplementation() {
     );
     if (selectedNames.size === 0) return rows;
 
+    // Include rows where selected person is PTC (Phụ trách chính) OR NTH (Người thực hiện)
     return rows.filter((row) => {
       const pmName = (row.pmName || "").toLowerCase().trim();
-      if (!pmName) return false;
-      return selectedNames.has(pmName);
+      const engineerName = (row.engineerName || "").toLowerCase().trim();
+      return selectedNames.has(pmName) || selectedNames.has(engineerName);
     });
   })();
 
@@ -568,7 +568,6 @@ export default function ListHospitalImplementation() {
     const group = pendingGroups.find((g) => (g.hospitalId ?? null) === (hospitalId ?? null));
     if (!group) return;
     for (const task of [...group.tasks]) {
-      // eslint-disable-next-line no-await-in-loop
       await handleAcceptTask(task.id, true);
     }
     await loadData();
@@ -577,7 +576,6 @@ export default function ListHospitalImplementation() {
   const handleAcceptAll = useCallback(async () => {
     for (const group of [...pendingGroups]) {
       for (const task of [...group.tasks]) {
-        // eslint-disable-next-line no-await-in-loop
         await handleAcceptTask(task.id, true);
       }
     }
@@ -1086,7 +1084,6 @@ export default function ListHospitalImplementation() {
                         : "";
                   const reportStatus = getDeadlineStatus(row.reportDeadline, display.health);
                   const goLiveStatus = getDeadlineStatus(row.goLiveDeadline, display.health);
-                  const isOverdue = display.health === "at_risk" || reportStatus === "overdue" || goLiveStatus === "overdue";
                   return (
                     <tr
                       key={row.id}
@@ -1318,6 +1315,7 @@ export default function ListHospitalImplementation() {
         }}
         onSubmit={handleHospitalSubmit}
         editHospital={editHospital}
+        forceDeadlineEdit={isSuperAdmin}
       />
 
       {/* Action menu portal - fixed position so it overlays and stays visible */}

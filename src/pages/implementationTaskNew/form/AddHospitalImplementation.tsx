@@ -10,6 +10,38 @@ import {
   searchHospitalsWithCode,
   searchUsersForDeployment,
 } from "../../../api/api";
+import { getUserAccount } from "../../../api/auth.api";
+import { isSuperAdmin } from "../../../utils/permission";
+
+/** Get current logged-in user id from storage (for default PM) */
+function getCurrentUserIdFromStorage(): number | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const userIdRaw =
+      localStorage.getItem("userId") ||
+      sessionStorage.getItem("userId");
+    if (userIdRaw) {
+      const n = Number(userIdRaw);
+      if (Number.isFinite(n)) return n;
+    }
+    const userJson =
+      localStorage.getItem("user") || sessionStorage.getItem("user");
+    if (userJson) {
+      const parsed = JSON.parse(userJson) as {
+        id?: number | string;
+        userId?: number | string;
+      };
+      const candidate = parsed.id ?? parsed.userId;
+      if (candidate != null) {
+        const n = Number(candidate);
+        if (Number.isFinite(n)) return n;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 /** Form state for create/edit - uses IDs per API spec §9 */
 export type HospitalFormValues = {
@@ -48,6 +80,8 @@ type AddHospitalImplementationProps = {
   onSubmit: (payload: HospitalFormSubmitPayload, taskId?: string) => void | Promise<void>;
   /** When set, form opens in edit mode with these values */
   editHospital?: EditHospitalInitial | null;
+  /** Force-enable deadline edit (used for superadmin route) */
+  forceDeadlineEdit?: boolean;
 };
 
 const initialValues: HospitalFormValues = {
@@ -211,13 +245,17 @@ export default function AddHospitalImplementation({
   onClose,
   onSubmit,
   editHospital = null,
+  forceDeadlineEdit = false,
 }: AddHospitalImplementationProps) {
   const [form, setForm] = useState<HospitalFormValues>(initialValues);
   const [isEntered, setIsEntered] = useState(false);
   const [hospitalOpt, setHospitalOpt] = useState<{ id: number; name: string } | null>(null);
   const [pmOpt, setPmOpt] = useState<{ id: number; name: string } | null>(null);
   const [engineerOpt, setEngineerOpt] = useState<{ id: number; name: string } | null>(null);
+  /** Only team lead (LEADER in teamRoles) can edit report deadline and go-live deadline */
+  const [canEditDeadlines, setCanEditDeadlines] = useState(false);
   const isEditMode = Boolean(editHospital?.id);
+  const canEditDeadlineFields = forceDeadlineEdit || canEditDeadlines;
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -240,6 +278,7 @@ export default function AddHospitalImplementation({
       setHospitalOpt(null);
       setPmOpt(null);
       setEngineerOpt(null);
+      setCanEditDeadlines(false);
     } else if (editHospital) {
       setForm({
         hospitalId: null,
@@ -261,11 +300,46 @@ export default function AddHospitalImplementation({
           ? { id: editHospital.engineerUserId, name: editHospital.engineerName ?? `User #${editHospital.engineerUserId}` }
           : null
       );
+      // Edit mode: fetch current user to know if team lead; Super Admin from JWT token
+      const userId = getCurrentUserIdFromStorage();
+      if (userId != null) {
+        getUserAccount(userId)
+          .then((user) => {
+            const isTeamLead =
+              user?.teamRoles && Object.values(user.teamRoles).some((r) => String(r).toUpperCase() === "LEADER");
+            setCanEditDeadlines(Boolean(isTeamLead || isSuperAdmin()));
+          })
+          .catch(() => setCanEditDeadlines(isSuperAdmin()));
+      } else {
+        setCanEditDeadlines(isSuperAdmin());
+      }
     } else {
-      setForm(initialValues);
+      // Create mode: default PM to current logged-in user (fetch fullname from API)
+      const userId = getCurrentUserIdFromStorage();
+      setForm({
+        ...initialValues,
+        pmUserId: userId ?? null,
+      });
       setHospitalOpt(null);
       setPmOpt(null);
       setEngineerOpt(null);
+      if (userId != null) {
+        getUserAccount(userId)
+          .then((user) => {
+            const displayName =
+              (user.fullname || user.username || `User #${userId}`).trim();
+            setPmOpt({ id: user.id, name: displayName });
+            const isTeamLead =
+              user?.teamRoles && Object.values(user.teamRoles).some((r) => String(r).toUpperCase() === "LEADER");
+            setCanEditDeadlines(Boolean(isTeamLead || isSuperAdmin()));
+          })
+          .catch(() => {
+            setPmOpt({ id: userId, name: `User #${userId}` });
+            setCanEditDeadlines(isSuperAdmin());
+          });
+      } else {
+        setCanEditDeadlines(isSuperAdmin());
+      }
     }
   }, [isOpen, editHospital]);
 
@@ -437,7 +511,14 @@ export default function AddHospitalImplementation({
                       type="date"
                       value={form.reportDeadline}
                       onChange={(e) => update({ reportDeadline: e.target.value })}
-                      className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                      disabled={!canEditDeadlineFields}
+                      readOnly={!canEditDeadlineFields}
+                      title={!canEditDeadlineFields ? "Chỉ trưởng team hoặc Super Admin mới được chỉnh sửa" : undefined}
+                      className={`w-full rounded-lg border py-2 pl-9 pr-3 text-sm dark:text-slate-100 ${
+                        canEditDeadlineFields
+                          ? "border-slate-200 bg-white text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800"
+                          : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400"
+                      }`}
                     />
                     <CalenderIcon className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
                   </div>
@@ -451,7 +532,14 @@ export default function AddHospitalImplementation({
                       type="date"
                       value={form.goLiveDeadline}
                       onChange={(e) => update({ goLiveDeadline: e.target.value })}
-                      className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                      disabled={!canEditDeadlineFields}
+                      readOnly={!canEditDeadlineFields}
+                      title={!canEditDeadlineFields ? "Chỉ trưởng team hoặc Super Admin mới được chỉnh sửa" : undefined}
+                      className={`w-full rounded-lg border py-2 pl-9 pr-3 text-sm dark:text-slate-100 ${
+                        canEditDeadlineFields
+                          ? "border-slate-200 bg-white text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800"
+                          : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400"
+                      }`}
                     />
                     <CalenderIcon className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
                   </div>
@@ -470,7 +558,7 @@ export default function AddHospitalImplementation({
               />
 
               <SearchableSelect
-                label="Kỹ sư / Người thực hiện"
+                label="Người hỗ trợ"
                 placeholder="Nhập tên kỹ sư để tìm…"
                 fetchOptions={searchUsersForDeployment}
                 value={engineerOpt}
