@@ -17,6 +17,9 @@ import CSKHReport from "../../components/reports/CSKHReport";
 
 // ExcelJS is heavy; import dynamically inside export functions to reduce initial bundle size
 
+// C1: Max page size for dashboard APIs (no more size:10000 - server-side filter + pagination)
+const PAGE_SIZE = 500;
+
 function StatCard({ title, value, icon, color }: { title: string; value: string | number; icon?: React.ReactNode; color?: string }) {
   let display: React.ReactNode = value;
   if (typeof value === 'string' && value.endsWith(' ₫')) {
@@ -91,7 +94,7 @@ export default function SuperAdminHome() {
     let mounted = true;
     (async () => {
       try {
-        const uResp = await getAllUsers({ page: 0, size: 10000 });
+        const uResp = await getAllUsers({ page: 0, size: PAGE_SIZE });
         const uList = Array.isArray(uResp) ? (uResp as UserResponseDTO[]) : (uResp as any)?.content ?? [];
         if (!mounted) return;
         // departments (for employee perf filter)
@@ -117,7 +120,7 @@ export default function SuperAdminHome() {
     let mounted = true;
     (async () => {
       try {
-        const hResp = await api.get('/api/v1/auth/hospitals', { params: { page: 0, size: 10000 } });
+        const hResp = await api.get('/api/v1/auth/hospitals', { params: { page: 0, size: PAGE_SIZE } });
         const hData = hResp.data;
         const hList: any[] = Array.isArray(hData) ? hData : hData?.content ?? [];
         const tMap = new Map<string, { transferred: boolean; transferredAt: string | null }>();
@@ -313,19 +316,29 @@ export default function SuperAdminHome() {
     }
   };
 
-  // load business report
+  // load business report (fetch all pages when total > PAGE_SIZE so totals are correct)
   const loadBusinessReport = useCallback(async (from?: string, to?: string, status?: string) => {
     setBusinessLoading(true);
     try {
       const toParam = (v?: string | null) => v ? (v.length === 16 ? `${v}:00` : v) : undefined;
-      const params: Record<string, unknown> = {};
+      const params: Record<string, unknown> = { size: PAGE_SIZE };
       if (from) params.startDateFrom = toParam(from);
       if (to) params.startDateTo = toParam(to);
       if (status && status.trim() !== '') params.status = status.trim();
-      // fetch all matching projects (backend paginates; request a large size to try to get all)
-      const res = await getBusinesses({ page: 0, size: 10000, ...params });
-      const content = Array.isArray(res?.content) ? res.content : (Array.isArray(res) ? res : []);
-      const itemsRaw = (content as Array<Record<string, unknown>>).map((c) => {
+
+      let allContent: unknown[] = [];
+      let page = 0;
+      const maxPages = 50; // safety: cap at 50 pages (e.g. 25k items)
+      while (page < maxPages) {
+        const res = await getBusinesses({ page, ...params });
+        const content = Array.isArray(res?.content) ? res.content : (Array.isArray(res) ? res : []);
+        allContent = allContent.concat(content);
+        const totalElements = (res as { totalElements?: number })?.totalElements ?? allContent.length;
+        if (content.length < PAGE_SIZE || allContent.length >= totalElements) break;
+        page += 1;
+      }
+
+      const itemsRaw = (allContent as Array<Record<string, unknown>>).map((c) => {
         const rawDate = c['startDate'] ?? c['completionDate'] ?? null;
         const parsedDate = rawDate ? new Date(String(rawDate)) : null;
         return {
@@ -475,17 +488,17 @@ export default function SuperAdminHome() {
   const loadHardwareReport = useCallback(async () => {
     setHwLoading(true);
     try {
-      const hwResp = await HardwareAPI.getAllHardware({ size: 10000 });
+      const hwResp = await HardwareAPI.getAllHardware({ size: PAGE_SIZE });
       const hardwareList = Array.isArray(hwResp) ? (hwResp as unknown[]) : ((hwResp as unknown) as { content?: unknown[] })?.content || [];
 
-      const busResp = await getBusinesses({ size: 10000 });
+      const busResp = await getBusinesses({ size: PAGE_SIZE });
       const businessList = Array.isArray(busResp) ? (busResp as unknown[]) : ((busResp as unknown) as { content?: unknown[] })?.content || [];
 
-      const implResp = await getAllImplementationTasks({ size: 10000 });
+      const implResp = await getAllImplementationTasks({ size: PAGE_SIZE });
       const implList = Array.isArray(implResp) ? (implResp as unknown[]) : ((implResp as unknown) as { content?: unknown[] })?.content || [];
-      const devResp = await getAllDevTasks({ size: 10000 });
+      const devResp = await getAllDevTasks({ size: PAGE_SIZE });
       const devList = Array.isArray(devResp) ? (devResp as unknown[]) : ((devResp as unknown) as { content?: unknown[] })?.content || [];
-      const maintResp = await getAllMaintenanceTasks({ size: 10000 });
+      const maintResp = await getAllMaintenanceTasks({ size: PAGE_SIZE });
       const maintList = Array.isArray(maintResp) ? (maintResp as unknown[]) : ((maintResp as unknown) as { content?: unknown[] })?.content || [];
 
       const hwById: Record<string, Record<string, unknown>> = {};
@@ -712,7 +725,7 @@ export default function SuperAdminHome() {
         if (allUsersCache.length > 0) {
           allUsers = allUsersCache;
         } else {
-          const uResp = await getAllUsers({ page: 0, size: 10000 });
+          const uResp = await getAllUsers({ page: 0, size: PAGE_SIZE });
           const uList = Array.isArray(uResp) ? (uResp as UserResponseDTO[]) : (uResp as any)?.content ?? [];
           allUsers = uList as UserResponseDTO[];
           setAllUsersCache(allUsers);
@@ -817,10 +830,10 @@ export default function SuperAdminHome() {
       // tasks - use server-side filtering (including team filter to reduce N+1 backend overhead)
       const filterParams: any = {
         page: 0,
-        size: 10000, // Load all filtered results
+        size: PAGE_SIZE,
         sortBy: 'startDate',
         sortDir: 'desc',
-        team: team, // ← KEY OPTIMIZATION: let backend filter by team → much fewer records → much fewer N+1 queries
+        team: team, // Server-side team filter
       };
       // Add date range filter if set (convert to ISO format for backend)
       if (profileDateFrom) {
@@ -854,24 +867,24 @@ export default function SuperAdminHome() {
 
       // Promise 1: Dev tasks
       const devPromise = !isSalesLikeTeam && (!isStrictSingleTeam || isDevOnlyTeam)
-        ? getAllDevTasks({ page: 0, size: 10000 }).catch((err: any) => { console.warn('dev load', err); return null; })
+        ? getAllDevTasks({ page: 0, size: PAGE_SIZE }).catch((err: any) => { console.warn('dev load', err); return null; })
         : Promise.resolve(null);
       parallelPromises.push(devPromise);
 
       // Promise 2: Maintenance tasks
       const maintPromise = !isSalesLikeTeam && (!isStrictSingleTeam || isMaintOnlyTeam)
-        ? getAllMaintenanceTasks({ page: 0, size: 10000 }).catch((err: any) => { console.warn('maint load', err); return null; })
+        ? getAllMaintenanceTasks({ page: 0, size: PAGE_SIZE }).catch((err: any) => { console.warn('maint load', err); return null; })
         : Promise.resolve(null);
       parallelPromises.push(maintPromise);
 
       // Promise 3: Businesses
       const bizPromise = isSalesLikeTeam
-        ? getBusinesses({ page: 0, size: 10000 } as any).catch((err: any) => { console.warn('business load', err); return null; })
+        ? getBusinesses({ page: 0, size: PAGE_SIZE } as any).catch((err: any) => { console.warn('business load', err); return null; })
         : Promise.resolve(null);
       parallelPromises.push(bizPromise);
 
       // Promise 4: Hardware
-      const hwPromise = HardwareAPI.getAllHardware({ size: 10000 } as any).catch((err: any) => { console.warn('hardware load', err); return null; });
+      const hwPromise = HardwareAPI.getAllHardware({ size: PAGE_SIZE } as any).catch((err: any) => { console.warn('hardware load', err); return null; });
       parallelPromises.push(hwPromise);
 
       // Hospital transfer map is now pre-fetched on mount (background effect) → no need to fetch here

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if command -v npm >/dev/null 2>&1; then
+  npm run lint
+  npm run test -- --run --passWithNoTests
+else
+  echo "npm not found. Cannot run frontend pre-commit checks."
+  exit 1
+fi
