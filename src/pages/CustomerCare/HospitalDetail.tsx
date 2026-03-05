@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import PageMeta from "../../components/common/PageMeta";
 import { CareActivityFormData, convertActivityFormDataToDTO, convertActivityFormDataToUpdateDTO } from "./Form/AddCareActivityForm";
 import { addCustomerCareActivity, getCustomerCareById, getAllCustomerCareActivities, updateCustomerCareActivity, deleteCustomerCareActivity, CustomerCareResponseDTO } from "../../api/customerCare.api";
@@ -264,9 +264,26 @@ const tabs: Tab[] = [
 ];
 
 // ===================== COMPONENT =====================
+interface FromListState {
+  fromList?: {
+    page?: number;
+    search?: string;
+    tab?: string;
+    size?: number;
+    priority?: string;
+    customerType?: string;
+    pic?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  };
+  basePath?: string;
+}
+
 export default function HospitalDetailView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const listState = location.state as FromListState | null;
   const [activeTab, setActiveTab] = useState<TabKey>("thong_tin_chung");
   const contractRowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
   
@@ -613,7 +630,24 @@ export default function HospitalDetailView() {
   };
 
   const handleBack = () => {
-    navigate(-1);
+    const from = listState?.fromList;
+    const basePath = listState?.basePath ?? (location.pathname.startsWith("/superadmin") ? "/superadmin" : "/admin");
+    if (from) {
+      const params = new URLSearchParams();
+      if (from.page != null) params.set("page", String(from.page));
+      if (from.search) params.set("search", from.search);
+      if (from.tab) params.set("tab", from.tab);
+      if (from.size != null) params.set("size", String(from.size));
+      if (from.priority) params.set("priority", from.priority);
+      if (from.customerType) params.set("customerType", from.customerType);
+      if (from.pic) params.set("pic", from.pic);
+      if (from.dateFrom) params.set("dateFrom", from.dateFrom);
+      if (from.dateTo) params.set("dateTo", from.dateTo);
+      const qs = params.toString();
+      navigate(`${basePath}/hospital-care${qs ? `?${qs}` : ""}`);
+    } else {
+      navigate(-1);
+    }
   };
 
   // Memoize callbacks để tránh infinite loop
@@ -828,7 +862,7 @@ export default function HospitalDetailView() {
           <div className="text-center">
             <p className="text-red-500 dark:text-red-400 mb-4">{error || "Không tìm thấy thông tin bệnh viện"}</p>
             <button
-              onClick={() => navigate(-1)}
+              onClick={handleBack}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition"
             >
               Quay lại
