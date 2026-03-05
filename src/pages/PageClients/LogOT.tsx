@@ -287,6 +287,8 @@ export default function LogOT() {
 
   const handleSubmitApproval = async () => {
     if (!requestId || submitting || isReadOnly) return;
+    const confirmed = window.confirm("Bạn có muốn gửi phê duyệt OT tháng này?");
+    if (!confirmed) return;
     setSubmitting(true);
     try {
       const response = await submitAdminOTRequest(requestId);
