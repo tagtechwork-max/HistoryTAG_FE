@@ -1040,6 +1040,9 @@ export default function ListHospitalImplementation() {
             <table className="w-full min-w-[900px] divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-800/50">
                 <tr>
+                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 w-14">
+                    STT
+                  </th>
                   <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 min-w-[200px]">
                     Tên bệnh viện
                   </th>
@@ -1062,7 +1065,7 @@ export default function ListHospitalImplementation() {
                     Tiến độ
                   </th>
                   <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 min-w-[140px]">
-                    PTC & NTH
+                    PTC & NHT
                   </th>
                   <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 min-w-[120px]">
                     Tình trạng
@@ -1073,22 +1076,27 @@ export default function ListHospitalImplementation() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {displayedRows.map((row) => {
+                {displayedRows.map((row, index) => {
                   const display = getRowDisplay(row, milestonesByTaskId[String(row.id)]);
+                  const stt = (currentPage - 1) * itemsPerPage + index + 1;
                   const statusDisplay = getStatusDisplay(row, display.health, display.healthLabel);
-                  const borderClass =
-                    display.health === "at_risk"
-                      ? "border-l-4 border-l-red-500"
-                      : display.health === "blocked"
-                        ? "border-l-4 border-l-amber-500"
+                  const healthLower = (display.health ?? "").toLowerCase();
+                  const rowHighlightClass =
+                    healthLower === "blocked"
+                      ? "bg-red-100 dark:bg-red-900/30 shadow-[inset_0_0_0_2px_#ef4444]"
+                      : healthLower === "at_risk"
+                        ? "bg-red-50/80 dark:bg-red-900/20 shadow-[inset_4px_0_0_0_#ef4444]"
                         : "";
                   const reportStatus = getDeadlineStatus(row.reportDeadline, display.health);
                   const goLiveStatus = getDeadlineStatus(row.goLiveDeadline, display.health);
                   return (
                     <tr
                       key={row.id}
-                      className={`transition hover:bg-gray-50 dark:hover:bg-gray-800/30 ${borderClass}`}
+                      className={`transition hover:opacity-90 ${rowHighlightClass || "hover:bg-gray-50 dark:hover:bg-gray-800/30"}`}
                     >
+                      <td className={`whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 ${healthLower === "blocked" ? "border-l-4 border-l-red-600 bg-red-100 dark:bg-red-900/30" : ""} ${healthLower === "at_risk" ? "border-l-4 border-l-red-500 bg-red-50 dark:bg-red-900/20" : ""}`}>
+                        {stt}
+                      </td>
                       <td className="min-w-[200px] max-w-[320px] px-4 py-3">
                         <Link
                           to={
@@ -1183,7 +1191,7 @@ export default function ListHospitalImplementation() {
                             PTC: {orDash(row.pmName)}
                           </p>
                           <p className="truncate max-w-[140px] text-xs text-gray-500 dark:text-gray-400" title={row.engineerName ?? ""}>
-                            NTH: {orDash(row.engineerName)}
+                            NHT: {orDash(row.engineerName)}
                           </p>
                         </div>
                       </td>

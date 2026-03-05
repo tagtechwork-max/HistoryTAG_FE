@@ -182,7 +182,7 @@ export default function DeploymentDashboard() {
             Thống kê triển khai
           </h1>
           <div className="flex flex-wrap items-center gap-3">
-            <div className="relative flex items-center rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+            {/* <div className="relative flex items-center rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
               <CalenderIcon className="ml-3 size-4 text-gray-500 dark:text-gray-400" />
               <select
                 value={monthValue}
@@ -196,7 +196,7 @@ export default function DeploymentDashboard() {
                 ))}
               </select>
               <ChevronDownIcon className="pointer-events-none absolute right-2 size-4 text-gray-500" />
-            </div>
+            </div> */}
             <div className="relative flex items-center rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
               <UserIcon className="ml-3 size-4 text-gray-500 dark:text-gray-400" />
               <select
@@ -204,7 +204,7 @@ export default function DeploymentDashboard() {
                 onChange={(e) => setPmFilter(e.target.value)}
                 className="w-full min-w-[140px] appearance-none bg-transparent py-2 pl-9 pr-8 text-sm text-gray-700 dark:text-gray-200"
               >
-                <option value="all">Tất cả PM</option>
+                <option value="all">Tất cả phụ trách</option>
                 {MOCK_PM_WORKLOAD.map((pm) => (
                   <option key={pm.pmUserId} value={String(pm.pmUserId)}>
                     {pm.pmName}
@@ -213,7 +213,7 @@ export default function DeploymentDashboard() {
               </select>
               <ChevronDownIcon className="pointer-events-none absolute right-2 size-4 text-gray-500" />
             </div>
-            <div className="relative flex items-center rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+            {/* <div className="relative flex items-center rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
               <HorizontaLDots className="ml-3 size-4 text-gray-500 dark:text-gray-400" />
               <select
                 value={statusFilter}
@@ -227,12 +227,12 @@ export default function DeploymentDashboard() {
                 <option value="completed">Hoàn thành</option>
               </select>
               <ChevronDownIcon className="pointer-events-none absolute right-2 size-4 text-gray-500" />
-            </div>
+            </div> */}
           </div>
         </div>
 
         {/* Section 1 — KPI Cards */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 md:gap-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 md:gap-6">
           <KPIStatCard
             icon={<TaskIcon />}
             label="Tổng bệnh viện đang triển khai"
@@ -247,13 +247,13 @@ export default function DeploymentDashboard() {
             trend="+4"
             variant="normal"
           />
-          <KPIStatCard
+          {/* <KPIStatCard
             icon={<AlertIcon />}
             label="Có rủi ro / Bị chặn"
             value={atRiskBlocked}
             trend="+2"
             variant="warning"
-          />
+          /> */}
           <KPIStatCard
             icon={<CalenderIcon />}
             label="Sắp đến hạn báo cáo"

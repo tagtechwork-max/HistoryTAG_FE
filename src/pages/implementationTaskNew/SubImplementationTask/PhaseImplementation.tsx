@@ -565,10 +565,15 @@ export default function PhaseImplementation() {
                     status === "completed"
                       ? `Hoàn thành bởi: ${assigneeText}`
                       : `Được giao cho: ${assigneeText}`;
+                  const isBlocked = status === "blocked";
                   return (
                     <li
                       key={workItem.id}
-                      className="flex items-start gap-2 rounded-lg border border-slate-100 p-2.5 dark:border-slate-700"
+                      className={`flex items-start gap-2 rounded-lg border p-2.5 ${
+                        isBlocked
+                          ? "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-900/25"
+                          : "border-slate-100 dark:border-slate-700"
+                      }`}
                     >
                       {cfg.icon === "alert" && (
                         <span className="mt-0.5 text-red-500">

@@ -628,7 +628,7 @@ export default function TaskPhaseImplementation() {
                   <div className={`flex flex-1 flex-col gap-2 rounded-lg p-1.5 ${cfg?.bg ?? ""}`}>
                     {col.tasks.map((w) => {
                       const task = toTaskCard(w);
-                      const isBlockedCard = col.id === "blocked" && task.impact === "critical";
+                      const isBlockedCard = col.id === "blocked";
                       const isCompletedCard = task.impact === "done";
                       const isCriticalTodo = col.id === "todo" && task.impact === "critical";
                       return (
@@ -636,12 +636,10 @@ export default function TaskPhaseImplementation() {
                         key={task.id}
                         draggable
                         onDragStart={(e) => { e.dataTransfer.setData("text/plain", task.id); e.dataTransfer.effectAllowed = "move"; }}
-                        className={`group flex flex-col gap-2 rounded-lg bg-white p-3 shadow-sm transition-shadow hover:shadow-md dark:bg-slate-800 cursor-grab active:cursor-grabbing ${
+                        className={`group flex flex-col gap-2 rounded-lg p-3 shadow-sm transition-shadow hover:shadow-md cursor-grab active:cursor-grabbing ${
                           isBlockedCard
-                            ? "border-2 border-red-500"
-                            : isCriticalTodo
-                              ? "border-l-4 border-red-500 border-slate-200 dark:border-slate-700"
-                              : "border border-slate-200 dark:border-slate-700"
+                            ? "border-2 border-red-500 bg-red-50 dark:bg-red-900/25"
+                            : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 " + (isCriticalTodo ? "border-l-4 border-l-red-500" : "")
                         } ${isCompletedCard ? "opacity-75 hover:opacity-100" : ""}`}
                       >
                         {/* Card header */}
@@ -654,6 +652,11 @@ export default function TaskPhaseImplementation() {
                                   : "border border-red-200 bg-red-100 text-red-600 dark:border-red-800 dark:bg-red-900/30 dark:text-red-400"
                               }`}>
                                 Khẩn cấp
+                              </span>
+                            )}
+                            {isBlockedCard && task.impact !== "critical" && (
+                              <span className="rounded border border-red-300 bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-tight text-red-700 dark:border-red-700 dark:bg-red-900/40 dark:text-red-300">
+                                Đang chặn
                               </span>
                             )}
                             {task.impact === "normal" && (
