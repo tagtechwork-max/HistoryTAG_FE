@@ -153,14 +153,19 @@ api.interceptors.request.use((config) => {
   }
   
   // ✅ Chặn superadmin API calls từ ADMIN users (chặn từ gốc)
+  // Ngoại lệ: /api/v1/superadmin/ot/** cho phép ADMIN gọi (server sẽ kiểm tra canApproveOt)
   const isSuperAdminAPI = config.url?.includes('/api/v1/superadmin/');
+  const isOTApprovalAPI = config.url?.includes('/api/v1/superadmin/ot');
   if (isSuperAdminAPI && !isSuperAdminUser()) {
-    // Reject ngay từ client, không gửi request đến server
-    return Promise.reject({
-      message: 'FORBIDDEN_CLIENT: ADMIN users cannot access SUPERADMIN endpoints',
-      config,
-      silent: true, // Flag để không log error spam
-    }) as any;
+    if (isOTApprovalAPI) {
+      // Allow ADMIN to call OT approval APIs; backend will check canApproveOt
+    } else {
+      return Promise.reject({
+        message: 'FORBIDDEN_CLIENT: ADMIN users cannot access SUPERADMIN endpoints',
+        config,
+        silent: true,
+      }) as any;
+    }
   }
 
   // ✅ Không gửi token cho các API public (đăng nhập, đăng ký, quên mật khẩu, etc.)

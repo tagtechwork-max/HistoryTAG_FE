@@ -23,6 +23,7 @@ import AppLayout from "./layout/AppLayout";
 import SuperAdminLayout from "./layout/SuperAdminLayout";
 import { ScrollToTop } from "./components/common/ScrollToTop";
 import Home from "./pages/Dashboard/Home";
+import DeploymentDashboard from "./pages/Dashboard/DeploymentDashboard";
 import ImplementationTasksPage from "./pages/PageClients/implementation-tasks";
 import DevTasksPage from "./pages/PageClients/dev-tasks";
 import MaintenanceTasksPage from "./pages/PageClients/maintenance-tasks";
@@ -146,6 +147,7 @@ export default function App() {
           {/* Super Admin Layout - Protected */}
           <Route element={<ProtectedRoute><SuperAdminLayout /></ProtectedRoute>}>
             <Route path="/superadmin/home" element={<SuperAdminHome />} />
+            <Route path="/superadmin/deployment-dashboard" element={<DeploymentDashboard />} />
             <Route path="/superadmin/users" element={<SuperAdminUsers />} />
             <Route path="/superadmin/hospitals" element={<Hospitals />} />
             <Route path="/superadmin/his-systems" element={<HisSystemPage />} />
@@ -177,12 +179,15 @@ export default function App() {
           {/* Dashboard Layout - Protected */}
           <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
             <Route path="/home" element={<Home />} />
+            <Route path="/deployment-dashboard" element={<DeploymentDashboard />} />
 
             {/* Admin - Business department */}
             <Route path="/admin/business" element={<BusinessPage />} />
             <Route path="/admin/maintain-contracts" element={<MaintainContractsPage />} />
             <Route path="/admin/hospital-care" element={<HospitalCareList />} />
             <Route path="/admin/hospital-care/:id" element={<HospitalDetail />} />
+            {/* OT approval: same page as SuperAdmin, allowed for ADMIN when granted */}
+            <Route path="/admin/log-ot-approval" element={<SuperAdminLogOT />} />
 
             {/* Others Page */}
             <Route path="/admin/profile" element={<UserProfiles />} />

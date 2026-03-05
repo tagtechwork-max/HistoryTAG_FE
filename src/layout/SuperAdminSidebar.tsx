@@ -31,7 +31,10 @@ const navItems: NavItem[] = [
   {
     icon: <GridIcon />,
     name: "Dashboard",
-    path: "/superadmin/home",
+    subItems: [
+      { name: "Báo cáo tổng quan", path: "/superadmin/home", pro: false },
+      { name: "Thống kê triển khai", path: "/superadmin/deployment-dashboard", pro: false },
+    ],
   },
   {
     icon: <CalenderIcon />,

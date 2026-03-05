@@ -44,6 +44,9 @@ type UserForm = {
   department: "" | (typeof DEPARTMENT_OPTIONS)[number];
   workStatus?: string;
   workStatusDate?: string;
+
+  /** When true, this user (ADMIN) can approve OT. Only shown when globalRole is ADMIN. */
+  canApproveOt: boolean;
 };
 
 const ROLE_OPTIONS = ["USER", "ADMIN", "SUPERADMIN"]; // Match backend RoleType enum
@@ -172,6 +175,7 @@ export default function SuperAdminUsers() {
     department: "",
     workStatus: "",
     workStatusDate: "",
+    canApproveOt: false,
   });
 
   // business projects selection removed from UI; keep backend support if needed later
@@ -218,6 +222,7 @@ export default function SuperAdminUsers() {
       department: "",
       workStatus: "",
       workStatusDate: "",
+      canApproveOt: false,
     });
   }
 
@@ -267,6 +272,7 @@ export default function SuperAdminUsers() {
 
       department: (user.department ?? "") as UserForm["department"],
       workStatus: user.workStatus || "",
+      canApproveOt: !!user.canApproveOt,
       workStatusDate: user.workStatusDate || "",
     });
   }
@@ -358,6 +364,7 @@ export default function SuperAdminUsers() {
       department: "",
       workStatus: "ACTIVE", // Mặc định là "Đang làm việc"
       workStatusDate: "",
+      canApproveOt: false,
     });
     setOpen(true);
   }
@@ -525,6 +532,7 @@ export default function SuperAdminUsers() {
           // Backward compatibility fallback
           team: form.selectedTeams.length > 0 ? (form.selectedTeams[0] as any) : undefined,
           roles: [form.globalRole],
+          canApproveOt: form.globalRole === "ADMIN" ? form.canApproveOt : false,
         };
         await updateUser(editing!.id, payload);
         toast.success("Cập nhật thành công");
@@ -960,7 +968,12 @@ export default function SuperAdminUsers() {
                                   checked={checked}
                                   onChange={(e) => {
                                     if (e.target.checked) {
-                                      setForm((s) => ({ ...s, globalRole: role as UserForm['globalRole'] }));
+                                      const newRole = role as UserForm['globalRole'];
+                                      setForm((s) => ({
+                                        ...s,
+                                        globalRole: newRole,
+                                        canApproveOt: newRole === "ADMIN" ? s.canApproveOt : false,
+                                      }));
                                     }
                                   }}
                                   disabled={isViewing}
@@ -973,6 +986,22 @@ export default function SuperAdminUsers() {
                       </div>
                       {!isViewing && <p className="mt-1 text-xs text-gray-500">Chọn một vai trò toàn cục</p>}
                     </div>
+
+                    {form.globalRole === "ADMIN" && (
+                      <div className="rounded-lg border border-gray-300 p-3">
+                        <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 text-blue-600 rounded"
+                            checked={form.canApproveOt}
+                            onChange={(e) => setForm((s) => ({ ...s, canApproveOt: e.target.checked }))}
+                            disabled={isViewing}
+                          />
+                          <span>Được phép duyệt OT</span>
+                        </label>
+                        {!isViewing && <p className="mt-1 text-xs text-gray-500">Cho phép người dùng này vào trang Phê duyệt OT và duyệt/từ chối phiếu tăng ca</p>}
+                      </div>
+                    )}
 
                     <div>
                       <label className="mb-1 block text-sm font-medium">Phòng ban <span className="text-red-500">*</span></label>

@@ -31,7 +31,10 @@ const navItems: NavItem[] = [
   {
     icon: <GridIcon />,
     name: "Dashboard",
-    subItems: [{ name: "Báo cáo tổng quan", path: "/home", pro: false }],
+    subItems: [
+      { name: "Báo cáo tổng quan", path: "/home", pro: false },
+      { name: "Thống kê triển khai", path: "/deployment-dashboard", pro: false },
+    ],
   },
   {
     icon: <CalenderIcon />,
@@ -87,6 +90,11 @@ const navItems: NavItem[] = [
     name: "Log OT",
     icon: <TimeIcon />,
     path: "/log-ot",
+  },
+  {
+    name: "Phê duyệt OT",
+    icon: <TimeIcon />,
+    path: "/admin/log-ot-approval",
   },
 ];
 
@@ -171,6 +179,17 @@ const AppSidebar: React.FC = () => {
     return false;
   });
 
+  const isAdmin = roles.some((role: any) => {
+    if (typeof role === "string") {
+      return role.toUpperCase() === "ADMIN";
+    }
+    if (role && typeof role === "object") {
+      const roleName = role.roleName || role.role_name || role.role;
+      return typeof roleName === "string" && roleName.toUpperCase() === "ADMIN";
+    }
+    return false;
+  });
+
   const userTeam = userInfo?.team ? String(userInfo.team).toUpperCase() : null;
   const userDepartment = userInfo?.department ? String(userInfo.department).toUpperCase() : null;
 
@@ -221,6 +240,12 @@ const AppSidebar: React.FC = () => {
       // Chỉ hiển thị menu "Phòng CSKH" cho user thuộc phòng kinh doanh hoặc SuperAdmin
       if (item.name === "Phòng CSKH") {
         return isSuperAdmin || userDepartment === "BUSINESS";
+      }
+      // Show "Phê duyệt OT" only for users who can approve: SuperAdmin always, or Admin with canApproveOt
+      if (item.name === "Phê duyệt OT") {
+        if (isSuperAdmin) return true;
+        if (isAdmin && userInfo?.canApproveOt === true) return true;
+        return false;
       }
       return true;
     })

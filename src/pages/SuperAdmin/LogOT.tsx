@@ -212,9 +212,19 @@ export default function SuperAdminLogOT() {
       setRequests(items as OTRequest[]);
       setTotalItems(total);
       setTotalPages(Math.max(1, pages));
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Load OT data failed", error);
-      toast.error("Không tải được danh sách OT. Kiểm tra kết nối hoặc quyền truy cập.");
+      const err = error as {
+        message?: string;
+        response?: { data?: { message?: string; data?: string }; status?: number };
+      };
+      const msg =
+        err?.response?.data?.message ??
+        (typeof err?.response?.data?.data === "string" ? err.response.data.data : null) ??
+        err?.message ??
+        (error instanceof Error ? error.message : null) ??
+        "Không tải được danh sách OT. Kiểm tra kết nối hoặc quyền truy cập.";
+      toast.error(msg);
       setRequests([]);
       setTotalItems(0);
       setTotalPages(1);
