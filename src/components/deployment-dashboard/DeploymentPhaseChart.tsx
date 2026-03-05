@@ -61,7 +61,7 @@ export default function DeploymentPhaseChart({ data }: DeploymentPhaseChartProps
                 borderRadius: "8px",
                 border: "1px solid var(--gray-200)",
               }}
-              formatter={(value: number) => [`${value} dự án`, "Số dự án"]}
+              formatter={(value: number | undefined) => [`${value ?? 0} dự án`, "Số dự án"]}
               labelFormatter={(_, payload) =>
                 payload?.[0]?.payload?.fullLabel ?? ""
               }

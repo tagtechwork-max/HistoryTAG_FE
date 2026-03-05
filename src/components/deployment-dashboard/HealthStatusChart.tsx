@@ -58,9 +58,10 @@ export default function HealthStatusChart({
               {total} {totalLabel}
             </text>
             <Tooltip
-              formatter={(value: number, name, props) => {
-                const pct = total > 0 ? ((value / total) * 100).toFixed(0) : 0;
-                return [`${value} (${pct}%)`, props.payload?.label ?? name];
+              formatter={(value: number | undefined, name, props) => {
+                const v = value ?? 0;
+                const pct = total > 0 ? ((v / total) * 100).toFixed(0) : 0;
+                return [`${v} (${pct}%)`, props.payload?.label ?? name];
               }}
             />
             <Legend
