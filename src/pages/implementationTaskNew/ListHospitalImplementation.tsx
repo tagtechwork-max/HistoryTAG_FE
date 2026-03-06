@@ -1052,6 +1052,9 @@ export default function ListHospitalImplementation() {
             <table className="w-full min-w-[900px] divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-800/50">
                 <tr>
+                  <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 w-14">
+                    STT
+                  </th>
                   <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 min-w-[200px]">
                     Tên bệnh viện
                   </th>
@@ -1085,7 +1088,7 @@ export default function ListHospitalImplementation() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {displayedRows.map((row) => {
+                {displayedRows.map((row, index) => {
                   const display = getRowDisplay(row, milestonesByTaskId[String(row.id)]);
                   const statusDisplay = getStatusDisplay(row, display.health, display.healthLabel);
                   const borderClass =
@@ -1101,6 +1104,9 @@ export default function ListHospitalImplementation() {
                       key={row.id}
                       className={`transition hover:bg-gray-50 dark:hover:bg-gray-800/30 ${borderClass}`}
                     >
+                      <td className="whitespace-nowrap px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">
+                        {startItem + index}
+                      </td>
                       <td className="min-w-[200px] max-w-[320px] px-4 py-3">
                         <Link
                           to={
