@@ -182,7 +182,7 @@ export default function DeploymentDashboard() {
             Thống kê triển khai
           </h1>
           <div className="flex flex-wrap items-center gap-3">
-            {/* <div className="relative flex items-center rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+            <div className="relative flex items-center rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
               <CalenderIcon className="ml-3 size-4 text-gray-500 dark:text-gray-400" />
               <select
                 value={monthValue}
@@ -196,7 +196,7 @@ export default function DeploymentDashboard() {
                 ))}
               </select>
               <ChevronDownIcon className="pointer-events-none absolute right-2 size-4 text-gray-500" />
-            </div> */}
+            </div>
             <div className="relative flex items-center rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
               <UserIcon className="ml-3 size-4 text-gray-500 dark:text-gray-400" />
               <select

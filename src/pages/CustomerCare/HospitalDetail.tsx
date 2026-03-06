@@ -341,6 +341,8 @@ export default function HospitalDetailView() {
               outcome: act.outcome || undefined,
               nextAction: act.nextAction || undefined,
               nextFollowUpDate: act.nextFollowUpDate || undefined,
+              createdByName: act.performedBy?.fullname ?? undefined,
+              createdBy: (act.performedBy?.fullname || act.performedBy?.email) ?? undefined,
             };
           });
         } catch (err) {
@@ -716,6 +718,8 @@ export default function HospitalDetailView() {
           outcome: act.outcome || undefined,
           nextAction: act.nextAction || undefined,
           nextFollowUpDate: act.nextFollowUpDate || undefined,
+          createdByName: act.performedBy?.fullname ?? undefined,
+          createdBy: (act.performedBy?.fullname || act.performedBy?.email) ?? undefined,
         };
       });
       
@@ -771,6 +775,8 @@ export default function HospitalDetailView() {
           outcome: act.outcome || undefined,
           nextAction: act.nextAction || undefined,
           nextFollowUpDate: act.nextFollowUpDate || undefined,
+          createdByName: act.performedBy?.fullname ?? undefined,
+          createdBy: (act.performedBy?.fullname || act.performedBy?.email) ?? undefined,
         };
       });
       
@@ -827,6 +833,8 @@ export default function HospitalDetailView() {
           outcome: act.outcome || undefined,
           nextAction: act.nextAction || undefined,
           nextFollowUpDate: act.nextFollowUpDate || undefined,
+          createdByName: act.performedBy?.fullname ?? undefined,
+          createdBy: (act.performedBy?.fullname || act.performedBy?.email) ?? undefined,
         };
       });
       

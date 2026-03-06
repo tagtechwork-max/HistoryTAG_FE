@@ -12,6 +12,7 @@ import {
   createImplementationTask,
   updateImplementationTask,
   deleteImplementationTask,
+  fetchCareStatusSummary,
   type ImplementationTaskListItem,
   type MilestoneDto,
 } from "../../api/api";
@@ -283,6 +284,11 @@ export default function ListHospitalImplementation() {
   const [pendingOpen, setPendingOpen] = useState(false);
   const [pendingGroups, setPendingGroups] = useState<PendingGroup[]>([]);
   const [loadingPending, setLoadingPending] = useState(false);
+  /** Summary of hospitals/kiosks in "chăm sóc" status from business (phòng kinh doanh). Filled by API when available. */
+  const [careStatusSummary, setCareStatusSummary] = useState<{ hospitalCount: number; kioskCount: number }>({
+    hospitalCount: 0,
+    kioskCount: 0,
+  });
   const pendingCountRef = useRef<number>(0);
   /** Milestones per task id for current page – used to derive progress/health when all 4 phases completed */
   const [milestonesByTaskId, setMilestonesByTaskId] = useState<Record<string, MilestoneDto[]>>({});
@@ -611,6 +617,12 @@ export default function ListHospitalImplementation() {
     });
     return () => unsubscribe();
   }, [fetchPendingGroups, loadData, subscribe]);
+
+  // Load care-status summary from business (phòng kinh doanh) when pending modal opens
+  useEffect(() => {
+    if (!pendingOpen) return;
+    void fetchCareStatusSummary().then(setCareStatusSummary);
+  }, [pendingOpen]);
 
   // Fetch milestones for current page items to derive progress/health when all 4 phases completed
   useEffect(() => {
@@ -1040,9 +1052,6 @@ export default function ListHospitalImplementation() {
             <table className="w-full min-w-[900px] divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-800/50">
                 <tr>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 w-14">
-                    STT
-                  </th>
                   <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 min-w-[200px]">
                     Tên bệnh viện
                   </th>
@@ -1076,27 +1085,22 @@ export default function ListHospitalImplementation() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {displayedRows.map((row, index) => {
+                {displayedRows.map((row) => {
                   const display = getRowDisplay(row, milestonesByTaskId[String(row.id)]);
-                  const stt = (currentPage - 1) * itemsPerPage + index + 1;
                   const statusDisplay = getStatusDisplay(row, display.health, display.healthLabel);
-                  const healthLower = (display.health ?? "").toLowerCase();
-                  const rowHighlightClass =
-                    healthLower === "blocked"
-                      ? "bg-red-100 dark:bg-red-900/30 shadow-[inset_0_0_0_2px_#ef4444]"
-                      : healthLower === "at_risk"
-                        ? "bg-red-50/80 dark:bg-red-900/20 shadow-[inset_4px_0_0_0_#ef4444]"
+                  const borderClass =
+                    display.health === "at_risk"
+                      ? "border-l-4 border-l-red-500"
+                      : display.health === "blocked"
+                        ? "border-l-4 border-l-amber-500"
                         : "";
                   const reportStatus = getDeadlineStatus(row.reportDeadline, display.health);
                   const goLiveStatus = getDeadlineStatus(row.goLiveDeadline, display.health);
                   return (
                     <tr
                       key={row.id}
-                      className={`transition hover:opacity-90 ${rowHighlightClass || "hover:bg-gray-50 dark:hover:bg-gray-800/30"}`}
+                      className={`transition hover:bg-gray-50 dark:hover:bg-gray-800/30 ${borderClass}`}
                     >
-                      <td className={`whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 ${healthLower === "blocked" ? "border-l-4 border-l-red-600 bg-red-100 dark:bg-red-900/30" : ""} ${healthLower === "at_risk" ? "border-l-4 border-l-red-500 bg-red-50 dark:bg-red-900/20" : ""}`}>
-                        {stt}
-                      </td>
                       <td className="min-w-[200px] max-w-[320px] px-4 py-3">
                         <Link
                           to={
@@ -1401,9 +1405,14 @@ export default function ListHospitalImplementation() {
         >
           <div className="max-h-[80vh] w-full max-w-4xl overflow-auto rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-900">
             <div className="flex items-center justify-between border-b px-4 py-3 dark:border-gray-700">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                📨 Chờ tiếp nhận - Tiếp nhận từ Sales
-              </h3>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  📨 Chờ tiếp nhận - Tiếp nhận từ Sales
+                </h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Có {careStatusSummary.hospitalCount} viện {careStatusSummary.kioskCount} kiosk đang ở trạng thái chăm sóc (dữ liệu từ phòng kinh doanh).
+                </p>
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"

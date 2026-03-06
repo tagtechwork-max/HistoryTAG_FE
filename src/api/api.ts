@@ -494,3 +494,37 @@ export async function addWorkItemComment(id: string | number, content: string) {
   return data;
 }
 
+/** Care-status summary from business (phòng kinh doanh): hospitals and total kiosks in "chăm sóc" status */
+export type CareStatusSummary = {
+  hospitalCount: number;
+  kioskCount: number;
+};
+
+/** Fetch summary for "Có X viện Y kiosk đang ở trạng thái chăm sóc" (data from business/sales) */
+export async function fetchCareStatusSummary(): Promise<CareStatusSummary> {
+  try {
+    const res = await api.get<CareStatusSummary | { data?: CareStatusSummary }>(
+      "/api/v1/admin/business/care-status-summary"
+    );
+    // Axios puts response body in res.data; backend may wrap in { data: { ... } }
+    const body = (res as { data?: unknown }).data;
+    const payload =
+      body &&
+      typeof body === "object" &&
+      "data" in body &&
+      (body as { data?: unknown }).data &&
+      typeof (body as { data?: unknown }).data === "object"
+        ? (body as { data: CareStatusSummary }).data
+        : (body as CareStatusSummary);
+    const hospitalCount = Math.max(0, Number(payload?.hospitalCount) ?? 0);
+    const kioskCount = Math.max(0, Number(payload?.kioskCount) ?? 0);
+    console.log("[fetchCareStatusSummary] body:", body, "->", { hospitalCount, kioskCount });
+    return { hospitalCount, kioskCount };
+  } catch (err) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    const url = (err as { config?: { url?: string } })?.config?.url;
+    console.warn("[fetchCareStatusSummary] failed:", status ?? "network/other", url ?? "", err);
+    return { hospitalCount: 0, kioskCount: 0 };
+  }
+}
+
