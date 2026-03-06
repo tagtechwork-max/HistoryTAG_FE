@@ -152,7 +152,7 @@ const statusConfig: Record<string, { label: string; bgColor: string; textColor: 
 
 export default function MaintainContractsPage() {
   // Determine if current user can perform write actions
-  // Allow SUPERADMIN or team CUSTOMER_SERVICE
+  // Allow SUPERADMIN or team CUSTOMER_SERVICE/SALES
   const canEdit = (() => {
     try {
       // Check SUPERADMIN role
@@ -165,12 +165,19 @@ export default function MaintainContractsPage() {
         if (isSuperAdmin) return true;
       }
 
-      // Check CUSTOMER_SERVICE team from user object
+      // Check CUSTOMER_SERVICE/SALES team from user object
       const userStr = localStorage.getItem("user") || sessionStorage.getItem("user");
       if (userStr) {
         const user = JSON.parse(userStr);
-        const userTeam = user?.team ? String(user.team).toUpperCase() : null;
-        if (userTeam === "CUSTOMER_SERVICE") return true;
+        const directTeam = user?.team ? String(user.team).toUpperCase() : null;
+        const activeTeam = user?.activeTeam ? String(user.activeTeam).toUpperCase() : null;
+        const teamList = Array.isArray(user?.teams)
+          ? user.teams.map((t: unknown) => String(t).toUpperCase())
+          : [];
+        const allowedTeams = [directTeam, activeTeam, ...teamList];
+        if (allowedTeams.includes("CUSTOMER_SERVICE") || allowedTeams.includes("SALES")) {
+          return true;
+        }
       }
 
       return false;
