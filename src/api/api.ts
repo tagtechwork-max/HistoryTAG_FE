@@ -489,6 +489,7 @@ export async function deleteWorkItem(id: string | number) {
   await api.delete(`/api/v1/work-items/${id}`);
 }
 
+/** POST a comment; returns the created comment object. Use as onSendComment return value for realtime display in ViewTaskPhaseImplementation. */
 export async function addWorkItemComment(id: string | number, content: string) {
   const { data } = await api.post(`/api/v1/work-items/${id}/comments`, { content });
   return data;

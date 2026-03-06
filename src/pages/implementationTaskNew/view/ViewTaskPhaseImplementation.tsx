@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CloseIcon,
   FileIcon,
@@ -11,6 +11,8 @@ import {
   PaperPlaneIcon,
   PencilIcon,
 } from "../../../icons";
+import { addWorkItemComment } from "../../../api/api";
+import { useWebSocket } from "../../../contexts/WebSocketContext";
 
 export type TaskDetail = {
   id: string;
@@ -48,14 +50,29 @@ export type CommentItem = {
   createdAt: string;
 };
 
+/** Optional: when onSendComment resolves with a CommentItem, it is shown immediately (realtime) */
 type ViewTaskPhaseImplementationProps = {
   task: TaskDetail | null;
   activityLog?: ActivityLogItem[];
   comments?: CommentItem[];
-  onSendComment?: (content: string) => void | Promise<void>;
+  /** If provided, parent handles send (return CommentItem for realtime). If not provided and task.id exists, component calls addWorkItemComment itself. */
+  onSendComment?: (content: string) => void | Promise<void | CommentItem>;
   isOpen: boolean;
   onClose: () => void;
 };
+
+/** Map API or WebSocket payload to CommentItem */
+function toCommentItem(payload: unknown): CommentItem | null {
+  if (!payload || typeof payload !== "object") return null;
+  const o = payload as Record<string, unknown>;
+  const id = o.id != null ? Number(o.id) : NaN;
+  if (!Number.isFinite(id)) return null;
+  const content = typeof o.content === "string" ? o.content : "";
+  const user = typeof o.user === "string" ? o.user : "";
+  const userInitials = typeof o.userInitials === "string" ? o.userInitials : (user.slice(0, 2).toUpperCase() || "?");
+  const createdAt = typeof o.createdAt === "string" ? o.createdAt : new Date().toISOString();
+  return { id, user, userInitials, content, createdAt };
+}
 
 const STATUS_OPTIONS = [
   { value: "todo", label: "Cần làm" },
@@ -140,9 +157,118 @@ export default function ViewTaskPhaseImplementation({
   isOpen,
   onClose,
 }: ViewTaskPhaseImplementationProps) {
+  const { subscribe, publish } = useWebSocket();
   const [commentText, setCommentText] = useState("");
   const [isEntered, setIsEntered] = useState(false);
   const [sending, setSending] = useState(false);
+  /** Comments added this session or received via WebSocket so they show immediately (realtime) */
+  const [localComments, setLocalComments] = useState<CommentItem[]>([]);
+  const commentsEndRef = useRef<HTMLDivElement>(null);
+  const prevLocalCommentCountRef = useRef(0);
+  /** Typing indicator: show when someone else is typing (from WebSocket) */
+  const [typingFrom, setTypingFrom] = useState<{ userId: number | string; userDisplayName: string } | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingPublishDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingHeartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const currentUser = useMemo(() => {
+    try {
+      const raw = localStorage.getItem("user") || sessionStorage.getItem("user");
+      const id = localStorage.getItem("userId") || sessionStorage.getItem("userId");
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        const uid = Number(parsed?.id ?? parsed?.userId ?? id);
+        const name = [parsed?.fullname, parsed?.fullName, parsed?.username, parsed?.name].find((x) => typeof x === "string" && x.trim()) as string | undefined;
+        return { userId: Number.isFinite(uid) ? uid : id ?? 0, userDisplayName: (name ?? "").trim() || "Bạn" };
+      }
+      return { userId: id ? Number(id) : 0, userDisplayName: "Bạn" };
+    } catch {
+      return { userId: 0, userDisplayName: "Bạn" };
+    }
+  }, []);
+
+  // Clear local comments when panel closes or task changes
+  useEffect(() => {
+    if (!isOpen || !task) {
+      setLocalComments([]);
+      prevLocalCommentCountRef.current = 0;
+      setTypingFrom(null);
+    }
+  }, [isOpen, task?.id]);
+
+  // WebSocket: subscribe to work-item comments topic for realtime (backend/Rabbit can publish to this topic when a comment is created)
+  useEffect(() => {
+    if (!isOpen || !task?.id) return;
+    const topic = `/topic/work-items/${task.id}/comments`;
+    const unsubscribe = subscribe(topic, (payload: unknown) => {
+      const item = toCommentItem(payload);
+      if (item) {
+        setLocalComments((prev) => [...prev, item]);
+        // If a comment arrived from the user currently typing, hide typing immediately.
+        setTypingFrom((prev) => {
+          if (!prev) return prev;
+          return prev.userDisplayName === item.user ? null : prev;
+        });
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+          typingTimeoutRef.current = null;
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, [isOpen, task?.id, subscribe]);
+
+  // WebSocket: subscribe to typing topic; show "X đang soạn tin..." and auto-hide after 3s without update
+  useEffect(() => {
+    if (!isOpen || !task?.id) return;
+    const topic = `/topic/work-items/${task.id}/typing`;
+    const unsubscribe = subscribe(topic, (payload: unknown) => {
+      const o = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : null;
+      if (!o) return;
+      const userId = o.userId ?? o.user_id;
+      const userDisplayName = typeof o.userDisplayName === "string" ? o.userDisplayName : (typeof o.userName === "string" ? o.userName : "Ai đó");
+      const typing = o.typing !== false;
+      const isMe = String(userId) === String(currentUser.userId);
+      if (isMe) return;
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      if (typing) {
+        setTypingFrom({ userId: userId as number | string, userDisplayName: userDisplayName || "Ai đó" });
+        typingTimeoutRef.current = setTimeout(() => {
+          setTypingFrom(null);
+          typingTimeoutRef.current = null;
+        }, 6000);
+      } else {
+        setTypingFrom(null);
+      }
+    });
+    return () => {
+      unsubscribe();
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    };
+  }, [isOpen, task?.id, subscribe, currentUser.userId]);
+
+  /** Merge props comments with locally added ones; dedupe by id, sort by createdAt */
+  const displayComments = useMemo(() => {
+    const byId = new Map<number, CommentItem>();
+    comments.forEach((c) => byId.set(c.id, c));
+    localComments.forEach((c) => {
+      if (!byId.has(c.id)) byId.set(c.id, c);
+    });
+    return Array.from(byId.values()).sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+  }, [comments, localComments]);
+
+  // Scroll to the latest comment when a new one is added (send or WebSocket), not when opening with existing comments
+  useEffect(() => {
+    const localCount = localComments.length;
+    if (localCount > prevLocalCommentCountRef.current && localCount > 0) {
+      prevLocalCommentCountRef.current = localCount;
+      commentsEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    } else {
+      prevLocalCommentCountRef.current = localCount;
+    }
+  }, [localComments.length]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -170,16 +296,96 @@ export default function ViewTaskPhaseImplementation({
     return () => cancelAnimationFrame(id);
   }, [isOpen]);
 
+  const sendTyping = useCallback(
+    (typing: boolean) => {
+      if (!task?.id) return;
+      // Backend should accept /app/work-items/{id}/typing and broadcast to /topic/work-items/{id}/typing
+      const dest = `/app/work-items/${task.id}/typing`;
+      publish(dest, {
+        userId: currentUser.userId,
+        userDisplayName: currentUser.userDisplayName,
+        typing,
+      });
+    },
+    [task?.id, publish, currentUser.userId, currentUser.userDisplayName]
+  );
+
+  const stopTypingSignal = useCallback(() => {
+    if (typingPublishDebounceRef.current) {
+      clearTimeout(typingPublishDebounceRef.current);
+      typingPublishDebounceRef.current = null;
+    }
+    if (typingHeartbeatRef.current) {
+      clearInterval(typingHeartbeatRef.current);
+      typingHeartbeatRef.current = null;
+    }
+    sendTyping(false);
+  }, [sendTyping]);
+
+  const ensureTypingHeartbeat = useCallback(() => {
+    if (typingHeartbeatRef.current) return;
+    // Keep remote indicator alive while user still typing.
+    typingHeartbeatRef.current = setInterval(() => {
+      sendTyping(true);
+    }, 1800);
+  }, [sendTyping]);
+
+  const handleCommentChange = (value: string) => {
+    setCommentText(value);
+    if (typingPublishDebounceRef.current) {
+      clearTimeout(typingPublishDebounceRef.current);
+      typingPublishDebounceRef.current = null;
+    }
+    if (!task?.id) return;
+    if (value.trim()) {
+      typingPublishDebounceRef.current = setTimeout(() => {
+        sendTyping(true);
+        ensureTypingHeartbeat();
+      }, 250);
+    } else {
+      stopTypingSignal();
+    }
+  };
+
+  const handleCommentBlur = () => {
+    stopTypingSignal();
+  };
+
   const handleSendComment = async () => {
-    if (!commentText.trim() || !onSendComment) return;
+    const content = commentText.trim();
+    const canSendViaParent = Boolean(onSendComment);
+    const canSendViaApi = Boolean(task?.id) && !canSendViaParent;
+    if (!content || (!canSendViaParent && !canSendViaApi)) return;
+    stopTypingSignal();
     setSending(true);
     try {
-      await onSendComment(commentText.trim());
+      let created: CommentItem | null = null;
+      if (onSendComment) {
+        const result = await onSendComment(content);
+        created = toCommentItem(result ?? undefined);
+      } else if (task?.id) {
+        const result = await addWorkItemComment(task.id, content);
+        created = toCommentItem(result);
+      }
       setCommentText("");
+      if (created) setLocalComments((prev) => [...prev, created!]);
     } finally {
       setSending(false);
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (typingPublishDebounceRef.current) {
+        clearTimeout(typingPublishDebounceRef.current);
+        typingPublishDebounceRef.current = null;
+      }
+      if (typingHeartbeatRef.current) {
+        clearInterval(typingHeartbeatRef.current);
+        typingHeartbeatRef.current = null;
+      }
+    };
+  }, []);
 
   if (!task) return null;
 
@@ -362,17 +568,19 @@ export default function ViewTaskPhaseImplementation({
             </section>
           )}
 
-          {/* Activity log */}
+          {/* Activity log (exclude comment-added; comments are shown in the section below) */}
           <section className="mb-5">
             <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100">
               <TimeIcon className="size-4 text-slate-500" />
               Nhật ký hoạt động
             </h3>
             <div className="space-y-3">
-              {activityLog.length === 0 ? (
-                <p className="text-xs text-slate-500 dark:text-slate-400">Chưa có hoạt động</p>
-              ) : (
-                activityLog.map((activity) => {
+              {(() => {
+                const filteredLog = activityLog.filter((a) => a.eventType !== "COMMENT_ADDED");
+                return filteredLog.length === 0 ? (
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Chưa có hoạt động</p>
+                ) : (
+                  filteredLog.map((activity) => {
                   const msg = formatActivityMessage(activity);
                   return (
                     <div
@@ -396,7 +604,8 @@ export default function ViewTaskPhaseImplementation({
                     </div>
                   );
                 })
-              )}
+                );
+              })()}
             </div>
           </section>
 
@@ -404,13 +613,13 @@ export default function ViewTaskPhaseImplementation({
           <section>
             <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100">
               <ChatIcon className="size-4 text-slate-500" />
-              Bình luận ({comments.length})
+              Bình luận ({displayComments.length})
             </h3>
             <div className="space-y-3">
-              {comments.length === 0 ? (
+              {displayComments.length === 0 ? (
                 <p className="text-xs text-slate-500 dark:text-slate-400">Chưa có bình luận</p>
               ) : (
-                comments.map((comment) => (
+                displayComments.map((comment) => (
                   <div key={comment.id} className="flex gap-3 rounded-lg border border-slate-100 p-3 dark:border-slate-800">
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-600 dark:bg-slate-600 dark:text-slate-200">
                       {comment.userInitials}
@@ -431,7 +640,15 @@ export default function ViewTaskPhaseImplementation({
                   </div>
                 ))
               )}
+            <div ref={commentsEndRef} aria-hidden="true" />
             </div>
+
+            {/* Typing indicator: show when someone else is typing (like Zalo) */}
+            {typingFrom && (
+              <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400 italic">
+                {typingFrom.userDisplayName} đang soạn tin…
+              </p>
+            )}
 
             {/* Comment input - modern interface */}
             
@@ -457,7 +674,8 @@ export default function ViewTaskPhaseImplementation({
               <div className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
                 <textarea
                   value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
+                  onChange={(e) => handleCommentChange(e.target.value)}
+                  onBlur={handleCommentBlur}
                   placeholder="Viết bình luận..."
                   rows={2}
                   className="w-full resize-none bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none dark:text-slate-100 dark:placeholder:text-slate-500"
@@ -466,7 +684,7 @@ export default function ViewTaskPhaseImplementation({
                   <button
                     type="button"
                     onClick={handleSendComment}
-                    disabled={!commentText.trim() || !onSendComment || sending}
+                    disabled={!commentText.trim() || (!onSendComment && !task?.id) || sending}
                     className="rounded-lg bg-blue-600 p-1.5 text-white transition hover:bg-blue-600/90 disabled:opacity-40 disabled:cursor-not-allowed dark:bg-blue-500 dark:hover:bg-blue-500/90"
                     title="Gửi"
                   >
