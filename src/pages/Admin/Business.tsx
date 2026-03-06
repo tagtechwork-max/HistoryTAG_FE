@@ -3090,10 +3090,10 @@ const BusinessPage: React.FC = () => {
                                   >
                                     <EyeIcon style={{ width: 18, height: 18 }} />
                                   </button>
-                                  {canManage && !(it.status === 'CONTRACTED' && !isSuperAdmin) && (
+                                  {canManage && (
                                     <button
                                       title="Sửa"
-                                      onClick={() => { if (it.status === 'CONTRACTED' && !isSuperAdmin) { setToast({ message: 'Không thể sửa dự án đã ký hợp đồng', type: 'error' }); return; } openEditModal(it.id); }}
+                                      onClick={() => openEditModal(it.id)}
                                       className="rounded-lg p-1.5 text-gray-500 transition hover:bg-yellow-100 hover:text-orange-600"
                                     >
                                       <PencilIcon style={{ width: 18, height: 18 }} />
