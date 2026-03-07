@@ -272,7 +272,7 @@ export default function ListHospitalImplementation() {
   const [status, setStatus] = useState("all");
   const [deadline, setDeadline] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<DOMRect | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -293,7 +293,7 @@ export default function ListHospitalImplementation() {
   /** Milestones per task id for current page – used to derive progress/health when all 4 phases completed */
   const [milestonesByTaskId, setMilestonesByTaskId] = useState<Record<string, MilestoneDto[]>>({});
   const dropdownRef = useRef<HTMLDivElement | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
 
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
   const startItem = totalItems > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0;
@@ -657,11 +657,11 @@ export default function ListHospitalImplementation() {
 
   const MENU_HEIGHT = 180;
 
-  const openMenu = useCallback((rowId: string, button: HTMLButtonElement) => {
-    const rect = button.getBoundingClientRect();
+  const openMenu = useCallback((rowId: string, anchor: HTMLElement) => {
+    const rect = anchor.getBoundingClientRect();
     setMenuAnchor(rect);
     setOpenMenuId(rowId);
-    triggerRef.current = button;
+    triggerRef.current = anchor;
   }, []);
 
   const closeMenu = useCallback(() => {
@@ -670,7 +670,7 @@ export default function ListHospitalImplementation() {
     triggerRef.current = null;
   }, []);
 
-  // Close dropdown when clicking outside (portal renders in body, so check both trigger and dropdown)
+  // Close dropdown when clicking outside (triggerRef can be button or row element)
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node;
@@ -1082,7 +1082,7 @@ export default function ListHospitalImplementation() {
                   <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 min-w-[120px]">
                     Tình trạng
                   </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 w-12">
+                  <th className="sticky right-0 z-10 whitespace-nowrap border-l border-gray-200 bg-gray-50 px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400 dark:shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.3)] w-12">
                     Thao tác
                   </th>
                 </tr>
@@ -1102,7 +1102,7 @@ export default function ListHospitalImplementation() {
                   return (
                     <tr
                       key={row.id}
-                      className={`transition hover:bg-gray-50 dark:hover:bg-gray-800/30 ${borderClass}`}
+                      className={`group transition hover:bg-gray-50 dark:hover:bg-gray-800/30 ${borderClass}`}
                     >
                       <td className="whitespace-nowrap px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">
                         {startItem + index}
@@ -1215,7 +1215,7 @@ export default function ListHospitalImplementation() {
                           {statusDisplay.label}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right">
+                      <td className="sticky right-0 z-10 whitespace-nowrap border-l border-gray-200 bg-white px-4 py-3 text-right shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] transition-colors group-hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.3)] dark:group-hover:bg-gray-800/30">
                         <button
                           type="button"
                           onClick={(e) => {
@@ -1348,18 +1348,20 @@ export default function ListHospitalImplementation() {
             const top = openUpward
               ? menuAnchor.top - MENU_HEIGHT - 4
               : menuAnchor.bottom + 4;
+            // Clamp horizontal position so menu stays visible (row can be wide when table scrolls)
+            const menuWidth = 180;
+            const padding = 8;
+            const preferredLeft = menuAnchor.right - menuWidth;
             const left = Math.max(
-              8,
-              Math.min(
-                menuAnchor.right - 180,
-                window.innerWidth - 180 - 8
-              )
+              padding,
+              Math.min(preferredLeft, window.innerWidth - menuWidth - padding)
             );
+            const clampedTop = Math.max(padding, Math.min(top, window.innerHeight - MENU_HEIGHT - padding));
             return (
               <div
                 ref={dropdownRef}
                 className="fixed z-[9999] min-w-[180px] rounded-lg border border-gray-200 bg-white py-1 shadow-xl dark:border-gray-700 dark:bg-gray-800"
-                style={{ top, left }}
+                style={{ top: clampedTop, left }}
                 role="menu"
               >
                 <button
