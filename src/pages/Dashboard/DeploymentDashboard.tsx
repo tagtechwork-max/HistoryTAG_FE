@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import PageMeta from "../../components/common/PageMeta";
 import {
@@ -26,10 +26,15 @@ import {
 import {
   fetchDeploymentDashboardSummary,
   fetchDeploymentDashboardByPhase,
+  fetchDeploymentDashboardByHealth,
+  fetchDeploymentDashboardAttention,
   fetchUserDeploymentOptions,
   type DeploymentDashboardSummary,
   type UserDeploymentOption,
 } from "../../api/api";
+import { getUserAccount } from "../../api/auth.api";
+import { useAuth } from "../../contexts/AuthContext";
+import { isSuperAdmin as checkSuperAdmin } from "../../utils/permission";
 
 // ---------------------------------------------------------------------------
 // Mock data (replace with API later where not yet implemented)
@@ -70,6 +75,14 @@ const MOCK_HEALTH_DATA: HealthCount[] = [
   { status: "at_risk", label: "Rủi ro", count: 5, color: "#f59e0b" },
   { status: "blocked", label: "Bị chặn", count: 2, color: "#ef4444" },
   { status: "completed", label: "Hoàn thành", count: 5, color: "#3b82f6" },
+];
+
+/** Default health data when API has not loaded (all zeros). */
+const DEFAULT_HEALTH_DATA: HealthCount[] = [
+  { status: "in_progress", label: "Đang thực hiện", count: 0, color: "#22c55e" },
+  { status: "at_risk", label: "Rủi ro", count: 0, color: "#f59e0b" },
+  { status: "blocked", label: "Bị chặn", count: 0, color: "#ef4444" },
+  { status: "completed", label: "Hoàn thành", count: 0, color: "#3b82f6" },
 ];
 
 const MOCK_ATTENTION: AttentionRow[] = [
@@ -147,11 +160,44 @@ function getMonthOptions() {
   return options;
 }
 
+// Get current user id and team from storage (same pattern as elsewhere in app)
+function getCurrentUserId(): string | null {
+  return localStorage.getItem("userId") || sessionStorage.getItem("userId");
+}
+function getStoredTeam(): string | null {
+  try {
+    const raw = localStorage.getItem("user") || sessionStorage.getItem("user");
+    if (!raw) return null;
+    const u = JSON.parse(raw);
+    const t = u?.team ?? u?.activeTeam ?? u?.teamName;
+    return typeof t === "string" ? t : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Same as AddHospitalImplementation: team lead = user.teamRoles has any "LEADER", or SuperAdmin */
+function checkIsTeamLeadFromAccount(user: { teamRoles?: Record<string, string> | null } | null): boolean {
+  if (!user?.teamRoles) return false;
+  return Object.values(user.teamRoles).some((r) => String(r).toUpperCase() === "LEADER");
+}
+
 export default function DeploymentDashboard() {
   const location = useLocation();
+  const { activeTeam } = useAuth();
   const isSuperAdmin = location.pathname.startsWith("/superadmin");
   const basePath = isSuperAdmin ? "/superadmin/implementation-tasks-new" : "/implementation-tasks-new";
   const viewAllHref = basePath;
+
+  const currentUserId = getCurrentUserId();
+  const storedTeam = getStoredTeam();
+  const effectiveTeam = activeTeam ?? storedTeam ?? null;
+  // Team lead: same as AddHospitalImplementation — getUserAccount().teamRoles has "LEADER", or SuperAdmin
+  const [isDeploymentLeader, setIsDeploymentLeader] = useState(false);
+
+  // Lock PM filter only for deployment members (not SuperAdmin, not team lead)
+  const isPmFilterLocked =
+    !isSuperAdmin && effectiveTeam === "DEPLOYMENT" && !isDeploymentLeader;
 
   const [monthValue, setMonthValue] = useState(() => MONTH_ALL_VALUE);
   const [pmFilter, setPmFilter] = useState<string>("all");
@@ -161,6 +207,48 @@ export default function DeploymentDashboard() {
   const [kpiError, setKpiError] = useState<string | null>(null);
   const [pmOptions, setPmOptions] = useState<UserDeploymentOption[]>([]);
   const [phaseData, setPhaseData] = useState<PhaseCount[]>(DEFAULT_PHASE_DATA);
+  const [healthData, setHealthData] = useState<HealthCount[]>(DEFAULT_HEALTH_DATA);
+  const [attentionRows, setAttentionRows] = useState<AttentionRow[]>([]);
+  const latestFilterRef = useRef({ monthValue: MONTH_ALL_VALUE, pmFilter: "all" });
+  latestFilterRef.current = { monthValue, pmFilter };
+
+  // Resolve team lead from API (same as AddHospitalImplementation — sửa hạn báo cáo / go-live)
+  useEffect(() => {
+    if (checkSuperAdmin()) {
+      setIsDeploymentLeader(true);
+      return;
+    }
+    const uidRaw = currentUserId;
+    if (!uidRaw) {
+      setIsDeploymentLeader(false);
+      return;
+    }
+    const uid = Number(uidRaw);
+    if (!Number.isFinite(uid)) {
+      setIsDeploymentLeader(false);
+      return;
+    }
+    let cancelled = false;
+    getUserAccount(uid)
+      .then((user) => {
+        if (cancelled) return;
+        const lead = checkIsTeamLeadFromAccount(user) || checkSuperAdmin();
+        setIsDeploymentLeader(lead);
+      })
+      .catch(() => {
+        if (!cancelled) setIsDeploymentLeader(checkSuperAdmin());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserId]);
+
+  // When user is deployment member, lock PM filter to current user
+  useEffect(() => {
+    if (isPmFilterLocked && currentUserId) {
+      setPmFilter(currentUserId);
+    }
+  }, [isPmFilterLocked, currentUserId]);
 
   // Load PM options (real list) once on mount
   useEffect(() => {
@@ -172,20 +260,33 @@ export default function DeploymentDashboard() {
   // Load KPI summary when month or PM filter changes
   useEffect(() => {
     let cancelled = false;
+    const month = monthValue === MONTH_ALL_VALUE ? undefined : monthValue;
+    const numPm = pmFilter === "all" ? NaN : Number(pmFilter);
+    const effectivePm = Number.isFinite(numPm) && numPm > 0 ? numPm : undefined;
+    const filterSnapshot = { monthValue, pmFilter };
     setKpiError(null);
     setKpiLoading(true);
     fetchDeploymentDashboardSummary({
-      month: monthValue === MONTH_ALL_VALUE ? undefined : monthValue,
-      pmUserId: pmFilter === "all" ? undefined : Number(pmFilter),
+      month,
+      pmUserId: effectivePm,
     })
       .then((data) => {
-        if (!cancelled) setKpiSummary(data);
+        if (cancelled) return;
+        const current = latestFilterRef.current;
+        if (current.monthValue !== filterSnapshot.monthValue || current.pmFilter !== filterSnapshot.pmFilter) return;
+        setKpiSummary(data);
       })
       .catch((err) => {
-        if (!cancelled) setKpiError(err?.message ?? "Không tải được dữ liệu KPI");
+        if (cancelled) return;
+        const current = latestFilterRef.current;
+        if (current.monthValue !== filterSnapshot.monthValue || current.pmFilter !== filterSnapshot.pmFilter) return;
+        setKpiError(err?.message ?? "Không tải được dữ liệu KPI");
       })
       .finally(() => {
-        if (!cancelled) setKpiLoading(false);
+        if (cancelled) return;
+        const current = latestFilterRef.current;
+        if (current.monthValue !== filterSnapshot.monthValue || current.pmFilter !== filterSnapshot.pmFilter) return;
+        setKpiLoading(false);
       });
     return () => {
       cancelled = true;
@@ -195,20 +296,96 @@ export default function DeploymentDashboard() {
   // Load phase chart data when month or PM filter changes
   useEffect(() => {
     let cancelled = false;
-    fetchDeploymentDashboardByPhase({
-      month: monthValue === MONTH_ALL_VALUE ? undefined : monthValue,
-      pmUserId: pmFilter === "all" ? undefined : Number(pmFilter),
-    })
+    const month = monthValue === MONTH_ALL_VALUE ? undefined : monthValue;
+    const numPm = pmFilter === "all" ? NaN : Number(pmFilter);
+    const effectivePm = Number.isFinite(numPm) && numPm > 0 ? numPm : undefined;
+    const filterSnapshot = { monthValue, pmFilter };
+    fetchDeploymentDashboardByPhase({ month, pmUserId: effectivePm })
       .then((data) => {
-        if (!cancelled) setPhaseData(Array.isArray(data) ? data : DEFAULT_PHASE_DATA);
+        if (cancelled) return;
+        const current = latestFilterRef.current;
+        if (current.monthValue !== filterSnapshot.monthValue || current.pmFilter !== filterSnapshot.pmFilter) return;
+        setPhaseData(Array.isArray(data) ? data : DEFAULT_PHASE_DATA);
       })
       .catch(() => {
-        if (!cancelled) setPhaseData(DEFAULT_PHASE_DATA);
+        if (cancelled) return;
+        const current = latestFilterRef.current;
+        if (current.monthValue !== filterSnapshot.monthValue || current.pmFilter !== filterSnapshot.pmFilter) return;
+        setPhaseData(DEFAULT_PHASE_DATA);
       });
     return () => {
       cancelled = true;
     };
   }, [monthValue, pmFilter]);
+
+  // Load health chart data when month or PM filter changes
+  useEffect(() => {
+    let cancelled = false;
+    const month = monthValue === MONTH_ALL_VALUE ? undefined : monthValue;
+    const numPm = pmFilter === "all" ? NaN : Number(pmFilter);
+    const effectivePm = Number.isFinite(numPm) && numPm > 0 ? numPm : undefined;
+    const filterSnapshot = { monthValue, pmFilter };
+    fetchDeploymentDashboardByHealth({ month, pmUserId: effectivePm })
+      .then((data) => {
+        if (cancelled) return;
+        const current = latestFilterRef.current;
+        if (current.monthValue !== filterSnapshot.monthValue || current.pmFilter !== filterSnapshot.pmFilter) return;
+        const withColor: HealthCount[] = (Array.isArray(data) ? data : []).map((d) => ({
+          status: d.status,
+          label: d.label,
+          count: d.count,
+          color: d.color ?? { in_progress: "#22c55e", at_risk: "#f59e0b", blocked: "#ef4444", completed: "#3b82f6" }[d.status] ?? "#94a3b8",
+        }));
+        setHealthData(withColor.length ? withColor : DEFAULT_HEALTH_DATA);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        const current = latestFilterRef.current;
+        if (current.monthValue !== filterSnapshot.monthValue || current.pmFilter !== filterSnapshot.pmFilter) return;
+        setHealthData(DEFAULT_HEALTH_DATA);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [monthValue, pmFilter]);
+
+  // Load attention table (at_risk + blocked) when month or PM filter changes
+  useEffect(() => {
+    let cancelled = false;
+    const month = monthValue === MONTH_ALL_VALUE ? undefined : monthValue;
+    const numPm = pmFilter === "all" ? NaN : Number(pmFilter);
+    const effectivePm = Number.isFinite(numPm) && numPm > 0 ? numPm : undefined;
+    const filterSnapshot = { monthValue, pmFilter };
+    fetchDeploymentDashboardAttention({ month, pmUserId: effectivePm })
+      .then((data) => {
+        if (cancelled) return;
+        const current = latestFilterRef.current;
+        if (current.monthValue !== filterSnapshot.monthValue || current.pmFilter !== filterSnapshot.pmFilter) return;
+        const rows: AttentionRow[] = (Array.isArray(data) ? data : []).map((d) => ({
+          id: typeof d?.id === "number" ? d.id : Number(d?.id) || 0,
+          hospitalName: d.hospitalName ?? "",
+          projectCode: d.projectCode ?? "",
+          pmName: d.pmName ?? "",
+          phase: d.phase ?? 1,
+          phaseLabel: d.phaseLabel,
+          reportDeadline: d.reportDeadline ?? null,
+          goLiveDeadline: d.goLiveDeadline ?? null,
+          health: d.health === "blocked" ? "blocked" : "at_risk",
+          healthLabel: d.healthLabel ?? (d.health === "blocked" ? "Bị chặn" : "Rủi ro"),
+          basePath,
+        }));
+        setAttentionRows(rows);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        const current = latestFilterRef.current;
+        if (current.monthValue !== filterSnapshot.monthValue || current.pmFilter !== filterSnapshot.pmFilter) return;
+        setAttentionRows([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [monthValue, pmFilter, basePath]);
 
   const monthOptions = useMemo(() => getMonthOptions(), []);
   const currentMonthLabel = useMemo(() => {
@@ -266,20 +443,28 @@ export default function DeploymentDashboard() {
               <ChevronDownIcon className="pointer-events-none absolute right-2 size-4 text-gray-500" />
             </div>
             <div className="relative flex items-center rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
-              <UserIcon className="ml-3 size-4 text-gray-500 dark:text-gray-400" />
-              <select
-                value={pmFilter}
-                onChange={(e) => setPmFilter(e.target.value)}
-                className="w-full min-w-[140px] appearance-none bg-transparent py-2 pl-9 pr-8 text-sm text-gray-700 dark:text-gray-200"
-              >
-                <option value="all">Tất cả phụ trách</option>
-                {pmOptions.map((pm) => (
-                  <option key={pm.id} value={String(pm.id)}>
-                    {pm.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDownIcon className="pointer-events-none absolute right-2 size-4 text-gray-500" />
+              <UserIcon className="ml-3 size-4 shrink-0 text-gray-500 dark:text-gray-400" />
+              {isPmFilterLocked ? (
+                <span className="w-full min-w-[140px] py-2 pl-2 pr-3 text-sm text-gray-700 dark:text-gray-200">
+                  Phụ trách: {pmOptions.find((p) => String(p.id) === currentUserId)?.name ?? "—"}
+                </span>
+              ) : (
+                <>
+                  <select
+                    value={pmFilter}
+                    onChange={(e) => setPmFilter(e.target.value)}
+                    className="w-full min-w-[140px] appearance-none bg-transparent py-2 pl-9 pr-8 text-sm text-gray-700 dark:text-gray-200"
+                  >
+                    <option value="all">Tất cả phụ trách</option>
+                    {pmOptions.map((pm) => (
+                      <option key={pm.id} value={String(pm.id)}>
+                        {pm.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDownIcon className="pointer-events-none absolute right-2 size-4 text-gray-500" />
+                </>
+              )}
             </div>
             {/* <div className="relative flex items-center rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
               <HorizontaLDots className="ml-3 size-4 text-gray-500 dark:text-gray-400" />
@@ -354,12 +539,12 @@ export default function DeploymentDashboard() {
         {/* Section 2 — Charts */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <DeploymentPhaseChart data={phaseData} />
-          <HealthStatusChart data={MOCK_HEALTH_DATA} totalLabel="TỔNG SỐ" />
+          <HealthStatusChart data={healthData} totalLabel="TỔNG SỐ" totalProjects={kpi.totalTasks} />
         </div>
 
         {/* Section 3 — Attention Table */}
         <AttentionTable
-          rows={MOCK_ATTENTION.map((r) => ({ ...r, basePath }))}
+          rows={attentionRows}
           viewAllHref={viewAllHref}
           basePath={basePath}
         />

@@ -17,13 +17,17 @@ const DEFAULT_COLORS: Record<string, string> = {
 export type HealthStatusChartProps = {
   data: HealthCount[];
   totalLabel?: string;
+  /** If set, center shows this (actual project count) instead of sum(data) because segments can overlap. */
+  totalProjects?: number;
 };
 
 export default function HealthStatusChart({
   data,
   totalLabel = "TỔNG SỐ",
+  totalProjects,
 }: HealthStatusChartProps) {
-  const total = data.reduce((s, d) => s + d.count, 0);
+  const sumSegments = data.reduce((s, d) => s + d.count, 0);
+  const total = totalProjects !== undefined && totalProjects !== null ? totalProjects : sumSegments;
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
@@ -60,7 +64,8 @@ export default function HealthStatusChart({
             <Tooltip
               formatter={(value: number | undefined, name, props) => {
                 const v = value ?? 0;
-                const pct = total > 0 ? ((v / total) * 100).toFixed(0) : 0;
+                const denom = total > 0 ? total : sumSegments || 1;
+                const pct = ((v / denom) * 100).toFixed(0);
                 return [`${v} (${pct}%)`, props.payload?.label ?? name];
               }}
             />
@@ -69,7 +74,8 @@ export default function HealthStatusChart({
               height={48}
               formatter={(value, entry) => {
                 const item = data.find((d) => d.label === value);
-                const pct = total > 0 && item ? ((item.count / total) * 100).toFixed(0) : "0";
+                const denom = total > 0 ? total : sumSegments || 1;
+                const pct = item ? ((item.count / denom) * 100).toFixed(0) : "0";
                 return `${value} (${pct}%)`;
               }}
             />

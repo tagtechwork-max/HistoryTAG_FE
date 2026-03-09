@@ -270,6 +270,64 @@ export async function fetchDeploymentDashboardByPhase(params?: {
   return Array.isArray(data) ? data : [];
 }
 
+/** Health count item for Deployment Health Status Chart (by-health API). */
+export type DeploymentHealthCount = {
+  status: string;
+  label: string;
+  count: number;
+  color?: string;
+};
+
+/**
+ * Fetches health status distribution for Health Status Chart.
+ * Backend: GET /api/v1/implementation-tasks/dashboard/by-health?month=YYYY-MM&pmUserId=id
+ */
+export async function fetchDeploymentDashboardByHealth(params?: {
+  month?: string;
+  pmUserId?: string | number;
+}): Promise<DeploymentHealthCount[]> {
+  const query: Record<string, string> = {};
+  if (params?.month) query.month = params.month;
+  if (params?.pmUserId !== undefined && params.pmUserId !== "all") {
+    query.pmUserId = String(params.pmUserId);
+  }
+  const { data } = await api.get<DeploymentHealthCount[]>(
+    "/api/v1/implementation-tasks/dashboard/by-health",
+    { params: Object.keys(query).length ? query : undefined }
+  );
+  return Array.isArray(data) ? data : [];
+}
+
+/** One row for "Cần chú ý" table (at_risk or blocked). Backend: GET dashboard/attention */
+export type DeploymentAttentionItem = {
+  id: number;
+  hospitalName: string;
+  projectCode: string;
+  pmName: string;
+  phase: number;
+  phaseLabel?: string;
+  reportDeadline: string | null;
+  goLiveDeadline: string | null;
+  health: "at_risk" | "blocked";
+  healthLabel: string;
+};
+
+export async function fetchDeploymentDashboardAttention(params?: {
+  month?: string;
+  pmUserId?: string | number;
+}): Promise<DeploymentAttentionItem[]> {
+  const query: Record<string, string> = {};
+  if (params?.month) query.month = params.month;
+  if (params?.pmUserId !== undefined && params.pmUserId !== "all") {
+    query.pmUserId = String(params.pmUserId);
+  }
+  const { data } = await api.get<DeploymentAttentionItem[]>(
+    "/api/v1/implementation-tasks/dashboard/attention",
+    { params: Object.keys(query).length ? query : undefined }
+  );
+  return Array.isArray(data) ? data : [];
+}
+
 /** Search hospitals by name - type-to-find style (like implementation-tasks RemoteSelect) */
 export async function searchHospitalsForSelect(term: string): Promise<HospitalOption[]> {
   if (!term || term.trim().length < 2) return [];

@@ -116,7 +116,22 @@ export default function SignInForm() {
       if (isSuperAdmin) {
         navigate("/superadmin/home");
       } else {
-        navigate("/home");
+        // Team triển khai: sau đăng nhập chuyển thẳng tới Thống kê triển khai
+        const userJson = storage.getItem("user");
+        let team: string | null = null;
+        if (userJson) {
+          try {
+            const user = JSON.parse(userJson) as { team?: string };
+            team = user?.team ? String(user.team).toUpperCase() : null;
+          } catch {
+            // ignore
+          }
+        }
+        if (team === "DEPLOYMENT") {
+          navigate("/deployment-dashboard");
+        } else {
+          navigate("/home");
+        }
       }
     } catch (err: unknown) {
       const errorMsg = pickErrMsg(err);

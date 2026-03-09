@@ -269,6 +269,13 @@ const AppSidebar: React.FC = () => {
           subItems: item.subItems.filter((sub) => sub.path !== "/deployment-dashboard"),
         };
       }
+      // Team triển khai: chỉ hiển thị "Thống kê triển khai", không hiển thị "Báo cáo tổng quan"
+      if (item.name === "Dashboard" && item.subItems && effectiveTeam === "DEPLOYMENT") {
+        return {
+          ...item,
+          subItems: item.subItems.filter((sub) => sub.path === "/deployment-dashboard"),
+        };
+      }
       return item;
     });
 

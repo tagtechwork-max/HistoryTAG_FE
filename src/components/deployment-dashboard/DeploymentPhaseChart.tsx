@@ -29,6 +29,9 @@ export type DeploymentPhaseChartProps = {
 
 const BAR_COLOR = "#3b82f6";
 
+const Y_AXIS_LEFT = 8;
+const Y_AXIS_WIDTH = 260;
+
 export default function DeploymentPhaseChart({ data }: DeploymentPhaseChartProps) {
   const chartData = data.map((d) => ({
     ...d,
@@ -44,7 +47,7 @@ export default function DeploymentPhaseChart({ data }: DeploymentPhaseChartProps
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             layout="vertical"
-            margin={{ top: 8, right: 24, left: 8, bottom: 8 }}
+            margin={{ top: 8, right: 24, left: Y_AXIS_LEFT, bottom: 8 }}
             data={chartData}
           >
             <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
@@ -52,9 +55,27 @@ export default function DeploymentPhaseChart({ data }: DeploymentPhaseChartProps
             <YAxis
               type="category"
               dataKey="fullLabel"
-              width={220}
-              tick={{ fontSize: 11 }}
+              width={Y_AXIS_WIDTH}
               tickLine={false}
+              axisLine={false}
+              tick={(props: { y?: number | string; payload?: { value?: string; fullLabel?: string } }) => {
+                const { y = 0, payload } = props;
+                const text = payload?.value ?? payload?.fullLabel ?? "";
+                return (
+                  <g transform={`translate(${Y_AXIS_LEFT},${y})`}>
+                    <text
+                      x={0}
+                      y={0}
+                      textAnchor="start"
+                      dominantBaseline="middle"
+                      className="fill-gray-700 dark:fill-gray-300"
+                      style={{ fontSize: 11 }}
+                    >
+                      {text}
+                    </text>
+                  </g>
+                );
+              }}
             />
             <Tooltip
               contentStyle={{
