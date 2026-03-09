@@ -17,6 +17,7 @@ import {
 } from "../icons";
 import { UserIcon } from "../icons";
 import { useSidebar } from "../context/SidebarContext";
+import { useAuth } from "../contexts/AuthContext";
 
 // Kiểu dữ liệu cho mục điều hướng
 type NavItem = {
@@ -193,6 +194,11 @@ const AppSidebar: React.FC = () => {
   const userTeam = userInfo?.team ? String(userInfo.team).toUpperCase() : null;
   const userDepartment = userInfo?.department ? String(userInfo.department).toUpperCase() : null;
 
+  // activeTeam from AuthContext (JWT) overrides stored user.team when present
+  const { activeTeam: authActiveTeam } = useAuth();
+  const effectiveTeam = (authActiveTeam || userTeam || "").toString().toUpperCase();
+  const isSalesTeam = effectiveTeam === "SALES";
+
   // Filter calendar menu items based on user role/team/department
   const getCalendarMenuItems = () => {
     // SuperAdmin sees all
@@ -254,6 +260,13 @@ const AppSidebar: React.FC = () => {
         return {
           ...item,
           subItems: getCalendarMenuItems(),
+        };
+      }
+      // Ẩn "Thống kê triển khai" cho tài khoản phòng kinh doanh (SALES)
+      if (item.name === "Dashboard" && item.subItems && isSalesTeam) {
+        return {
+          ...item,
+          subItems: item.subItems.filter((sub) => sub.path !== "/deployment-dashboard"),
         };
       }
       return item;
