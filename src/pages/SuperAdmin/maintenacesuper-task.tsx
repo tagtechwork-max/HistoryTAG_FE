@@ -235,7 +235,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
   const [hospitalsWithTasks, setHospitalsWithTasks] = useState<Array<{ id: number; label: string; subLabel?: string; hospitalCode?: string; taskCount?: number; acceptedCount?: number; nearDueCount?: number; overdueCount?: number; fromDeployment?: boolean; acceptedByMaintenance?: boolean; picDeploymentIds?: Array<string | number>; picDeploymentNames?: string[]; maintenancePersonInChargeName?: string }>>([]);
   const [loadingHospitals, setLoadingHospitals] = useState<boolean>(false);
   const [hospitalPage, setHospitalPage] = useState<number>(0);
-  const [hospitalSize, setHospitalSize] = useState<number>(20);
+  const [hospitalSize, setHospitalSize] = useState<number>(10);
   const [acceptedCount, setAcceptedCount] = useState<number | null>(null);
   const [hospitalSearch, setHospitalSearch] = useState<string>("");
   const [hospitalCodeSearch, setHospitalCodeSearch] = useState<string>("");

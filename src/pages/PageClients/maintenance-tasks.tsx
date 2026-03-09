@@ -1699,7 +1699,7 @@ const ImplementationTasksPage: React.FC = () => {
     }>>([]);
     const [loadingHospitals, setLoadingHospitals] = useState<boolean>(false);
     const [hospitalPage, setHospitalPage] = useState<number>(0);
-    const [hospitalSize, setHospitalSize] = useState<number>(20);
+    const [hospitalSize, setHospitalSize] = useState<number>(10);
     const [selectedHospital, setSelectedHospital] = useState<string | null>(null);
     const [hospitalSearch, setHospitalSearch] = useState<string>("");
     const [hospitalCodeSearch, setHospitalCodeSearch] = useState<string>("");

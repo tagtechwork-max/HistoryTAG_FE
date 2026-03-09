@@ -7,12 +7,29 @@ function getCookie(name: string) {
   return m ? decodeURIComponent(m[2]) : null;
 }
 
-/** Ưu tiên đọc token từ cookie rồi tới localStorage, cuối cùng là sessionStorage */
+/** Ưu tiên đọc token từ cookie rồi tới localStorage, cuối cùng là sessionStorage.
+ *  Trả về null nếu không có token hoặc token đã hết hạn (để tránh menu ẩn khi để qua đêm).
+ */
 export function getAuthToken(): string | null {
-  return getCookie("access_token") 
+  const raw =
+    getCookie("access_token") 
     || localStorage.getItem("access_token") 
     || sessionStorage.getItem("access_token")
     || localStorage.getItem("token");
+  if (!raw) return null;
+  if (isTokenExpired(raw)) {
+    clearAllAuthData();
+    if (typeof window !== "undefined" && !isRedirecting) {
+      const path = window.location.pathname;
+      const isAuthPage = path === "/signin" || path === "/signup" || path === "/forgot-password" || path === "/reset-password";
+      if (!isAuthPage) {
+        isRedirecting = true;
+        window.location.href = "/signin";
+      }
+    }
+    return null;
+  }
+  return raw;
 }
 
 // ✅ Helper để check xem token có expired không (export để dùng chung)

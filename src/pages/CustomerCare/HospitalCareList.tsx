@@ -987,7 +987,7 @@ export default function HospitalCareList() {
                   <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
                     Người thêm
                   </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                  <th className="sticky right-0 z-10 whitespace-nowrap border-l border-gray-200 bg-gray-50 px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400 dark:shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.3)]">
                     Thao tác
                   </th>
                 </tr>
@@ -1019,7 +1019,7 @@ export default function HospitalCareList() {
                     const { label, bgColor, textColor } = statusConfig[hospital.status];
                     const stt = currentPage * itemsPerPage + index + 1;
                     return (
-                      <tr key={hospital.careId} className={`${getRowBg(hospital.status)} transition hover:bg-gray-50 dark:hover:bg-gray-800/50`}>
+                      <tr key={hospital.careId} className={`group ${getRowBg(hospital.status)} transition hover:bg-gray-50 dark:hover:bg-gray-800/50`}>
                         {/* STT */}
                         <td className="whitespace-nowrap px-4 py-3 text-center text-sm text-gray-700 dark:text-gray-300">
                           {stt}
@@ -1211,7 +1211,7 @@ export default function HospitalCareList() {
                         </td>
 
                         {/* Thao tác */}
-                        <td className="whitespace-nowrap px-4 py-3">
+                        <td className="sticky right-0 z-10 whitespace-nowrap border-l border-gray-200 bg-white px-4 py-3 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] transition-colors group-hover:bg-gray-50 dark:border-gray-700 dark:bg-white/[0.03] dark:shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.3)] dark:group-hover:bg-gray-800/50">
                           <div className="flex items-center justify-center gap-1 relative">
                             <button
                               title="Xem chi tiết"

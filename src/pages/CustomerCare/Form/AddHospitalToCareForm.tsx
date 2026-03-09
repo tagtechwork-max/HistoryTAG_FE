@@ -664,7 +664,6 @@ export default function AddHospitalToCareForm({
                 type="date"
                 value={formData.targetDate}
                 onChange={(e) => setFormData({ ...formData, targetDate: e.target.value })}
-                min={new Date().toISOString().split("T")[0]}
                 className="w-full rounded-lg border border-gray-300 bg-white py-2 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
                 required
               />
