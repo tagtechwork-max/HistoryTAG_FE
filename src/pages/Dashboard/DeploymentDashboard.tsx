@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import PageMeta from "../../components/common/PageMeta";
 import {
@@ -23,31 +23,31 @@ import {
   UserIcon,
   HorizontaLDots,
 } from "../../icons";
+import {
+  fetchDeploymentDashboardSummary,
+  fetchDeploymentDashboardByPhase,
+  fetchUserDeploymentOptions,
+  type DeploymentDashboardSummary,
+  type UserDeploymentOption,
+} from "../../api/api";
 
 // ---------------------------------------------------------------------------
-// Mock data (replace with API later)
+// Mock data (replace with API later where not yet implemented)
 // ---------------------------------------------------------------------------
 
-export type DeploymentKPISummary = {
-  totalInProgress: number;
-  completedThisMonth: number;
-  atRisk: number;
-  blocked: number;
-  reportDeadlineSoon: number;
-  goLiveDeadlineSoon: number;
-  goLiveOverdue?: number;
-  totalBlockedTasks: number;
-};
-
-const MOCK_KPI: DeploymentKPISummary = {
-  totalInProgress: 24,
-  completedThisMonth: 12,
-  atRisk: 3,
-  blocked: 2,
-  reportDeadlineSoon: 8,
-  goLiveDeadlineSoon: 2,
-  goLiveOverdue: 3,
-  totalBlockedTasks: 2,
+/** Default KPI when API has not loaded yet (all zeros) */
+const DEFAULT_KPI: DeploymentDashboardSummary = {
+  totalTasks: 0,
+  totalInProgress: 0,
+  totalTransferredToMaintenance: 0,
+  completedTotal: 0,
+  completedThisMonth: 0,
+  atRisk: 0,
+  blocked: 0,
+  reportDeadlineSoon: 0,
+  goLiveDeadlineSoon: 0,
+  goLiveOverdue: 0,
+  totalBlockedTasks: 0,
 };
 
 const MOCK_PHASE_DATA: PhaseCount[] = [
@@ -56,6 +56,14 @@ const MOCK_PHASE_DATA: PhaseCount[] = [
   { phase: 3, label: "GĐ 3", count: 7, fullLabel: "GĐ 3: Giám sát & khắc phục (7 dự án)" },
   { phase: 4, label: "GĐ 4", count: 3, fullLabel: "GĐ 4: Nghiệm thu & vận hành (3 dự án)" },
 ];
+
+/** Default phase data when API has not loaded (all zeros). */
+const DEFAULT_PHASE_DATA: PhaseCount[] = [1, 2, 3, 4].map((p) => ({
+  phase: p,
+  label: `GĐ ${p}`,
+  count: 0,
+  fullLabel: `GĐ ${p} (0 dự án)`,
+}));
 
 const MOCK_HEALTH_DATA: HealthCount[] = [
   { status: "in_progress", label: "Đang thực hiện", count: 12, color: "#22c55e" },
@@ -125,9 +133,11 @@ const MOCK_PM_WORKLOAD: PMWorkloadRow[] = [
 // ---------------------------------------------------------------------------
 // Month options for filter
 // ---------------------------------------------------------------------------
+const MONTH_ALL_VALUE = "all";
+
 function getMonthOptions() {
   const now = new Date();
-  const options: { value: string; label: string }[] = [];
+  const options: { value: string; label: string }[] = [{ value: MONTH_ALL_VALUE, label: "Tất cả" }];
   for (let i = 0; i < 12; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -143,22 +153,80 @@ export default function DeploymentDashboard() {
   const basePath = isSuperAdmin ? "/superadmin/implementation-tasks-new" : "/implementation-tasks-new";
   const viewAllHref = basePath;
 
-  const [monthValue, setMonthValue] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  });
+  const [monthValue, setMonthValue] = useState(() => MONTH_ALL_VALUE);
   const [pmFilter, setPmFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [kpiSummary, setKpiSummary] = useState<DeploymentDashboardSummary | null>(null);
+  const [kpiLoading, setKpiLoading] = useState(true);
+  const [kpiError, setKpiError] = useState<string | null>(null);
+  const [pmOptions, setPmOptions] = useState<UserDeploymentOption[]>([]);
+  const [phaseData, setPhaseData] = useState<PhaseCount[]>(DEFAULT_PHASE_DATA);
+
+  // Load PM options (real list) once on mount
+  useEffect(() => {
+    fetchUserDeploymentOptions()
+      .then(setPmOptions)
+      .catch(() => setPmOptions([]));
+  }, []);
+
+  // Load KPI summary when month or PM filter changes
+  useEffect(() => {
+    let cancelled = false;
+    setKpiError(null);
+    setKpiLoading(true);
+    fetchDeploymentDashboardSummary({
+      month: monthValue === MONTH_ALL_VALUE ? undefined : monthValue,
+      pmUserId: pmFilter === "all" ? undefined : Number(pmFilter),
+    })
+      .then((data) => {
+        if (!cancelled) setKpiSummary(data);
+      })
+      .catch((err) => {
+        if (!cancelled) setKpiError(err?.message ?? "Không tải được dữ liệu KPI");
+      })
+      .finally(() => {
+        if (!cancelled) setKpiLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [monthValue, pmFilter]);
+
+  // Load phase chart data when month or PM filter changes
+  useEffect(() => {
+    let cancelled = false;
+    fetchDeploymentDashboardByPhase({
+      month: monthValue === MONTH_ALL_VALUE ? undefined : monthValue,
+      pmUserId: pmFilter === "all" ? undefined : Number(pmFilter),
+    })
+      .then((data) => {
+        if (!cancelled) setPhaseData(Array.isArray(data) ? data : DEFAULT_PHASE_DATA);
+      })
+      .catch(() => {
+        if (!cancelled) setPhaseData(DEFAULT_PHASE_DATA);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [monthValue, pmFilter]);
 
   const monthOptions = useMemo(() => getMonthOptions(), []);
   const currentMonthLabel = useMemo(() => {
+    if (monthValue === MONTH_ALL_VALUE) return "";
     const opt = monthOptions.find((o) => o.value === monthValue);
-    return opt?.label ?? "Tháng hiện tại";
+    return opt?.label ?? "";
   }, [monthValue, monthOptions]);
 
-  const kpi = MOCK_KPI;
+  const kpi = kpiSummary ?? DEFAULT_KPI;
   const atRiskBlocked = kpi.atRisk + kpi.blocked;
   const goLiveTrend = (kpi.goLiveOverdue ?? 0) > 0 ? `${kpi.goLiveOverdue} trễ` : undefined;
+  const totalTransferred = kpi.totalTransferredToMaintenance ?? 0;
+  const firstCardTrend =
+    kpiLoading
+      ? "..."
+      : [ kpi.totalInProgress > 0 && `${kpi.totalInProgress} đang triển khai`]
+          .filter(Boolean)
+          .join(", ") || "—";
 
   return (
     <>
@@ -205,9 +273,9 @@ export default function DeploymentDashboard() {
                 className="w-full min-w-[140px] appearance-none bg-transparent py-2 pl-9 pr-8 text-sm text-gray-700 dark:text-gray-200"
               >
                 <option value="all">Tất cả phụ trách</option>
-                {MOCK_PM_WORKLOAD.map((pm) => (
-                  <option key={pm.pmUserId} value={String(pm.pmUserId)}>
-                    {pm.pmName}
+                {pmOptions.map((pm) => (
+                  <option key={pm.id} value={String(pm.id)}>
+                    {pm.name}
                   </option>
                 ))}
               </select>
@@ -232,21 +300,28 @@ export default function DeploymentDashboard() {
         </div>
 
         {/* Section 1 — KPI Cards */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 md:gap-6">
-          <KPIStatCard
-            icon={<TaskIcon />}
-            label="Tổng bệnh viện đang triển khai"
-            value={kpi.totalInProgress}
-            trend="+12%"
-            variant="normal"
-          />
-          <KPIStatCard
-            icon={<CheckCircleIcon />}
-            label="Đã hoàn thành (tháng này)"
-            value={kpi.completedThisMonth}
-            trend="+4"
-            variant="normal"
-          />
+        <div className="space-y-2">
+          {kpiError && (
+            <p className="text-sm text-red-600 dark:text-red-400">{kpiError}</p>
+          )}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 md:gap-6">
+            <KPIStatCard
+              icon={<TaskIcon />}
+              label="Tổng số dự án"
+              value={kpi.totalTasks ?? kpi.totalInProgress}
+              trend={firstCardTrend}
+              variant="normal"
+            />
+            <KPIStatCard
+              icon={<CheckCircleIcon />}
+              label="Đã hoàn thành"
+              value={
+                monthValue === MONTH_ALL_VALUE
+                  ? (kpi.completedTotal ?? kpi.completedThisMonth)
+                  : (kpi.completedThisMonth ?? 0)
+              }
+              variant="normal"
+            />
           {/* <KPIStatCard
             icon={<AlertIcon />}
             label="Có rủi ro / Bị chặn"
@@ -274,10 +349,11 @@ export default function DeploymentDashboard() {
             variant="danger"
           />
         </div>
+        </div>
 
         {/* Section 2 — Charts */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <DeploymentPhaseChart data={MOCK_PHASE_DATA} />
+          <DeploymentPhaseChart data={phaseData} />
           <HealthStatusChart data={MOCK_HEALTH_DATA} totalLabel="TỔNG SỐ" />
         </div>
 

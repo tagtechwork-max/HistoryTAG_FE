@@ -200,6 +200,76 @@ export async function fetchUserDeploymentOptions(): Promise<UserDeploymentOption
   }
 }
 
+// ---------------------------------------------------------------------------
+// Deployment Dashboard (Thống kê triển khai) – requires backend implementation
+// See Docs/DEPLOYMENT_DASHBOARD_API_SUMMARY.md and DEPLOYMENT_DASHBOARD_BACKEND_SPEC.md
+// ---------------------------------------------------------------------------
+
+export type DeploymentDashboardSummary = {
+  /** Total tasks (non-deleted, after PM filter). */
+  totalTasks: number;
+  totalInProgress: number;
+  /** Number of tasks already transferred to maintenance. */
+  totalTransferredToMaintenance?: number;
+  /** Total completed (all time). Main value for "Đã hoàn thành". */
+  completedTotal?: number;
+  completedThisMonth: number;
+  atRisk: number;
+  blocked: number;
+  reportDeadlineSoon: number;
+  goLiveDeadlineSoon: number;
+  goLiveOverdue?: number;
+  totalBlockedTasks: number;
+};
+
+/**
+ * Fetches KPI summary for Deployment Dashboard.
+ * Backend: GET /api/v1/implementation-tasks/dashboard/summary?month=YYYY-MM&pmUserId=all|id
+ */
+export async function fetchDeploymentDashboardSummary(params?: {
+  month?: string; // YYYY-MM
+  pmUserId?: string | number; // "all" or user id
+}): Promise<DeploymentDashboardSummary> {
+  const query: Record<string, string> = {};
+  if (params?.month) query.month = params.month;
+  if (params?.pmUserId !== undefined && params.pmUserId !== "all") {
+    query.pmUserId = String(params.pmUserId);
+  }
+  const { data } = await api.get<DeploymentDashboardSummary>(
+    "/api/v1/implementation-tasks/dashboard/summary",
+    { params: Object.keys(query).length ? query : undefined }
+  );
+  return data;
+}
+
+/** Phase count item for Deployment Phase Chart (by-phase API). */
+export type DeploymentPhaseCount = {
+  phase: number;
+  label: string;
+  count: number;
+  fullLabel: string;
+};
+
+/**
+ * Fetches phase distribution for Deployment Phase Chart.
+ * Backend: GET /api/v1/implementation-tasks/dashboard/by-phase?month=YYYY-MM&pmUserId=id
+ */
+export async function fetchDeploymentDashboardByPhase(params?: {
+  month?: string;
+  pmUserId?: string | number;
+}): Promise<DeploymentPhaseCount[]> {
+  const query: Record<string, string> = {};
+  if (params?.month) query.month = params.month;
+  if (params?.pmUserId !== undefined && params.pmUserId !== "all") {
+    query.pmUserId = String(params.pmUserId);
+  }
+  const { data } = await api.get<DeploymentPhaseCount[]>(
+    "/api/v1/implementation-tasks/dashboard/by-phase",
+    { params: Object.keys(query).length ? query : undefined }
+  );
+  return Array.isArray(data) ? data : [];
+}
+
 /** Search hospitals by name - type-to-find style (like implementation-tasks RemoteSelect) */
 export async function searchHospitalsForSelect(term: string): Promise<HospitalOption[]> {
   if (!term || term.trim().length < 2) return [];
