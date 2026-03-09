@@ -1730,7 +1730,7 @@ export default function MaintainContractsPage() {
                     <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
                       Còn lại
                     </th>
-                    <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                    <th className="sticky right-0 z-10 whitespace-nowrap border-l border-gray-200 bg-gray-50 px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400 dark:shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.3)]">
                       Thao tác
                     </th>
                   </tr>
@@ -1778,7 +1778,7 @@ export default function MaintainContractsPage() {
                       return (
                         <tr
                           key={item.id}
-                          className="transition hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                          className="group transition hover:bg-gray-50 dark:hover:bg-gray-800/50"
                           onMouseEnter={() => setHoveredId(item.id)}
                           onMouseLeave={() => setHoveredId(null)}
                         >
@@ -1900,7 +1900,7 @@ export default function MaintainContractsPage() {
                             })()}
                           </td>
                           {/* Thao tác */}
-                          <td className="whitespace-nowrap px-4 py-3">
+                          <td className="sticky right-0 z-10 whitespace-nowrap border-l border-gray-200 bg-white px-4 py-3 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] transition-colors group-hover:bg-gray-50 dark:border-gray-700 dark:bg-white/[0.03] dark:shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.3)] dark:group-hover:bg-gray-800/50">
                             <div className="flex items-center justify-center gap-1">
                               <button
                                 title="Xem chi tiết"
@@ -2111,6 +2111,18 @@ export default function MaintainContractsPage() {
                     <p className="text-gray-500 dark:text-gray-400">Không tìm thấy thông tin</p>
                   </div>
                 )}
+              </div>
+
+              {/* Footer - close button on the right (same as Business detail modal) */}
+              <div className="flex-shrink-0 px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 rounded-b-xl">
+                <div className="flex justify-end">
+                  <button
+                    onClick={closeModal}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition dark:bg-indigo-600 dark:hover:bg-indigo-700"
+                  >
+                    Đóng
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>

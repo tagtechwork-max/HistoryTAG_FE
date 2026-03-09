@@ -2945,7 +2945,9 @@ const BusinessPage: React.FC = () => {
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Thành tiền</th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Còn lại</th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Bảo hành</th>
-                        <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Thao tác</th>
+                        <th className="sticky right-0 z-10 whitespace-nowrap border-l border-gray-200 bg-gray-50 px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400 dark:shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.3)]">
+                          Thao tác
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
@@ -2966,7 +2968,7 @@ const BusinessPage: React.FC = () => {
                           return (
                             <tr
                               key={it.id}
-                              className="transition hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                              className="group transition hover:bg-gray-50 dark:hover:bg-gray-800/50"
                               onMouseEnter={() => setHoveredId(it.id)}
                               onMouseLeave={() => setHoveredId(null)}
                             >
@@ -3080,8 +3082,8 @@ const BusinessPage: React.FC = () => {
                                   {renderWarrantyStatusBadge(it.warrantyEndDate)}
                                 </div>
                               </td>
-                              {/* Thao tác */}
-                              <td className="whitespace-nowrap px-4 py-3">
+                              {/* Thao tác (sticky right so no horizontal scroll needed) */}
+                              <td className="sticky right-0 z-10 whitespace-nowrap border-l border-gray-200 bg-white px-4 py-3 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] transition-colors group-hover:bg-gray-50 dark:border-gray-700 dark:bg-white/[0.03] dark:shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.3)] dark:group-hover:bg-gray-800/50">
                                 <div className="flex items-center justify-center gap-1">
                                   <button
                                     title="Xem chi tiết"
@@ -3141,7 +3143,7 @@ const BusinessPage: React.FC = () => {
           <div className="relative bg-white rounded-xl shadow-lg w-full max-w-4xl max-h-[95vh] flex flex-col">
             {/* Header - Fixed */}
             <div className="flex-shrink-0 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 border-b border-gray-200">
-              <h3 className="text-lg sm:text-xl font-semibold">Chi tiết Kinh doanh {formatBusinessId(viewItem.id)}</h3>
+              <h3 className="text-lg sm:text-xl font-semibold">Chi tiết hợp đồng kinh doanh {formatBusinessId(viewItem.id)}</h3>
             </div>
             {/* Content - Scrollable */}
             <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">

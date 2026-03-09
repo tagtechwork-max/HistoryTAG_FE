@@ -328,6 +328,33 @@ export async function fetchDeploymentDashboardAttention(params?: {
   return Array.isArray(data) ? data : [];
 }
 
+/** One row for "Khối lượng công việc theo PM" table. Backend: GET dashboard/pm-workload */
+export type DeploymentPmWorkloadItem = {
+  pmUserId: number;
+  pmName: string;
+  roleLabel?: string | null;
+  avatarUrl?: string | null;
+  projectCount: number;
+  atRiskCount: number;
+  deadlineSoonCount: number;
+};
+
+export async function fetchDeploymentDashboardPmWorkload(params?: {
+  month?: string;
+  pmUserId?: string | number;
+}): Promise<DeploymentPmWorkloadItem[]> {
+  const query: Record<string, string> = {};
+  if (params?.month) query.month = params.month;
+  if (params?.pmUserId !== undefined && params.pmUserId !== "all") {
+    query.pmUserId = String(params.pmUserId);
+  }
+  const { data } = await api.get<DeploymentPmWorkloadItem[]>(
+    "/api/v1/implementation-tasks/dashboard/pm-workload",
+    { params: Object.keys(query).length ? query : undefined }
+  );
+  return Array.isArray(data) ? data : [];
+}
+
 /** Search hospitals by name - type-to-find style (like implementation-tasks RemoteSelect) */
 export async function searchHospitalsForSelect(term: string): Promise<HospitalOption[]> {
   if (!term || term.trim().length < 2) return [];

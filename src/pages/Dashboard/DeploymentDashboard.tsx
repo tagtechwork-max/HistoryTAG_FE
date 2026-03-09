@@ -28,6 +28,7 @@ import {
   fetchDeploymentDashboardByPhase,
   fetchDeploymentDashboardByHealth,
   fetchDeploymentDashboardAttention,
+  fetchDeploymentDashboardPmWorkload,
   fetchUserDeploymentOptions,
   type DeploymentDashboardSummary,
   type UserDeploymentOption,
@@ -136,13 +137,6 @@ const MOCK_ATTENTION: AttentionRow[] = [
   },
 ];
 
-const MOCK_PM_WORKLOAD: PMWorkloadRow[] = [
-  { pmUserId: 1, pmName: "Nguyễn Văn A", roleLabel: "Senior PM", projectCount: 8, atRiskCount: 2, deadlineSoonCount: 3 },
-  { pmUserId: 2, pmName: "Trần Thị B", roleLabel: "PM", projectCount: 5, atRiskCount: 1, deadlineSoonCount: 1 },
-  { pmUserId: 3, pmName: "Lê Văn C", roleLabel: "PM", projectCount: 6, atRiskCount: 0, deadlineSoonCount: 2 },
-  { pmUserId: 4, pmName: "Phạm Minh D", roleLabel: "Junior PM", projectCount: 5, atRiskCount: 2, deadlineSoonCount: 2 },
-];
-
 // ---------------------------------------------------------------------------
 // Month options for filter
 // ---------------------------------------------------------------------------
@@ -209,6 +203,7 @@ export default function DeploymentDashboard() {
   const [phaseData, setPhaseData] = useState<PhaseCount[]>(DEFAULT_PHASE_DATA);
   const [healthData, setHealthData] = useState<HealthCount[]>(DEFAULT_HEALTH_DATA);
   const [attentionRows, setAttentionRows] = useState<AttentionRow[]>([]);
+  const [pmWorkloadRows, setPmWorkloadRows] = useState<PMWorkloadRow[]>([]);
   const latestFilterRef = useRef({ monthValue: MONTH_ALL_VALUE, pmFilter: "all" });
   latestFilterRef.current = { monthValue, pmFilter };
 
@@ -387,6 +382,40 @@ export default function DeploymentDashboard() {
     };
   }, [monthValue, pmFilter, basePath]);
 
+  // Load PM workload when month or PM filter changes
+  useEffect(() => {
+    let cancelled = false;
+    const month = monthValue === MONTH_ALL_VALUE ? undefined : monthValue;
+    const numPm = pmFilter === "all" ? NaN : Number(pmFilter);
+    const effectivePm = Number.isFinite(numPm) && numPm > 0 ? numPm : undefined;
+    const filterSnapshot = { monthValue, pmFilter };
+    fetchDeploymentDashboardPmWorkload({ month, pmUserId: effectivePm })
+      .then((data) => {
+        if (cancelled) return;
+        const current = latestFilterRef.current;
+        if (current.monthValue !== filterSnapshot.monthValue || current.pmFilter !== filterSnapshot.pmFilter) return;
+        const rows: PMWorkloadRow[] = (Array.isArray(data) ? data : []).map((d) => ({
+          pmUserId: d.pmUserId,
+          pmName: d.pmName ?? "",
+          roleLabel: d.roleLabel ?? undefined,
+          avatarUrl: d.avatarUrl ?? undefined,
+          projectCount: d.projectCount ?? 0,
+          atRiskCount: d.atRiskCount ?? 0,
+          deadlineSoonCount: d.deadlineSoonCount ?? 0,
+        }));
+        setPmWorkloadRows(rows);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        const current = latestFilterRef.current;
+        if (current.monthValue !== filterSnapshot.monthValue || current.pmFilter !== filterSnapshot.pmFilter) return;
+        setPmWorkloadRows([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [monthValue, pmFilter]);
+
   const monthOptions = useMemo(() => getMonthOptions(), []);
   const currentMonthLabel = useMemo(() => {
     if (monthValue === MONTH_ALL_VALUE) return "";
@@ -550,7 +579,7 @@ export default function DeploymentDashboard() {
         />
 
         {/* Section 4 — PM Workload */}
-        <PMWorkloadTable rows={MOCK_PM_WORKLOAD} />
+        <PMWorkloadTable rows={pmWorkloadRows} />
       </div>
     </>
   );
