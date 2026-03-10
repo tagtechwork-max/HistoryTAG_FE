@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useState } from "react";
 
 export type HealthStatus = "in_progress" | "at_risk" | "blocked" | "completed";
 
@@ -28,13 +29,33 @@ export type AttentionTableProps = {
   rows: AttentionRow[];
   viewAllHref?: string;
   basePath?: string;
+  pageSize?: number;
 };
 
 export default function AttentionTable({
   rows,
   viewAllHref,
   basePath = "/implementation-tasks-new",
+  pageSize = 5,
 }: AttentionTableProps) {
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const totalPages = Math.ceil(rows.length / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const currentRows = rows.slice(startIndex, endIndex);
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
   return (
     <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03] overflow-hidden">
       <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-800">
@@ -81,7 +102,7 @@ export default function AttentionTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {currentRows.map((row) => (
               <tr
                 key={row.id}
                 className="border-b border-gray-100 dark:border-gray-800/80 hover:bg-gray-50/50 dark:hover:bg-gray-800/30"
@@ -140,6 +161,44 @@ export default function AttentionTable({
           </tbody>
         </table>
       </div>
+      {rows.length > 0 && totalPages > 1 && (
+        <div className="flex items-center justify-between border-t border-gray-200 px-5 py-4 dark:border-gray-800">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            Hiển thị {startIndex + 1}-{Math.min(endIndex, rows.length)} trong tổng số {rows.length}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePrevPage}
+              disabled={currentPage === 1}
+              className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              ← Trước
+            </button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`inline-flex h-8 w-8 items-center justify-center rounded-lg text-sm font-medium ${
+                    page === currentPage
+                      ? "bg-blue-600 text-white dark:bg-blue-500"
+                      : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={handleNextPage}
+              disabled={currentPage === totalPages}
+              className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              Sau →
+            </button>
+          </div>
+        </div>
+      )}
       {rows.length === 0 && (
         <div className="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
           Không có mục cần chú ý.
