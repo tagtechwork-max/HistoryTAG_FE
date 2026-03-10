@@ -42,6 +42,7 @@ export type TicketResponseDTO = {
   pic: string | null;
   picUserId: number | null;
   hospitalId: number;
+  hospitalName?: string | null; // Tên bệnh viện (cho getAllTickets)
   createdBy: string | null; // Tên người tạo ticket
   createdById: number | null; // ID của User tạo ticket
   createdAt: string | null;
@@ -57,9 +58,97 @@ export type TicketRequestDTO = {
   picName?: string | null;
 };
 
+export type TicketFilterParams = {
+  hospitalId?: number;
+  status?: string;
+  priority?: string;
+  ticketType?: string;
+  search?: string;
+  page?: number;
+  size?: number;
+};
+
 // =======================================================
 // CRUD APIs
 // =======================================================
+
+/**
+ * Lấy toàn bộ danh sách tickets từ tất cả bệnh viện (với filter)
+ * Fallback implementation: Load hospitals summary rồi merge tickets
+ */
+export async function getAllTickets(params?: TicketFilterParams): Promise<TicketResponseDTO[]> {
+  try {
+    // Try the direct endpoint first
+    const base = getBase('GET', false);
+    const queryParams = new URLSearchParams();
+    
+    if (params?.hospitalId) queryParams.append('hospitalId', params.hospitalId.toString());
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.priority) queryParams.append('priority', params.priority);
+    if (params?.ticketType) queryParams.append('ticketType', params.ticketType);
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.page !== undefined) queryParams.append('page', params.page.toString());
+    if (params?.size !== undefined) queryParams.append('size', params.size.toString());
+    
+    const queryString = queryParams.toString();
+    const url = `${base}/tickets${queryString ? '?' + queryString : ''}`;
+    
+    const res = await api.get(url);
+    return Array.isArray(res.data) ? res.data : [];
+  } catch (error: any) {
+    // If endpoint doesn't exist (404), use fallback approach
+    if (error.response?.status === 404) {
+      console.log('Tickets endpoint not found, using fallback approach...');
+      return await getAllTicketsFallback();
+    }
+    throw error;
+  }
+}
+
+/**
+ * Fallback: Load tickets từ tất cả hospitals bằng cách:
+ * 1. Lấy danh sách hospitals từ summary API
+ * 2. Load tickets cho từng hospital
+ * 3. Merge tất cả lại
+ */
+async function getAllTicketsFallback(): Promise<TicketResponseDTO[]> {
+  try {
+    // Get hospitals summary
+    const summaryRes = await api.get('/api/v1/admin/maintenance/hospitals/summary');
+    const hospitals = Array.isArray(summaryRes.data) ? summaryRes.data : [];
+    
+    if (hospitals.length === 0) {
+      return [];
+    }
+    
+    // Load tickets for all hospitals in parallel
+    const ticketPromises = hospitals.map(async (hospital: any) => {
+      try {
+        const hospitalId = hospital.hospitalId || hospital.id;
+        if (!hospitalId) return [];
+        
+        const tickets = await getHospitalTickets(hospitalId);
+        
+        // Add hospitalName to each ticket
+        return tickets.map(ticket => ({
+          ...ticket,
+          hospitalName: hospital.hospitalName || hospital.name || `Hospital ${hospitalId}`
+        }));
+      } catch (err) {
+        console.error(`Error loading tickets for hospital ${hospital.hospitalId}:`, err);
+        return [];
+      }
+    });
+    
+    const ticketArrays = await Promise.all(ticketPromises);
+    const allTickets = ticketArrays.flat();
+    
+    return allTickets;
+  } catch (error) {
+    console.error('Error in getAllTicketsFallback:', error);
+    return [];
+  }
+}
 
 /**
  * Lấy danh sách tickets của một hospital
