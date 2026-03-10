@@ -336,6 +336,7 @@ export type DeploymentPmWorkloadItem = {
   avatarUrl?: string | null;
   projectCount: number;
   atRiskCount: number;
+  overdueCount?: number;
   deadlineSoonCount: number;
 };
 

@@ -8,10 +8,10 @@ export type HealthCount = {
 };
 
 const DEFAULT_COLORS: Record<string, string> = {
-  in_progress: "#22c55e",
+  in_progress: "#0ea5e9",   // sky blue (đang thực hiện)
   at_risk: "#f59e0b",
   blocked: "#ef4444",
-  completed: "#3b82f6",
+  completed: "#22c55e",     // green (hoàn thành)
 };
 
 export type HealthStatusChartProps = {

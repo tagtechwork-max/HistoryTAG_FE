@@ -5,6 +5,7 @@ export type PMWorkloadRow = {
   avatarUrl?: string | null;
   projectCount: number;
   atRiskCount: number;
+  overdueCount?: number;
   deadlineSoonCount: number;
 };
 
@@ -54,10 +55,10 @@ export default function PMWorkloadTable({ rows }: PMWorkloadTableProps) {
                     {row.projectCount} DỰ ÁN
                   </span>
                   <span className="font-semibold text-red-600 dark:text-red-400">
-                    {row.atRiskCount} RỦI RO
+                    {row.atRiskCount} BỊ CHẶN
                   </span>
-                  <span className="font-semibold text-amber-600 dark:text-amber-400">
-                    {row.deadlineSoonCount} GẦN HẠN
+                  <span className="font-semibold text-orange-600 dark:text-orange-400">
+                    {(row.overdueCount ?? 0)} QUÁ HẠN
                   </span>
                 </div>
               </div>

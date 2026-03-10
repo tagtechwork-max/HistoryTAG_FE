@@ -72,18 +72,18 @@ const DEFAULT_PHASE_DATA: PhaseCount[] = [1, 2, 3, 4].map((p) => ({
 }));
 
 const MOCK_HEALTH_DATA: HealthCount[] = [
-  { status: "in_progress", label: "Đang thực hiện", count: 12, color: "#22c55e" },
+  { status: "in_progress", label: "Đang thực hiện", count: 12, color: "#0ea5e9" },
   { status: "at_risk", label: "Rủi ro", count: 5, color: "#f59e0b" },
   { status: "blocked", label: "Bị chặn", count: 2, color: "#ef4444" },
-  { status: "completed", label: "Hoàn thành", count: 5, color: "#3b82f6" },
+  { status: "completed", label: "Hoàn thành", count: 5, color: "#22c55e" },
 ];
 
 /** Default health data when API has not loaded (all zeros). */
 const DEFAULT_HEALTH_DATA: HealthCount[] = [
-  { status: "in_progress", label: "Đang thực hiện", count: 0, color: "#22c55e" },
+  { status: "in_progress", label: "Đang thực hiện", count: 0, color: "#0ea5e9" },
   { status: "at_risk", label: "Rủi ro", count: 0, color: "#f59e0b" },
   { status: "blocked", label: "Bị chặn", count: 0, color: "#ef4444" },
-  { status: "completed", label: "Hoàn thành", count: 0, color: "#3b82f6" },
+  { status: "completed", label: "Hoàn thành", count: 0, color: "#22c55e" },
 ];
 
 const MOCK_ATTENTION: AttentionRow[] = [
@@ -329,7 +329,7 @@ export default function DeploymentDashboard() {
           status: d.status,
           label: d.label,
           count: d.count,
-          color: d.color ?? { in_progress: "#22c55e", at_risk: "#f59e0b", blocked: "#ef4444", completed: "#3b82f6" }[d.status] ?? "#94a3b8",
+          color: d.color ?? { in_progress: "#0ea5e9", at_risk: "#f59e0b", blocked: "#ef4444", completed: "#22c55e" }[d.status] ?? "#94a3b8",
         }));
         setHealthData(withColor.length ? withColor : DEFAULT_HEALTH_DATA);
       })
@@ -401,6 +401,7 @@ export default function DeploymentDashboard() {
           avatarUrl: d.avatarUrl ?? undefined,
           projectCount: d.projectCount ?? 0,
           atRiskCount: d.atRiskCount ?? 0,
+          overdueCount: d.overdueCount ?? 0,
           deadlineSoonCount: d.deadlineSoonCount ?? 0,
         }));
         setPmWorkloadRows(rows);
