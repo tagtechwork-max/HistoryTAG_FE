@@ -552,8 +552,8 @@ export default function DeploymentDashboard() {
           />
           <KPIStatCard
             icon={<ErrorHexaIcon />}
-            label="Sắp / Quá hạn go-live"
-            value={kpi.goLiveDeadlineSoon + (kpi.goLiveOverdue ?? 0)}
+            label="Quá hạn go-live"
+            value={kpi.goLiveOverdue ?? 0}
             trend={goLiveTrend}
             variant="danger"
           />
