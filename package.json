@@ -25,6 +25,7 @@
     "apexcharts": "^4.1.0",
     "axios": "^1.12.2",
     "clsx": "^2.1.1",
+    "crypto-js": "^4.2.0",
     "d3-geo": "^3.1.1",
     "exceljs": "^4.4.0",
     "flatpickr": "^4.6.13",
