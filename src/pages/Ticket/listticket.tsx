@@ -77,16 +77,22 @@ const ticketTypeConfig: Record<string, { label: string; bgColor: string; textCol
 
 // ==================== HELPER ====================
 
-function calculateTimeElapsed(createdAt?: string): string {
+/**
+ * Elapsed time from createdAt to endAt (or now if endAt not provided).
+ * When ticket is completed (HOAN_THANH), pass updatedAt as endAt so we show "time to complete" not "time until now".
+ */
+function calculateTimeElapsed(createdAt?: string, endAt?: string | null): string {
   if (!createdAt) return "—";
-  const now = new Date();
   const created = new Date(createdAt);
-  const diff = now.getTime() - created.getTime();
-  
+  if (Number.isNaN(created.getTime())) return "—";
+  const end = endAt ? new Date(endAt) : new Date();
+  if (endAt && Number.isNaN(end.getTime())) return "—";
+  const diff = Math.max(0, end.getTime() - created.getTime());
+
   const minutes = Math.floor(diff / (1000 * 60));
   const hours = Math.floor(diff / (1000 * 60 * 60));
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  
+
   if (days > 0) return `${days} ngày`;
   if (hours > 0) return `${hours}h ${minutes % 60}p`;
   if (minutes > 0) return `${minutes}p`;
@@ -730,6 +736,7 @@ export default function ListTicketPage() {
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Độ ưu tiên</th>
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Trạng thái</th>
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Người phụ trách</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Người tạo</th>
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Thời gian</th>
                       <th className="sticky right-0 z-10 whitespace-nowrap border-l border-gray-200 bg-gray-50 px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400 dark:shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.3)]">Thao tác</th>
                     </tr>
@@ -801,15 +808,29 @@ export default function ListTicketPage() {
                           </div>
                         </td>
 
-                        {/* Time */}
+                        {/* Created by */}
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <FiUser className="h-4 w-4 text-gray-400" />
+                            <span className="text-sm text-gray-700 dark:text-gray-300">{ticket.createdBy || "—"}</span>
+                          </div>
+                        </td>
+
+                        {/* Time: from creation to completion (if HOAN_THANH) or to now */}
                         <td className="px-4 py-4 whitespace-nowrap">
                           <div className="text-xs text-gray-600 dark:text-gray-400">
                             <div className="flex items-center gap-1">
                               <FiClock className="h-3 w-3" />
-                              {calculateTimeElapsed(ticket.createdAt || undefined)}
+                              {calculateTimeElapsed(
+                                ticket.createdAt || undefined,
+                                ticket.status === "HOAN_THANH" ? ticket.updatedAt : undefined
+                              )}
                             </div>
                             <div className="mt-1 text-[10px] text-gray-500">
                               {formatDateTime(ticket.createdAt)}
+                              {ticket.status === "HOAN_THANH" && ticket.updatedAt && (
+                                <span className="block">→ {formatDateTime(ticket.updatedAt)}</span>
+                              )}
                             </div>
                           </div>
                         </td>
