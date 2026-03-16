@@ -76,6 +76,43 @@ function formatDate(d: string | null): string {
   return d.split("-").reverse().join("/");
 }
 
+/** Parse ISO date string to local date (YYYY-MM-DD) for comparison. Returns null if invalid. */
+function parseDateOnly(s: string | null): Date | null {
+  if (!s || typeof s !== "string") return null;
+  const raw = s.includes("T") ? s.slice(0, 10) : s.slice(0, 10);
+  const d = new Date(raw + "T12:00:00"); // noon to avoid DST edge cases
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Completion vs go-live deadline: show "Đúng hạn" if completed on or before deadline,
+ * else "Hoàn thành sau hạn X ngày".
+ */
+function getCompletionDeadlineLabel(
+  completionDate: string | null,
+  goLiveDeadline: string | null
+): { dateText: string; statusLabel: string | null; isOnTime: boolean | null } {
+  if (!completionDate) {
+    return { dateText: "-", statusLabel: null, isOnTime: null };
+  }
+  const dateText = formatDate(completionDate) || "-";
+  const completion = parseDateOnly(completionDate);
+  const deadline = parseDateOnly(goLiveDeadline);
+  if (!completion) return { dateText, statusLabel: null, isOnTime: null };
+  if (!deadline) return { dateText, statusLabel: null, isOnTime: null };
+  const compTs = completion.getTime();
+  const deadTs = deadline.getTime();
+  if (compTs <= deadTs) {
+    return { dateText, statusLabel: "Đúng hạn", isOnTime: true };
+  }
+  const daysLate = Math.round((compTs - deadTs) / (24 * 60 * 60 * 1000));
+  return {
+    dateText,
+    statusLabel: `Quá hạn ${daysLate} ngày`,
+    isOnTime: false,
+  };
+}
+
 /** Display value or "-" when empty (no data) */
 function orDash(value: string | null | undefined): string {
   return value != null && String(value).trim() !== "" ? String(value).trim() : "-";
@@ -1169,8 +1206,29 @@ export default function ListHospitalImplementation() {
                           )}
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
-                        {formatDate(row.completionDate ?? null) || "-"}
+                      <td className="whitespace-nowrap px-4 py-3 text-sm">
+                        {(() => {
+                          const { dateText, statusLabel, isOnTime } = getCompletionDeadlineLabel(
+                            row.completionDate ?? null,
+                            row.goLiveDeadline ?? null
+                          );
+                          return (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-gray-700 dark:text-gray-300">{dateText}</span>
+                              {statusLabel != null && (
+                                <span
+                                  className={
+                                    isOnTime === true
+                                      ? "text-xs font-medium text-emerald-600 dark:text-emerald-400"
+                                      : "text-xs font-medium text-amber-600 dark:text-amber-400"
+                                  }
+                                >
+                                  {statusLabel}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <span

@@ -238,11 +238,15 @@ export default function DeploymentDashboard() {
     };
   }, [currentUserId]);
 
-  // When user is deployment member, lock PM filter to current user
+  // When user is deployment member, lock PM filter to current user; when leader/superadmin, default to "all"
+  const prevPmLockedRef = useRef(isPmFilterLocked);
   useEffect(() => {
     if (isPmFilterLocked && currentUserId) {
       setPmFilter(currentUserId);
+    } else if (prevPmLockedRef.current && !isPmFilterLocked) {
+      setPmFilter("all"); // was locked, now unlocked (trưởng đội / superadmin) → default "Tất cả phụ trách"
     }
+    prevPmLockedRef.current = isPmFilterLocked;
   }, [isPmFilterLocked, currentUserId]);
 
   // Load PM options (real list) once on mount
@@ -356,19 +360,23 @@ export default function DeploymentDashboard() {
         if (cancelled) return;
         const current = latestFilterRef.current;
         if (current.monthValue !== filterSnapshot.monthValue || current.pmFilter !== filterSnapshot.pmFilter) return;
-        const rows: AttentionRow[] = (Array.isArray(data) ? data : []).map((d) => ({
-          id: typeof d?.id === "number" ? d.id : Number(d?.id) || 0,
-          hospitalName: d.hospitalName ?? "",
-          projectCode: d.projectCode ?? "",
-          pmName: d.pmName ?? "",
-          phase: d.phase ?? 1,
-          phaseLabel: d.phaseLabel,
-          reportDeadline: d.reportDeadline ?? null,
-          goLiveDeadline: d.goLiveDeadline ?? null,
-          health: d.health === "blocked" ? "blocked" : "at_risk",
-          healthLabel: d.healthLabel ?? (d.health === "blocked" ? "Bị chặn" : "Rủi ro"),
-          basePath,
-        }));
+        // Only show at_risk and blocked; exclude completed and in_progress (e.g. hospital done all 4 phases)
+        const raw = Array.isArray(data) ? data : [];
+        const rows: AttentionRow[] = raw
+          .filter((d) => d?.health === "at_risk" || d?.health === "blocked")
+          .map((d) => ({
+            id: typeof d?.id === "number" ? d.id : Number(d?.id) || 0,
+            hospitalName: d.hospitalName ?? "",
+            projectCode: d.projectCode ?? "",
+            pmName: d.pmName ?? "",
+            phase: d.phase ?? 1,
+            phaseLabel: d.phaseLabel,
+            reportDeadline: d.reportDeadline ?? null,
+            goLiveDeadline: d.goLiveDeadline ?? null,
+            health: d.health === "blocked" ? "blocked" : "at_risk",
+            healthLabel: d.healthLabel ?? (d.health === "blocked" ? "Bị chặn" : "Rủi ro"),
+            basePath,
+          }));
         setAttentionRows(rows);
       })
       .catch(() => {
