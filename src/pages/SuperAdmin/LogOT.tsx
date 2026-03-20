@@ -106,6 +106,12 @@ function parseMonthValue(value: string) {
   };
 }
 
+/** Display hours with 2 decimal places; avoids IEEE-754 noise (e.g. 18.000000000000007). */
+function formatHoursForDisplay(hours: number): string {
+  if (!Number.isFinite(hours)) return "0";
+  return String(Number(hours.toFixed(2)));
+}
+
 function normalizeDetail(detail: OTSuperAdminRequestDetailResponseDTO): OTRequest {
   return {
     ...detail,
@@ -484,14 +490,17 @@ export default function SuperAdminLogOT() {
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-gray-500 dark:text-gray-400">Tổng giờ</p>
                 <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-white md:text-3xl">
-                  <span className="text-blue-600 dark:text-blue-400">{totalHoursSum}h</span>
+                  <span className="text-blue-600 dark:text-blue-400">{formatHoursForDisplay(totalHoursSum)}h</span>
                 </p>
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Tổng giờ tăng ca tháng này</p>
                 <p className="mt-2 text-xs text-gray-600 dark:text-gray-300">
-                  Ngày thường: <span className="font-semibold text-blue-700 dark:text-blue-300">{weekdayHours}h</span>
+                  Ngày thường: <span className="font-semibold text-blue-700 dark:text-blue-300">{formatHoursForDisplay(weekdayHours)}h</span>
                 </p>
                 <p className="text-xs text-gray-600 dark:text-gray-300">
-                  Ngày nghỉ: <span className="font-semibold text-amber-700 dark:text-amber-300">{totalHoursSum-weekdayHours}h</span>
+                  Ngày nghỉ:{" "}
+                  <span className="font-semibold text-amber-700 dark:text-amber-300">
+                    {formatHoursForDisplay(totalHoursSum - weekdayHours)}h
+                  </span>
                 </p>
               </div>
             </div>
@@ -694,12 +703,18 @@ export default function SuperAdminLogOT() {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{formatDeptLabel(row.dept)}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900 dark:text-white">
-                        <p className="font-medium">{row.hours} h</p>
+                        <p className="font-medium">{formatHoursForDisplay(row.hours)} h</p>
                         <p className="text-xs text-gray-600 dark:text-gray-300">
-                          Thường: <span className="font-semibold text-blue-700 dark:text-blue-300">{row.weekdayHours ?? 0}h</span>
+                          Thường:{" "}
+                          <span className="font-semibold text-blue-700 dark:text-blue-300">
+                            {formatHoursForDisplay(row.weekdayHours ?? 0)}h
+                          </span>
                         </p>
                         <p className="text-xs text-gray-600 dark:text-gray-300">
-                          Nghỉ: <span className="font-semibold text-amber-700 dark:text-amber-300">{row.offdayHours ?? 0}h</span>
+                          Nghỉ:{" "}
+                          <span className="font-semibold text-amber-700 dark:text-amber-300">
+                            {formatHoursForDisplay(row.offdayHours ?? 0)}h
+                          </span>
                         </p>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{row.submitDate}</td>
