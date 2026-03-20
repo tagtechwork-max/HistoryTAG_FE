@@ -491,7 +491,7 @@ export default function SuperAdminLogOT() {
                   Ngày thường: <span className="font-semibold text-blue-700 dark:text-blue-300">{weekdayHours}h</span>
                 </p>
                 <p className="text-xs text-gray-600 dark:text-gray-300">
-                  Ngày nghỉ: <span className="font-semibold text-amber-700 dark:text-amber-300">{offdayHours}h</span>
+                  Ngày nghỉ: <span className="font-semibold text-amber-700 dark:text-amber-300">{totalHoursSum-weekdayHours}h</span>
                 </p>
               </div>
             </div>
