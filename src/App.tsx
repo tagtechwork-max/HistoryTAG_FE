@@ -48,12 +48,9 @@ import HospitalDetailView from "./pages/CustomerCare/View/HospitalDetailView";
 import HospitalDetail from "./pages/CustomerCare/HospitalDetail";
 import LogOT from "./pages/PageClients/LogOT";
 import SuperAdminLogOT from "./pages/SuperAdmin/LogOT";
-<<<<<<< HEAD
 import MapHospitals from "./pages/Utility/MapHospitals";
-=======
 import ListTicketPage from "./pages/Ticket/listticket";
 import ToolEncryption from "./pages/Tool/ToolEncryption";
->>>>>>> NguyenChien
 import { AuthProvider } from "./contexts/AuthContext";
 
 // Helper to check SuperAdmin role
@@ -179,11 +176,8 @@ export default function App() {
             <Route path="/superadmin/hospital-care" element={<HospitalCareList />} />
             <Route path="/superadmin/hospital-care/:id" element={<HospitalDetail />} />
             <Route path="/superadmin/log-ot" element={<SuperAdminLogOT />} />
-<<<<<<< HEAD
             <Route path="/superadmin/utility/map-hospitals" element={<MapHospitals />} />
-=======
             <Route path="/superadmin/tickets" element={<ListTicketPage />} />
->>>>>>> NguyenChien
 
           </Route>
 
@@ -233,12 +227,9 @@ export default function App() {
             <Route path="/bar-chart" element={<BarChart />} />
             <Route path="/notifications" element={<AllNotificationsPage />} />
             <Route path="/log-ot" element={<LogOT />} />
-<<<<<<< HEAD
             <Route path="/utility/map-hospitals" element={<MapHospitals />} />
-=======
             <Route path="/tickets" element={<ListTicketPage />} />
             <Route path="/tool-encryption" element={<ToolEncryption />} />
->>>>>>> NguyenChien
           </Route>
 
           {/* Auth Layout */}

@@ -92,6 +92,21 @@ function MapFocusOnProvince({ provinceFilter }: { provinceFilter: string }) {
   return null;
 }
 
+function AddIslandLabelPane() {
+  const map = useMap();
+
+  useEffect(() => {
+    const paneName = "island-labels";
+    if (!map.getPane(paneName)) {
+      const pane = map.createPane(paneName);
+      // Put island labels above tiles/markers.
+      pane.style.zIndex = "1200";
+    }
+  }, [map]);
+
+  return null;
+}
+
 function createHospitalMarkerIcon(color: string, initialLetter: string) {
   // Small circular pin to match the marker feel in the screenshot.
   return L.divIcon({
@@ -118,6 +133,34 @@ function createHospitalMarkerIcon(color: string, initialLetter: string) {
         aria-hidden="true"
       >
         ${initialLetter}
+      </div>
+    `,
+  });
+}
+
+function createIslandLabelIcon(text: string) {
+  // Overlay label to cover the tile's own (Chinese) place label.
+  return L.divIcon({
+    className: "",
+    iconSize: [210, 44],
+    iconAnchor: [105, 22],
+    html: `
+      <div
+        style="
+          padding: 8px 14px;
+          border-radius: 9999px;
+          background: rgba(255,255,255,0.96);
+          border: 1px solid rgba(0,0,0,0.16);
+          box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+          color: #111827;
+          font-weight: 800;
+          font-size: 13px;
+          line-height: 1;
+          white-space: nowrap;
+          pointer-events: none;
+        "
+      >
+        ${text}
       </div>
     `,
   });
@@ -371,6 +414,24 @@ export default function MapHospitals() {
                 <TileLayerAny
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   attribution='&copy; OpenStreetMap contributors'
+                />
+
+                <AddIslandLabelPane />
+
+                {/* Overlay labels: top = Trường Sa, bottom = Hoàng Sa (per your screenshot) */}
+                <MarkerAny
+                  position={[16.75, 111.9]}
+                  icon={createIslandLabelIcon("Trường Sa")}
+                  interactive={false}
+                  zIndexOffset={10000}
+                  pane="island-labels"
+                />
+                <MarkerAny
+                  position={[10.6, 114.3]}
+                  icon={createIslandLabelIcon("Hoàng Sa")}
+                  interactive={false}
+                  zIndexOffset={10000}
+                  pane="island-labels"
                 />
 
                 {markers.map((m) => (

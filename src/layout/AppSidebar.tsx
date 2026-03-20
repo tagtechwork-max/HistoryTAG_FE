@@ -77,7 +77,6 @@ const navItems: NavItem[] = [
       { name: "Công việc triển khai mới", path: "/implementation-tasks-new", pro: false },
       // { name: "Công việc DEV", path: "/dev-tasks", pro: false },
       { name: "Công việc bảo trì", path: "/maintenance-tasks", pro: false },
-      { name: "Tool mã hóa", path: "/tool-encryption", pro: false },
     ],
   },
   
@@ -88,15 +87,20 @@ const navItems: NavItem[] = [
       { name: "Chăm sóc khách hàng", path: "/admin/hospital-care", pro: false },
     ],
   },
+
+  {
+    name: "Tiện ích",
+    icon: <PlugInIcon />,
+    subItems: [
+      { name: "Bản đồ bệnh viện", path: "/utility/map-hospitals", pro: false },
+      { name: "Tool mã hóa", path: "/tool-encryption", pro: false },
+    ],
+    
+  },
   {
     name: "Log OT",
     icon: <TimeIcon />,
     path: "/log-ot",
-  },
-  {
-    name: "Tiện ích",
-    icon: <PlugInIcon />,
-    subItems: [{ name: "Bản đồ bệnh viện", path: "/utility/map-hospitals", pro: false }],
   },
   {
     name: "Phê duyệt OT",

@@ -91,15 +91,16 @@ const navItems: NavItem[] = [
       // { name: "Viện có hợp đồng", path: "/superadmin/hospitals-with-contracts", pro: false },
     ],
   },
-  {
-    name: "Phê duyệt OT",
-    icon: <TimeIcon />,
-    path: "/superadmin/log-ot",
-  },
+
   {
     name: "Tiện ích",
     icon: <PlugInIcon />,
     subItems: [{ name: "Bản đồ bệnh viện", path: "/superadmin/utility/map-hospitals", pro: false }],
+  },
+  {
+    name: "Phê duyệt OT",
+    icon: <TimeIcon />,
+    path: "/superadmin/log-ot",
   },
 ];
 

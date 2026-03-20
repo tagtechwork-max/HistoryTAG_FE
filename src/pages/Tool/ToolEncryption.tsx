@@ -41,14 +41,14 @@ export default function ToolEncryption() {
     <>
       <PageMeta
         title="Tool mã hóa"
-        description="Công cụ mã hóa nhanh chuỗi văn bản sang MD5 và SHA-256 trong hệ thống TAG."
+        description="Công cụ mã hóa nhanh chuỗi văn bản sang MD5."
       />
       <div className="px-4 py-6 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-4xl space-y-6">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Tool mã hóa</h1>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              Nhập nội dung cần mã hóa, hệ thống sẽ sinh ra giá trị MD5 và SHA-256 tương ứng.
+              Nhập nội dung cần mã hóa, hệ thống sẽ sinh ra giá trị MD5 .
             </p>
           </div>
 
@@ -73,7 +73,7 @@ export default function ToolEncryption() {
             </p> */}
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-1">
             <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div>
@@ -94,7 +94,7 @@ export default function ToolEncryption() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            {/* <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div>
                   <h2 className="text-sm font-semibold text-gray-900 dark:text-white">SHA-256</h2>
@@ -112,7 +112,7 @@ export default function ToolEncryption() {
               <div className="rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-800 dark:bg-gray-800 dark:text-gray-100 break-all min-h-[2.5rem]">
                 {sha256 || "—"}
               </div>
-            </div>
+            </div> */}
           </div>
         </div>
       </div>
