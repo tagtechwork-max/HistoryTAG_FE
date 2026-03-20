@@ -147,12 +147,21 @@ function normalizeRole(r: any): string {
     return r.toUpperCase().trim();
   }
   if (r && typeof r === 'object') {
-    const roleName = r.roleName || r.role_name || r.role || r.name;
+    const roleName = r.roleName || r.role_name || r.role || r.name || r.authority;
     if (typeof roleName === 'string') {
       return roleName.toUpperCase().trim();
     }
   }
   return String(r).toUpperCase().trim();
+}
+
+function isSuperAdminRoleValue(rawRole: string): boolean {
+  const compact = String(rawRole || '')
+    .toUpperCase()
+    .trim()
+    .replace(/^ROLE[_\s-]*/i, '')
+    .replace(/[_\s-]/g, '');
+  return compact === 'SUPERADMIN' || compact.includes('SUPERADMIN');
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -225,7 +234,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // ✅ Check permissions
       const isSuperAdmin = normalizedRoles.some((r: string) =>
-        r === 'SUPERADMIN' || r === 'SUPER_ADMIN' || r === 'SUPER ADMIN'
+        isSuperAdminRoleValue(r)
       );
       const isAdmin = normalizedRoles.some((r: string) =>
         r === 'ADMIN' || isSuperAdmin
@@ -316,7 +325,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (rolesStr) {
           const roles = JSON.parse(rolesStr).map(normalizeRole);
           const isSuperAdmin = roles.some((r: string) => 
-            r === 'SUPERADMIN' || r === 'SUPER_ADMIN'
+            isSuperAdminRoleValue(r)
           );
           const isAdmin = roles.some((r: string) => 
             r === 'ADMIN' || isSuperAdmin
@@ -454,9 +463,7 @@ export function getRolesFromToken(): string[] {
  */
 export function isSuperAdmin(): boolean {
   const roles = getRolesFromToken();
-  return roles.some((r: string) => 
-    r === 'SUPERADMIN' || r === 'SUPER_ADMIN' || r === 'SUPER ADMIN'
-  );
+  return roles.some((r: string) => isSuperAdminRoleValue(r));
 }
 
 export function isAdmin(): boolean {

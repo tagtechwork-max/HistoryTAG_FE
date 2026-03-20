@@ -5,6 +5,8 @@ import { getAuthToken } from '../api/client';
 
 interface WebSocketContextType {
   subscribe: (destination: string, callback: (message: any) => void) => () => void;
+  /** Send a message to a destination (e.g. /app/work-items/123/typing). Body will be JSON.stringified if object. */
+  publish: (destination: string, body: string | object) => void;
   isConnected: boolean;
 }
 
@@ -136,8 +138,15 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
   }, []);
 
+  const publish = useCallback((destination: string, body: string | object) => {
+    const client = clientRef.current;
+    if (!client?.connected) return;
+    const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+    client.publish({ destination, body: bodyStr });
+  }, []);
+
   return (
-    <WebSocketContext.Provider value={{ subscribe, isConnected }}>
+    <WebSocketContext.Provider value={{ subscribe, publish, isConnected }}>
       {children}
     </WebSocketContext.Provider>
   );

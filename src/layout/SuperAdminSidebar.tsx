@@ -31,7 +31,10 @@ const navItems: NavItem[] = [
   {
     icon: <GridIcon />,
     name: "Dashboard",
-    path: "/superadmin/home",
+    subItems: [
+      { name: "Báo cáo tổng quan", path: "/superadmin/home", pro: false },
+      { name: "Thống kê triển khai", path: "/superadmin/deployment-dashboard", pro: false },
+    ],
   },
   {
     icon: <CalenderIcon />,
@@ -73,7 +76,7 @@ const navItems: NavItem[] = [
     name: "Công việc",
     icon: <TaskIcon />,
     subItems: [
-      { name: "Công việc Triển khai ", path: "/superadmin/implementation-tasks", pro: false },
+      // { name: "Công việc Triển khai ", path: "/superadmin/implementation-tasks", pro: false },
       { name: "Công việc triển khai mới", path: "/superadmin/implementation-tasks-new", pro: false },
       // { name: "Công việc Dev", path: "/superadmin/dev-tasks", pro: false },
       { name: "Công việc Bảo Trì", path: "/superadmin/maintenance-tasks", pro: false },
@@ -89,7 +92,7 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    name: "Log OT",
+    name: "Phê duyệt OT",
     icon: <TimeIcon />,
     path: "/superadmin/log-ot",
   },

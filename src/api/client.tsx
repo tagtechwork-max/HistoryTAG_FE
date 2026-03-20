@@ -7,12 +7,29 @@ function getCookie(name: string) {
   return m ? decodeURIComponent(m[2]) : null;
 }
 
-/** Ưu tiên đọc token từ cookie rồi tới localStorage, cuối cùng là sessionStorage */
+/** Ưu tiên đọc token từ cookie rồi tới localStorage, cuối cùng là sessionStorage.
+ *  Trả về null nếu không có token hoặc token đã hết hạn (để tránh menu ẩn khi để qua đêm).
+ */
 export function getAuthToken(): string | null {
-  return getCookie("access_token") 
+  const raw =
+    getCookie("access_token") 
     || localStorage.getItem("access_token") 
     || sessionStorage.getItem("access_token")
     || localStorage.getItem("token");
+  if (!raw) return null;
+  if (isTokenExpired(raw)) {
+    clearAllAuthData();
+    if (typeof window !== "undefined" && !isRedirecting) {
+      const path = window.location.pathname;
+      const isAuthPage = path === "/signin" || path === "/signup" || path === "/forgot-password" || path === "/reset-password";
+      if (!isAuthPage) {
+        isRedirecting = true;
+        window.location.href = "/signin";
+      }
+    }
+    return null;
+  }
+  return raw;
 }
 
 // ✅ Helper để check xem token có expired không (export để dùng chung)
@@ -73,6 +90,15 @@ let isRedirecting = false;
 
 // ✅ Helper để check xem user có phải SUPERADMIN không
 function isSuperAdminUser(): boolean {
+  const isSuperAdminRole = (value: unknown): boolean => {
+    if (value == null) return false;
+    const raw = String(value).toUpperCase().trim();
+    const compact = raw
+      .replace(/^ROLE[_\s-]*/i, '')
+      .replace(/[_\s-]/g, '');
+    return compact === 'SUPERADMIN' || compact.includes('SUPERADMIN');
+  };
+
   if (typeof window === 'undefined') return false;
   try {
     // Check pathname
@@ -80,11 +106,11 @@ function isSuperAdminUser(): boolean {
     // Check roles from localStorage/sessionStorage
     const roles = JSON.parse(localStorage.getItem('roles') || sessionStorage.getItem('roles') || '[]');
     if (Array.isArray(roles) && roles.some((r: unknown) => {
-      if (typeof r === 'string') return r.toUpperCase() === 'SUPERADMIN';
+      if (typeof r === 'string') return isSuperAdminRole(r);
       if (r && typeof r === 'object') {
         const rr = r as Record<string, unknown>;
-        const rn = rr.roleName ?? rr.role_name ?? rr.role;
-        return typeof rn === 'string' && rn.toUpperCase() === 'SUPERADMIN';
+        const rn = rr.roleName ?? rr.role_name ?? rr.role ?? rr.name ?? rr.authority;
+        return isSuperAdminRole(rn);
       }
       return false;
     })) {
@@ -98,7 +124,15 @@ function isSuperAdminUser(): boolean {
         if (parts.length >= 2) {
           const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
           const maybeRoles = payload.roles || payload.authorities || payload.role || payload.realm_access && payload.realm_access.roles;
-          if (Array.isArray(maybeRoles) && maybeRoles.some((r: unknown) => typeof r === 'string' && (r as string).toUpperCase() === 'SUPERADMIN')) {
+          if (Array.isArray(maybeRoles) && maybeRoles.some((r: unknown) => {
+            if (typeof r === 'string') return isSuperAdminRole(r);
+            if (r && typeof r === 'object') {
+              const rr = r as Record<string, unknown>;
+              const rn = rr.roleName ?? rr.role_name ?? rr.role ?? rr.name ?? rr.authority;
+              return isSuperAdminRole(rn);
+            }
+            return false;
+          })) {
             return true;
           }
         }
@@ -136,14 +170,19 @@ api.interceptors.request.use((config) => {
   }
   
   // ✅ Chặn superadmin API calls từ ADMIN users (chặn từ gốc)
+  // Ngoại lệ: /api/v1/superadmin/ot/** cho phép ADMIN gọi (server sẽ kiểm tra canApproveOt)
   const isSuperAdminAPI = config.url?.includes('/api/v1/superadmin/');
+  const isOTApprovalAPI = config.url?.includes('/api/v1/superadmin/ot');
   if (isSuperAdminAPI && !isSuperAdminUser()) {
-    // Reject ngay từ client, không gửi request đến server
-    return Promise.reject({
-      message: 'FORBIDDEN_CLIENT: ADMIN users cannot access SUPERADMIN endpoints',
-      config,
-      silent: true, // Flag để không log error spam
-    }) as any;
+    if (isOTApprovalAPI) {
+      // Allow ADMIN to call OT approval APIs; backend will check canApproveOt
+    } else {
+      return Promise.reject({
+        message: 'FORBIDDEN_CLIENT: ADMIN users cannot access SUPERADMIN endpoints',
+        config,
+        silent: true,
+      }) as any;
+    }
   }
 
   // ✅ Không gửi token cho các API public (đăng nhập, đăng ký, quên mật khẩu, etc.)

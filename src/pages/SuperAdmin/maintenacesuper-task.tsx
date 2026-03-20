@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { FiActivity, FiInfo, FiLink, FiUser, FiClock, FiCheckCircle, FiXCircle, FiTag, FiX } from "react-icons/fi";
 import { useWebSocket } from "../../contexts/WebSocketContext";
 import { FaHospital } from "react-icons/fa";
@@ -193,6 +194,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
   // ✅ Use AuthContext hook - Performance optimized với useMemo, reactive với token changes
   const { isSuperAdmin } = useAuth();
   const isSuper = isSuperAdmin;
+  const navigate = useNavigate();
 
   const [data, setData] = useState<MaintTask[]>([]);
   const [loading, setLoading] = useState(false);
@@ -235,7 +237,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
   const [hospitalsWithTasks, setHospitalsWithTasks] = useState<Array<{ id: number; label: string; subLabel?: string; hospitalCode?: string; taskCount?: number; acceptedCount?: number; nearDueCount?: number; overdueCount?: number; fromDeployment?: boolean; acceptedByMaintenance?: boolean; picDeploymentIds?: Array<string | number>; picDeploymentNames?: string[]; maintenancePersonInChargeName?: string }>>([]);
   const [loadingHospitals, setLoadingHospitals] = useState<boolean>(false);
   const [hospitalPage, setHospitalPage] = useState<number>(0);
-  const [hospitalSize, setHospitalSize] = useState<number>(20);
+  const [hospitalSize, setHospitalSize] = useState<number>(10);
   const [acceptedCount, setAcceptedCount] = useState<number | null>(null);
   const [hospitalSearch, setHospitalSearch] = useState<string>("");
   const [hospitalCodeSearch, setHospitalCodeSearch] = useState<string>("");
@@ -1296,6 +1298,14 @@ const MaintenanceSuperTaskPage: React.FC = () => {
                       {pendingTasks.length}
                     </span>
                   )}
+                </button>
+                <button
+                  className="inline-flex items-center gap-2 rounded-full border border-gray-300 text-gray-800 px-4 py-2 text-sm bg-white hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:bg-gray-900"
+                  onClick={() => navigate("/superadmin/tickets")}
+                  type="button"
+                >
+                  <FiTag className="w-5 h-5" />
+                  Tickets
                 </button>
               </div>
             </div>

@@ -47,6 +47,8 @@ export type UserResponseDTO = {
   primaryTeam?: string | null;
   /** Danh sách team (từ user_teams) dùng làm fallback khi không có primaryTeam */
   availableTeams?: string[] | null;
+  /** Khi true, user (ADMIN) được phép vào trang Phê duyệt OT. */
+  canApproveOt?: boolean | null;
 };
 
 export type UserUpdateRequestDTO = {

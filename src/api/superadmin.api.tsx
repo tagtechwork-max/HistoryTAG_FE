@@ -27,6 +27,8 @@ export type UserResponseDTO = {
   availableTeams?: string[] | null;
   primaryTeam?: string | null;
   teamRoles?: Record<string, string> | null;
+  /** When true, this user (ADMIN) is allowed to approve OT. */
+  canApproveOt?: boolean | null;
 };
 
 export type SuperAdminUserCreateDTO = {
@@ -66,6 +68,8 @@ export type UserUpdateRequestDTO = {
   selectedTeams?: string[]; // List of team IDs
   teamRoles?: string; // JSON string: teamId -> role (LEADER/MEMBER)
   primaryTeam?: string; // Primary team ID
+  /** When true, allow this user (ADMIN) to approve OT. */
+  canApproveOt?: boolean;
 };
 
 // User Management APIs

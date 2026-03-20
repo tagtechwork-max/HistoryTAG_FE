@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import TaskCardNew from "../SuperAdmin/TaskCardNew";
 import TaskNotes from "../../components/TaskNotes";
 import { AiOutlineEye } from "react-icons/ai";
@@ -1655,6 +1656,7 @@ function Info({
 }
 
 const ImplementationTasksPage: React.FC = () => {
+    const navigate = useNavigate();
     const [data, setData] = useState<ImplementationTaskResponseDTO[]>([]);
     const [loading, setLoading] = useState(false);
     const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -1699,7 +1701,7 @@ const ImplementationTasksPage: React.FC = () => {
     }>>([]);
     const [loadingHospitals, setLoadingHospitals] = useState<boolean>(false);
     const [hospitalPage, setHospitalPage] = useState<number>(0);
-    const [hospitalSize, setHospitalSize] = useState<number>(20);
+    const [hospitalSize, setHospitalSize] = useState<number>(10);
     const [selectedHospital, setSelectedHospital] = useState<string | null>(null);
     const [hospitalSearch, setHospitalSearch] = useState<string>("");
     const [hospitalCodeSearch, setHospitalCodeSearch] = useState<string>("");
@@ -2920,6 +2922,17 @@ const ImplementationTasksPage: React.FC = () => {
                                                         </span>
                                                     )}
                                                 </button>
+                                                <button
+                                                    className="inline-flex items-center gap-2 rounded-full border border-gray-300 text-gray-800 px-4 py-2 text-sm bg-white hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:bg-gray-900"
+                                                    onClick={() => {
+                                                        const targetPath = isSuperAdmin ? "/superadmin/tickets" : "/tickets";
+                                                        navigate(targetPath);
+                                                    }}
+                                                >
+                                                    <FiTag className="w-5 h-5" />
+                                                    Tickets
+                                                </button>
+                                                
                                             </>
                                         )}
                                     </div>

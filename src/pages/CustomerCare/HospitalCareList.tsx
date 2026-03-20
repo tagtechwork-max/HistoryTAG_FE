@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import PageMeta from "../../components/common/PageMeta";
 import Pagination from "../../components/common/Pagination";
 import AddHospitalToCareForm, { AddHospitalToCareFormData } from "./Form/AddHospitalToCareForm";
@@ -264,17 +264,20 @@ const tabs: Tab[] = [
 export default function HospitalCareList() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Initialize state from URL so returning from detail keeps page/filters
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get("search") ?? "");
   const [statusFilter, setStatusFilter] = useState("");
-  const [priorityFilter, setPriorityFilter] = useState("");
-  const [customerTypeFilter, setCustomerTypeFilter] = useState("");
-  const [dateFromFilter, setDateFromFilter] = useState("");
-  const [dateToFilter, setDateToFilter] = useState("");
-  const [picFilter, setPicFilter] = useState(""); // User ID (string) thay vì tên
+  const [priorityFilter, setPriorityFilter] = useState(() => searchParams.get("priority") ?? "");
+  const [customerTypeFilter, setCustomerTypeFilter] = useState(() => searchParams.get("customerType") ?? "");
+  const [dateFromFilter, setDateFromFilter] = useState(() => searchParams.get("dateFrom") ?? "");
+  const [dateToFilter, setDateToFilter] = useState(() => searchParams.get("dateTo") ?? "");
+  const [picFilter, setPicFilter] = useState(() => searchParams.get("pic") ?? "");
   const [groupFilter, setGroupFilter] = useState("");
-  const [activeTab, setActiveTab] = useState<TabKey>("all");
-  const [currentPage, setCurrentPage] = useState(0);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [activeTab, setActiveTab] = useState<TabKey>(() => (searchParams.get("tab") ?? "all") as TabKey);
+  const [currentPage, setCurrentPage] = useState(() => Math.max(0, parseInt(searchParams.get("page") ?? "0", 10)));
+  const [itemsPerPage, setItemsPerPage] = useState(() => Math.max(1, parseInt(searchParams.get("size") ?? "10", 10)));
   const [showAddHospitalModal, setShowAddHospitalModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedHospitalId, setSelectedHospitalId] = useState<number | null>(null);
@@ -302,6 +305,23 @@ export default function HospitalCareList() {
     dang_hoat_dong: 0,
   });
 
+  // Restore page + filters from URL whenever we land on the list (location.search is source of truth when entering the page)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const page = Math.max(0, parseInt(params.get("page") ?? "0", 10));
+    const size = Math.max(1, parseInt(params.get("size") ?? "10", 10));
+    const tab = (params.get("tab") ?? "all") as TabKey;
+    setCurrentPage(page);
+    setItemsPerPage(size);
+    setActiveTab(tab);
+    setSearchTerm(params.get("search") ?? "");
+    setPriorityFilter(params.get("priority") ?? "");
+    setCustomerTypeFilter(params.get("customerType") ?? "");
+    setPicFilter(params.get("pic") ?? "");
+    setDateFromFilter(params.get("dateFrom") ?? "");
+    setDateToFilter(params.get("dateTo") ?? "");
+  }, [location.pathname, location.search]);
+
   // Load contract status counts from API
   useEffect(() => {
     const loadContractStatusCounts = async () => {
@@ -316,15 +336,27 @@ export default function HospitalCareList() {
     loadContractStatusCounts();
   }, []); // Chỉ load một lần khi mount
 
-  // Load data from API
+  // Load data from API. Use URL as source of truth for page/size/filters so "back from detail" always requests the correct page (avoids race with state restore).
   useEffect(() => {
+    const search = new URLSearchParams(location.search);
+    const pageFromUrl = Math.max(0, parseInt(search.get("page") ?? "", 10));
+    const sizeFromUrl = Math.max(1, parseInt(search.get("size") ?? "", 10));
+    const pageForRequest = Number.isNaN(pageFromUrl) ? currentPage : pageFromUrl;
+    const sizeForRequest = Number.isNaN(sizeFromUrl) ? itemsPerPage : sizeFromUrl;
+    const tabFromUrl = (search.get("tab") ?? activeTab) as TabKey;
+    const searchFromUrl = search.get("search") ?? searchTerm;
+    const priorityFromUrl = search.get("priority") ?? priorityFilter;
+    const customerTypeFromUrl = search.get("customerType") ?? customerTypeFilter;
+    const picFromUrl = search.get("pic") ?? picFilter;
+
+    const abortController = new AbortController();
     const loadData = async () => {
       setLoading(true);
       setError(null);
       try {
         const params: any = {
-          page: currentPage,
-          size: itemsPerPage,
+          page: pageForRequest,
+          size: sizeForRequest,
           sortBy: "lastContactDate", // Sắp xếp theo lịch sử liên hệ mới nhất
           sortDir: "desc", // Mới nhất lên đầu
         };
@@ -332,23 +364,22 @@ export default function HospitalCareList() {
         // Debug: Log params
         console.log("🔍 DEBUG getAllCares params:", params);
 
-        // Apply filters
-        if (searchTerm) params.search = searchTerm;
-        if (priorityFilter) params.priority = priorityFilter;
-        if (customerTypeFilter) params.customerType = customerTypeFilter;
-        if (picFilter) {
-          // Gửi assignedUserId lên backend để filter
-          const userId = parseInt(picFilter, 10);
+        // Apply filters (use URL-derived values so first load after "back" is correct)
+        if (searchFromUrl) params.search = searchFromUrl;
+        if (priorityFromUrl) params.priority = priorityFromUrl;
+        if (customerTypeFromUrl) params.customerType = customerTypeFromUrl;
+        if (picFromUrl) {
+          const userId = parseInt(picFromUrl, 10);
           if (!isNaN(userId)) {
             params.assignedUserId = userId;
           }
         }
-        // Filter theo contract status (tab filter) - gửi lên backend
-        if (activeTab !== "all") {
-          params.contractStatus = activeTab;
+        if (tabFromUrl !== "all") {
+          params.contractStatus = tabFromUrl;
         }
 
         const response = await getAllCustomerCares(params);
+        if (abortController.signal.aborted) return;
         
         // Debug: Log response để kiểm tra thứ tự
         console.log("🔍 DEBUG getAllCares response:", {
@@ -363,7 +394,8 @@ export default function HospitalCareList() {
         // Handle paginated response
         const data = response.content || response.data || (Array.isArray(response) ? response : []);
         const total = response.totalElements || response.total || data.length;
-        const pages = response.totalPages || Math.ceil(total / itemsPerPage);
+        const pages = response.totalPages || Math.ceil(total / sizeForRequest);
+        if (abortController.signal.aborted) return;
 
         const convertedHospitals = Array.isArray(data) 
           ? data.map(convertApiResponseToHospital)
@@ -467,6 +499,7 @@ export default function HospitalCareList() {
             }
           })
         );
+        if (abortController.signal.aborted) return;
 
         setHospitals(hospitalsWithContracts);
         setTotalItems(total);
@@ -475,23 +508,25 @@ export default function HospitalCareList() {
         // Refresh contract status counts sau khi load data
         try {
           const counts = await getContractStatusCounts();
-          setContractStatusCounts(counts);
+          if (!abortController.signal.aborted) setContractStatusCounts(counts);
         } catch (countsErr) {
           console.warn("Error refreshing contract status counts:", countsErr);
         }
       } catch (err: any) {
+        if (abortController.signal.aborted) return;
         console.error("Error loading customer care list:", err);
         setError(err?.response?.data?.message || err?.message || "Có lỗi xảy ra khi tải dữ liệu");
         setHospitals([]);
         setTotalItems(0);
         setTotalPages(0);
       } finally {
-        setLoading(false);
+        if (!abortController.signal.aborted) setLoading(false);
       }
     };
 
     loadData();
-  }, [currentPage, itemsPerPage, searchTerm, priorityFilter, customerTypeFilter, picFilter, activeTab]);
+    return () => abortController.abort();
+  }, [location.search, currentPage, itemsPerPage, searchTerm, priorityFilter, customerTypeFilter, picFilter, activeTab]);
 
   // Load customer types on mount
   useEffect(() => {
@@ -595,12 +630,50 @@ export default function HospitalCareList() {
   // Pagination - API đã handle pagination, nhưng vẫn filter client-side cho tabs
   const paginatedHospitals = filteredHospitals;
 
-  // Reset to page 0 when filters change (except currentPage and itemsPerPage which are handled in loadData)
+  // Sync list state -> URL when user changes page/filters. Skip first run so we don't overwrite URL with 0 when returning from detail.
+  const syncSkippedRef = useRef(false);
   useEffect(() => {
-    if (currentPage !== 0) {
-    setCurrentPage(0);
+    if (!syncSkippedRef.current) {
+      syncSkippedRef.current = true;
+      return;
     }
-  }, [searchTerm, priorityFilter, customerTypeFilter, dateFromFilter, dateToFilter, picFilter, activeTab]);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("page", String(currentPage));
+        next.set("tab", activeTab);
+        next.set("size", String(itemsPerPage));
+        if (searchTerm) next.set("search", searchTerm);
+        else next.delete("search");
+        if (priorityFilter) next.set("priority", priorityFilter);
+        else next.delete("priority");
+        if (customerTypeFilter) next.set("customerType", customerTypeFilter);
+        else next.delete("customerType");
+        if (picFilter) next.set("pic", picFilter);
+        else next.delete("pic");
+        if (dateFromFilter) next.set("dateFrom", dateFromFilter);
+        else next.delete("dateFrom");
+        if (dateToFilter) next.set("dateTo", dateToFilter);
+        else next.delete("dateTo");
+        return next;
+      },
+      { replace: true }
+    );
+  }, [currentPage, searchTerm, activeTab, itemsPerPage, priorityFilter, customerTypeFilter, picFilter, dateFromFilter, dateToFilter]);
+
+  // Reset to page 0 only when user actually changes a filter (not when we just restored from URL after "back")
+  const prevFiltersRef = useRef<string>("");
+  useEffect(() => {
+    const key = `${searchTerm}|${priorityFilter}|${customerTypeFilter}|${dateFromFilter}|${dateToFilter}|${picFilter}|${activeTab}`;
+    if (prevFiltersRef.current === "") {
+      prevFiltersRef.current = key;
+      return;
+    }
+    if (prevFiltersRef.current !== key && currentPage !== 0) {
+      setCurrentPage(0);
+    }
+    prevFiltersRef.current = key;
+  }, [searchTerm, priorityFilter, customerTypeFilter, dateFromFilter, dateToFilter, picFilter, activeTab, currentPage]);
 
   // Customer type options from API (enum values)
   const customerTypeOptions = customerTypes;
@@ -914,7 +987,7 @@ export default function HospitalCareList() {
                   <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
                     Người thêm
                   </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                  <th className="sticky right-0 z-10 whitespace-nowrap border-l border-gray-200 bg-gray-50 px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400 dark:shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.3)]">
                     Thao tác
                   </th>
                 </tr>
@@ -946,7 +1019,7 @@ export default function HospitalCareList() {
                     const { label, bgColor, textColor } = statusConfig[hospital.status];
                     const stt = currentPage * itemsPerPage + index + 1;
                     return (
-                      <tr key={hospital.careId} className={`${getRowBg(hospital.status)} transition hover:bg-gray-50 dark:hover:bg-gray-800/50`}>
+                      <tr key={hospital.careId} className={`group ${getRowBg(hospital.status)} transition hover:bg-gray-50 dark:hover:bg-gray-800/50`}>
                         {/* STT */}
                         <td className="whitespace-nowrap px-4 py-3 text-center text-sm text-gray-700 dark:text-gray-300">
                           {stt}
@@ -956,7 +1029,22 @@ export default function HospitalCareList() {
                           <button 
                             onClick={() => {
                               const basePath = location.pathname.includes('/superadmin') ? '/superadmin' : '/admin';
-                              navigate(`${basePath}/hospital-care/${hospital.careId}`); // Dùng careId, không phải hospital.id
+                              navigate(`${basePath}/hospital-care/${hospital.careId}`, {
+                                state: {
+                                  fromList: {
+                                    page: currentPage,
+                                    search: searchTerm,
+                                    tab: activeTab,
+                                    size: itemsPerPage,
+                                    priority: priorityFilter,
+                                    customerType: customerTypeFilter,
+                                    pic: picFilter,
+                                    dateFrom: dateFromFilter,
+                                    dateTo: dateToFilter,
+                                  },
+                                  basePath,
+                                },
+                              });
                             }}
                             className="flex items-center gap-1 text-left text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400"
                           >
@@ -1123,7 +1211,7 @@ export default function HospitalCareList() {
                         </td>
 
                         {/* Thao tác */}
-                        <td className="whitespace-nowrap px-4 py-3">
+                        <td className="sticky right-0 z-10 whitespace-nowrap border-l border-gray-200 bg-white px-4 py-3 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] transition-colors group-hover:bg-gray-50 dark:border-gray-700 dark:bg-white/[0.03] dark:shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.3)] dark:group-hover:bg-gray-800/50">
                           <div className="flex items-center justify-center gap-1 relative">
                             <button
                               title="Xem chi tiết"

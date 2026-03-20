@@ -17,6 +17,7 @@ import {
 } from "../icons";
 import { UserIcon } from "../icons";
 import { useSidebar } from "../context/SidebarContext";
+import { useAuth } from "../contexts/AuthContext";
 
 // Kiểu dữ liệu cho mục điều hướng
 type NavItem = {
@@ -31,7 +32,10 @@ const navItems: NavItem[] = [
   {
     icon: <GridIcon />,
     name: "Dashboard",
-    subItems: [{ name: "Báo cáo tổng quan", path: "/home", pro: false }],
+    subItems: [
+      { name: "Báo cáo tổng quan", path: "/home", pro: false },
+      { name: "Thống kê triển khai", path: "/deployment-dashboard", pro: false },
+    ],
   },
   {
     icon: <CalenderIcon />,
@@ -69,10 +73,11 @@ const navItems: NavItem[] = [
     name: "Công việc",
     icon: <TaskIcon />,
     subItems: [
-      { name: "Công việc triển khai", path: "/implementation-tasks", pro: false },
+      // { name: "Công việc triển khai", path: "/implementation-tasks", pro: false },
       { name: "Công việc triển khai mới", path: "/implementation-tasks-new", pro: false },
       // { name: "Công việc DEV", path: "/dev-tasks", pro: false },
       { name: "Công việc bảo trì", path: "/maintenance-tasks", pro: false },
+      { name: "Tool mã hóa", path: "/tool-encryption", pro: false },
     ],
   },
   
@@ -92,6 +97,11 @@ const navItems: NavItem[] = [
     name: "Tiện ích",
     icon: <PlugInIcon />,
     subItems: [{ name: "Bản đồ bệnh viện", path: "/utility/map-hospitals", pro: false }],
+  },
+  {
+    name: "Phê duyệt OT",
+    icon: <TimeIcon />,
+    path: "/admin/log-ot-approval",
   },
 ];
 
@@ -176,8 +186,24 @@ const AppSidebar: React.FC = () => {
     return false;
   });
 
+  const isAdmin = roles.some((role: any) => {
+    if (typeof role === "string") {
+      return role.toUpperCase() === "ADMIN";
+    }
+    if (role && typeof role === "object") {
+      const roleName = role.roleName || role.role_name || role.role;
+      return typeof roleName === "string" && roleName.toUpperCase() === "ADMIN";
+    }
+    return false;
+  });
+
   const userTeam = userInfo?.team ? String(userInfo.team).toUpperCase() : null;
   const userDepartment = userInfo?.department ? String(userInfo.department).toUpperCase() : null;
+
+  // activeTeam from AuthContext (JWT) overrides stored user.team when present
+  const { activeTeam: authActiveTeam } = useAuth();
+  const effectiveTeam = (authActiveTeam || userTeam || "").toString().toUpperCase();
+  const isSalesTeam = effectiveTeam === "SALES";
 
   // Filter calendar menu items based on user role/team/department
   const getCalendarMenuItems = () => {
@@ -227,6 +253,12 @@ const AppSidebar: React.FC = () => {
       if (item.name === "Phòng CSKH") {
         return isSuperAdmin || userDepartment === "BUSINESS";
       }
+      // Show "Phê duyệt OT" only for users who can approve: SuperAdmin always, or Admin with canApproveOt
+      if (item.name === "Phê duyệt OT") {
+        if (isSuperAdmin) return true;
+        if (isAdmin && userInfo?.canApproveOt === true) return true;
+        return false;
+      }
       return true;
     })
     .map((item) => {
@@ -234,6 +266,20 @@ const AppSidebar: React.FC = () => {
         return {
           ...item,
           subItems: getCalendarMenuItems(),
+        };
+      }
+      // Ẩn "Thống kê triển khai" cho tài khoản phòng kinh doanh (SALES)
+      if (item.name === "Dashboard" && item.subItems && isSalesTeam) {
+        return {
+          ...item,
+          subItems: item.subItems.filter((sub) => sub.path !== "/deployment-dashboard"),
+        };
+      }
+      // Team triển khai: chỉ hiển thị "Thống kê triển khai", không hiển thị "Báo cáo tổng quan"
+      if (item.name === "Dashboard" && item.subItems && effectiveTeam === "DEPLOYMENT") {
+        return {
+          ...item,
+          subItems: item.subItems.filter((sub) => sub.path === "/deployment-dashboard"),
         };
       }
       return item;

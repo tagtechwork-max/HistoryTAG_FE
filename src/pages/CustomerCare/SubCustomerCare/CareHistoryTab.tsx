@@ -3,6 +3,30 @@ import { FiPlus, FiPhoneCall, FiSend, FiUser, FiMail, FiFileText, FiEdit2, FiTra
 import { FaViber } from "react-icons/fa";
 import AddCareActivityForm, { CareActivityFormData } from "../Form/AddCareActivityForm";
 
+/** Get current logged-in user display name from storage (same pattern as rest of app). */
+function getCurrentUserDisplayName(): string {
+  try {
+    const raw = localStorage.getItem("user") || sessionStorage.getItem("user");
+    if (!raw) return "Người dùng";
+    const parsed = JSON.parse(raw) as {
+      fullname?: string | null;
+      fullName?: string | null;
+      username?: string | null;
+      name?: string | null;
+      email?: string | null;
+    };
+    const name =
+      parsed.fullname ??
+      parsed.fullName ??
+      parsed.name ??
+      parsed.username ??
+      parsed.email;
+    return typeof name === "string" && name.trim() ? name.trim() : "Người dùng";
+  } catch {
+    return "Người dùng";
+  }
+}
+
 export interface CareActivity {
   id: number;
   date: string;
@@ -13,12 +37,19 @@ export interface CareActivity {
   outcome?: "POSITIVE" | "NEUTRAL" | "NEGATIVE";
   nextAction?: string;
   nextFollowUpDate?: string;
+  /** User who created this activity (display name or username). Shown at bottom of each entry. */
+  createdBy?: string | null;
+  createdByName?: string | null;
 }
+
+/** Optional meta passed when adding an activity so parent can set createdByName on the new item. */
+export type CareActivityAddMeta = { createdByName: string };
 
 interface CareHistoryTabProps {
   careHistory: CareActivity[];
   hospitalName: string;
-  onAddActivity: (data: CareActivityFormData) => void;
+  /** When adding, we pass (data, { createdByName: currentUser }). Parent should set createdByName on the new activity. */
+  onAddActivity: (data: CareActivityFormData, meta?: CareActivityAddMeta) => void;
   onUpdateActivity?: (id: number, data: CareActivityFormData) => void;
   onDeleteActivity?: (id: number) => void;
 }
@@ -71,7 +102,8 @@ export default function CareHistoryTab({
       onUpdateActivity?.(editingActivity.id, data);
       setEditingActivity(null);
     } else {
-      onAddActivity(data);
+      const createdByName = getCurrentUserDisplayName();
+      onAddActivity(data, { createdByName });
     }
     setShowAddActivityModal(false);
   };
@@ -268,6 +300,15 @@ export default function CareHistoryTab({
                         (Follow up: {new Date(item.nextFollowUpDate).toLocaleString("vi-VN")})
                       </span>
                     )}
+                  </div>
+                )}
+                {(item.createdByName ?? item.createdBy) ? (
+                  <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
+                    Người thêm: <span className="font-medium text-gray-600 dark:text-gray-300">{item.createdByName ?? item.createdBy}</span>
+                  </div>
+                ) : (
+                  <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
+                    Người thêm: <span className="italic text-gray-400 dark:text-gray-500">Chưa cập nhật</span>
                   </div>
                 )}
               </div>

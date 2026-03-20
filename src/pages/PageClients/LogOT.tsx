@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import PageMeta from "../../components/common/PageMeta";
 import { Modal } from "../../components/ui/modal";
@@ -23,6 +23,21 @@ import {
   type OTAdminRequestDetailResponseDTO,
   type OTEntryUpsertRequestDTO,
 } from "../../api/ot.api";
+
+/** Extract error message from backend response (axios-like error) or fallback. */
+function getErrorMessage(error: unknown, fallback: string): string {
+  const err = error as { response?: { data?: unknown }; message?: string };
+  const data = err?.response?.data;
+  if (typeof data === "string" && data.trim()) return data.trim();
+  if (data && typeof data === "object") {
+    const msg = (data as { message?: unknown }).message;
+    const alt = (data as { error?: unknown }).error;
+    if (typeof msg === "string" && msg.trim()) return msg.trim();
+    if (typeof alt === "string" && alt.trim()) return alt.trim();
+  }
+  if (typeof err?.message === "string" && err.message.trim()) return err.message.trim();
+  return fallback;
+}
 
 type OTEntry = {
   id: number;
@@ -66,8 +81,30 @@ const STATUS_OPTIONS = [
 ];
 
 function parseTimeToMinutes(timeStr: string): number {
-  const [h, m] = (timeStr || "00:00").split(":").map(Number);
+  const normalized = normalizeTimeTo24h(timeStr || "00:00");
+  const [h, m] = normalized.split(":").map(Number);
   return (h || 0) * 60 + (m || 0);
+}
+
+/** Accept both "HH:mm" (24h) and "H:mm AM/PM" (12h) and return "HH:mm" (24h). */
+function normalizeTimeTo24h(timeStr: string): string {
+  if (!timeStr || typeof timeStr !== "string") return "00:00";
+  const t = timeStr.trim();
+  const upper = t.toUpperCase();
+  const hasPM = upper.includes("PM");
+  const hasAM = upper.includes("AM");
+  const match = t.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!match) {
+    const already24 = t.match(/^(\d{1,2}):(\d{2})$/);
+    if (already24) return t.length === 5 ? t : `${String(parseInt(already24[1], 10)).padStart(2, "0")}:${String(parseInt(already24[2], 10)).padStart(2, "0")}`;
+    return "00:00";
+  }
+  let h = parseInt(match[1], 10);
+  const m = parseInt(match[2], 10) || 0;
+  if (isNaN(h)) return "00:00";
+  if (hasPM && h !== 12) h += 12;
+  if (hasAM && h === 12) h = 0;
+  return `${String(h).padStart(2, "0")}:${String(Math.min(59, Math.max(0, m))).padStart(2, "0")}`;
 }
 
 function toHTMLDate(dateStr: string): string {
@@ -125,6 +162,7 @@ export default function LogOT() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<OTEntry | null>(null);
   const [formDate, setFormDate] = useState("");
+  const formDateInputRef = useRef<HTMLInputElement>(null);
   const [formStart, setFormStart] = useState("18:00");
   const [formEnd, setFormEnd] = useState("20:30");
   const [formOTType, setFormOTType] = useState<"weekday" | "offday">("weekday");
@@ -153,7 +191,7 @@ export default function LogOT() {
       setStatus("draft");
       setNotes("");
       setRejectReason("");
-      toast.error("Không tải được dữ liệu OT. Vui lòng thử lại.");
+      toast.error(getErrorMessage(error, "Không tải được dữ liệu OT. Vui lòng thử lại."));
     } finally {
       setLoading(false);
     }
@@ -178,11 +216,15 @@ export default function LogOT() {
   const statusLabel = STATUS_OPTIONS.find((s) => s.value === status)?.label ?? "Bản nháp";
   const statusColor = STATUS_OPTIONS.find((s) => s.value === status)?.color ?? "bg-amber-400";
 
+  // Support overnight OT: e.g. 22:00 -> 06:00 next morning = 8h (end < start => span midnight)
   const totalHoursForm = useMemo(() => {
     const startMin = parseTimeToMinutes(formStart);
     const endMin = parseTimeToMinutes(formEnd);
-    if (endMin <= startMin) return 0;
-    return Math.round(((endMin - startMin) / 60) * 100) / 100;
+    const minutesPerDay = 24 * 60;
+    const durationMin =
+      endMin <= startMin ? minutesPerDay - startMin + endMin : endMin - startMin;
+    if (durationMin <= 0) return 0;
+    return Math.round((durationMin / 60) * 100) / 100;
   }, [formStart, formEnd]);
 
   const isReadOnly = status === "submitted" || status === "approved";
@@ -202,8 +244,8 @@ export default function LogOT() {
     if (isReadOnly) return;
     setEditingEntry(entry);
     setFormDate(toHTMLDate(entry.date));
-    setFormStart(entry.start);
-    setFormEnd(entry.end);
+    setFormStart(normalizeTimeTo24h(entry.start));
+    setFormEnd(normalizeTimeTo24h(entry.end));
     setFormOTType(entry.otType);
     setFormDesc(entry.desc);
     setModalOpen(true);
@@ -222,8 +264,8 @@ export default function LogOT() {
 
     const payload: OTEntryUpsertRequestDTO = {
       date: toApiDate(formDate),
-      start: formStart,
-      end: formEnd,
+      start: normalizeTimeTo24h(formStart),
+      end: normalizeTimeTo24h(formEnd),
       otType: formOTType,
       desc: formDesc,
     };
@@ -240,7 +282,7 @@ export default function LogOT() {
       toast.success(editingEntry ? "Cập nhật mục OT thành công." : "Thêm mục OT thành công.");
     } catch (error) {
       console.error("Save OT entry failed", error);
-      toast.error("Không lưu được mục OT. Vui lòng kiểm tra lại dữ liệu.");
+      toast.error(getErrorMessage(error, "Không lưu được mục OT. Vui lòng kiểm tra lại dữ liệu."));
     } finally {
       setSavingEntry(false);
     }
@@ -255,12 +297,14 @@ export default function LogOT() {
       toast.success("Đã xóa mục OT.");
     } catch (error) {
       console.error("Delete OT entry failed", error);
-      toast.error("Xóa mục OT thất bại. Vui lòng thử lại.");
+      toast.error(getErrorMessage(error, "Xóa mục OT thất bại. Vui lòng thử lại."));
     }
   };
 
   const handleSubmitApproval = async () => {
     if (!requestId || submitting || isReadOnly) return;
+    const confirmed = window.confirm("Bạn có muốn gửi phê duyệt OT tháng này?");
+    if (!confirmed) return;
     setSubmitting(true);
     try {
       const response = await submitAdminOTRequest(requestId);
@@ -269,7 +313,7 @@ export default function LogOT() {
       toast.success("Đã gửi phiếu OT để phê duyệt.");
     } catch (error) {
       console.error("Submit OT request failed", error);
-      toast.error("Gửi phê duyệt thất bại. Vui lòng kiểm tra dữ liệu và thử lại.");
+      toast.error(getErrorMessage(error, "Gửi phê duyệt thất bại. Vui lòng kiểm tra dữ liệu và thử lại."));
     } finally {
       setSubmitting(false);
     }
@@ -284,7 +328,7 @@ export default function LogOT() {
       toast.success("Đã lưu ghi chú tháng.");
     } catch (error) {
       console.error("Update monthly notes failed", error);
-      toast.error("Lưu ghi chú thất bại. Vui lòng thử lại.");
+      toast.error(getErrorMessage(error, "Lưu ghi chú thất bại. Vui lòng thử lại."));
     } finally {
       setSavingNotes(false);
     }
@@ -538,6 +582,7 @@ export default function LogOT() {
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Ngày làm việc</label>
               <div className="relative">
                 <input
+                  ref={formDateInputRef}
                   type="date"
                   value={formDate}
                   onChange={(e) => {
@@ -547,9 +592,20 @@ export default function LogOT() {
                   }}
                   className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-12 text-sm text-gray-800 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof formDateInputRef.current?.showPicker === "function") {
+                      formDateInputRef.current.showPicker();
+                    } else {
+                      formDateInputRef.current?.focus();
+                    }
+                  }}
+                  className="absolute right-0 top-0 flex h-full w-12 items-center justify-center rounded-r-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                  title="Chọn ngày"
+                >
                   <CalenderIcon className="size-5" />
-                </span>
+                </button>
               </div>
             </div>
 
@@ -607,7 +663,9 @@ export default function LogOT() {
               </label>
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
                 <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400">{totalHoursForm.toFixed(2)} giờ</p>
-                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Tự động tính dựa trên giờ nhập</p>
+                {/* <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                Tự động tính từ giờ nhập (cả giờ sáng AM và chiều/tối PM). Hỗ trợ OT qua đêm (vd: 22:00 → 06:00 = 8h).
+              </p> */}
               </div>
             </div>
 

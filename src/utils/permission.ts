@@ -85,7 +85,7 @@ function normalizeRole(r: any): string {
     return r.toUpperCase().trim();
   }
   if (r && typeof r === 'object') {
-    const roleName = r.roleName || r.role_name || r.role || r.name;
+    const roleName = r.roleName || r.role_name || r.role || r.name || r.authority;
     if (typeof roleName === 'string') {
       return roleName.toUpperCase().trim();
     }
@@ -107,9 +107,13 @@ export function hasPermission(requiredRoles: string[]): boolean {
  */
 export function isSuperAdmin(): boolean {
   const roles = getRolesFromToken();
-  return roles.some(r => 
-    r === 'SUPERADMIN' || r === 'SUPER_ADMIN' || r === 'SUPER ADMIN'
-  );
+  return roles.some((role) => {
+    const raw = String(role || '').toUpperCase().trim();
+    const compact = raw
+      .replace(/^ROLE[_\s-]*/i, '')
+      .replace(/[_\s-]/g, '');
+    return compact === 'SUPERADMIN' || compact.includes('SUPERADMIN');
+  });
 }
 
 /**

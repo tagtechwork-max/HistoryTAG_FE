@@ -23,7 +23,6 @@ import AppLayout from "./layout/AppLayout";
 import SuperAdminLayout from "./layout/SuperAdminLayout";
 import { ScrollToTop } from "./components/common/ScrollToTop";
 import Home from "./pages/Dashboard/Home";
-import DeploymentDashboard from "./pages/Dashboard/DeploymentDashboard";
 import ImplementationTasksPage from "./pages/PageClients/implementation-tasks";
 import DevTasksPage from "./pages/PageClients/dev-tasks";
 import MaintenanceTasksPage from "./pages/PageClients/maintenance-tasks";
@@ -48,12 +47,6 @@ import HospitalDetailView from "./pages/CustomerCare/View/HospitalDetailView";
 import HospitalDetail from "./pages/CustomerCare/HospitalDetail";
 import LogOT from "./pages/PageClients/LogOT";
 import SuperAdminLogOT from "./pages/SuperAdmin/LogOT";
-<<<<<<< HEAD
-import MapHospitals from "./pages/Utility/MapHospitals";
-=======
-import ListTicketPage from "./pages/Ticket/listticket";
-import ToolEncryption from "./pages/Tool/ToolEncryption";
->>>>>>> NguyenChien
 import { AuthProvider } from "./contexts/AuthContext";
 
 // Helper to check SuperAdmin role
@@ -153,7 +146,6 @@ export default function App() {
           {/* Super Admin Layout - Protected */}
           <Route element={<ProtectedRoute><SuperAdminLayout /></ProtectedRoute>}>
             <Route path="/superadmin/home" element={<SuperAdminHome />} />
-            <Route path="/superadmin/deployment-dashboard" element={<DeploymentDashboard />} />
             <Route path="/superadmin/users" element={<SuperAdminUsers />} />
             <Route path="/superadmin/hospitals" element={<Hospitals />} />
             <Route path="/superadmin/his-systems" element={<HisSystemPage />} />
@@ -179,26 +171,18 @@ export default function App() {
             <Route path="/superadmin/hospital-care" element={<HospitalCareList />} />
             <Route path="/superadmin/hospital-care/:id" element={<HospitalDetail />} />
             <Route path="/superadmin/log-ot" element={<SuperAdminLogOT />} />
-<<<<<<< HEAD
-            <Route path="/superadmin/utility/map-hospitals" element={<MapHospitals />} />
-=======
-            <Route path="/superadmin/tickets" element={<ListTicketPage />} />
->>>>>>> NguyenChien
 
           </Route>
 
           {/* Dashboard Layout - Protected */}
           <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
             <Route path="/home" element={<Home />} />
-            <Route path="/deployment-dashboard" element={<DeploymentDashboard />} />
 
             {/* Admin - Business department */}
             <Route path="/admin/business" element={<BusinessPage />} />
             <Route path="/admin/maintain-contracts" element={<MaintainContractsPage />} />
             <Route path="/admin/hospital-care" element={<HospitalCareList />} />
             <Route path="/admin/hospital-care/:id" element={<HospitalDetail />} />
-            {/* OT approval: same page as SuperAdmin, allowed for ADMIN when granted */}
-            <Route path="/admin/log-ot-approval" element={<SuperAdminLogOT />} />
 
             {/* Others Page */}
             <Route path="/admin/profile" element={<UserProfiles />} />
@@ -233,12 +217,6 @@ export default function App() {
             <Route path="/bar-chart" element={<BarChart />} />
             <Route path="/notifications" element={<AllNotificationsPage />} />
             <Route path="/log-ot" element={<LogOT />} />
-<<<<<<< HEAD
-            <Route path="/utility/map-hospitals" element={<MapHospitals />} />
-=======
-            <Route path="/tickets" element={<ListTicketPage />} />
-            <Route path="/tool-encryption" element={<ToolEncryption />} />
->>>>>>> NguyenChien
           </Route>
 
           {/* Auth Layout */}
