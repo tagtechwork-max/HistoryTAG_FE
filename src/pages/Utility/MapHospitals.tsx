@@ -166,6 +166,26 @@ function createIslandLabelIcon(text: string) {
   });
 }
 
+function hashUnitInterval(n: number): number {
+  // Deterministic pseudo-random in [0, 1) for stable jitter across renders.
+  const x = Math.sin(n * 9999.123) * 10000;
+  return x - Math.floor(x);
+}
+
+function jitterAroundCenter(center: { lat: number; lng: number }, hospitalId: number) {
+  const a = hashUnitInterval(hospitalId);
+  const b = hashUnitInterval(hospitalId + 12345);
+  const angle = a * 2 * Math.PI;
+
+  // Roughly 2-5km radius at province zoom (enough to visually separate markers).
+  const radius = 0.02 + b * 0.03;
+
+  return {
+    lat: center.lat + radius * Math.sin(angle),
+    lng: center.lng + radius * Math.cos(angle),
+  };
+}
+
 export default function MapHospitals() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -239,7 +259,13 @@ export default function MapHospitals() {
 
       const position = hasPrecise
         ? { lat: p.latitude as number, lng: p.longitude as number }
-        : getProvinceCenter(province);
+        : (() => {
+            const center = getProvinceCenter(province);
+            if (!center) return null;
+            // When we only have province centroid (no precise lat/lng), spread markers
+            // so "many points" don't look like "a few points stacked together".
+            return jitterAroundCenter(center, p.hospitalId);
+          })();
 
       if (!position) continue;
 
