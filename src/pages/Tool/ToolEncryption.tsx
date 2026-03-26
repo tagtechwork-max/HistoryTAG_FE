@@ -94,7 +94,7 @@ export default function ToolEncryption() {
               </div>
             </div>
 
-            {/* <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div>
                   <h2 className="text-sm font-semibold text-gray-900 dark:text-white">SHA-256</h2>
@@ -112,7 +112,7 @@ export default function ToolEncryption() {
               <div className="rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-800 dark:bg-gray-800 dark:text-gray-100 break-all min-h-[2.5rem]">
                 {sha256 || "—"}
               </div>
-            </div> */}
+            </div>
           </div>
         </div>
       </div>
