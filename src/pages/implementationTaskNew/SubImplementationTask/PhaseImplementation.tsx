@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import PageMeta from "../../../components/common/PageMeta";
 import {
   CalenderIcon,
@@ -20,6 +20,7 @@ import {
   type MilestoneDto,
   type WorkItemListDto,
 } from "../../../api/api";
+import { implTasksListTo, parseListSearchFromState } from "./implListNav";
 
 function formatDate(d: string | null): string {
   if (!d) return "—";
@@ -191,6 +192,7 @@ const TASK_STATUS_CONFIG: Record<
  */
 export default function PhaseImplementation() {
   const { hospitalId } = useParams<{ hospitalId: string }>();
+  const location = useLocation();
   const [task, setTask] = useState<ImplementationTaskDetail | null>(null);
   const [phases, setPhases] = useState<(MilestoneDto & { status: PhaseStatus })[]>([]);
   const [recentWorkItems, setRecentWorkItems] = useState<WorkItemListDto[]>([]);
@@ -199,6 +201,7 @@ export default function PhaseImplementation() {
 
   const isSuperAdmin = window.location.pathname.startsWith("/superadmin");
   const basePath = isSuperAdmin ? "/superadmin/implementation-tasks-new" : "/implementation-tasks-new";
+  const listPath = implTasksListTo(basePath, parseListSearchFromState(location.state));
 
   useEffect(() => {
     if (!hospitalId) return;
@@ -335,7 +338,7 @@ export default function PhaseImplementation() {
           {error ?? "Không tìm thấy dữ liệu"}
         </div>
         <Link
-          to={basePath}
+          to={listPath}
           className="mt-4 inline-block text-sm text-blue-600 hover:underline dark:text-blue-400"
         >
           ← Quay lại danh sách
@@ -354,7 +357,7 @@ export default function PhaseImplementation() {
         {/* Breadcrumbs */}
         <nav className="mb-4 flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
           <Link
-            to={basePath}
+            to={listPath}
             className="hover:text-blue-600 dark:hover:text-blue-400"
           >
             Bệnh viện
@@ -505,7 +508,11 @@ export default function PhaseImplementation() {
               return (
                 <Fragment key={phase.id}>
                   {isCurrentPhase ? (
-                    <Link to={`${basePath}/${hospitalId}/${phase.id}`} className={baseClasses}>
+                    <Link
+                      to={`${basePath}/${hospitalId}/${phase.id}`}
+                      state={location.state}
+                      className={baseClasses}
+                    >
                       {content}
                     </Link>
                   ) : (
@@ -544,6 +551,7 @@ export default function PhaseImplementation() {
                 return (
                   <Link
                     to={viewAllUrl}
+                    state={location.state}
                     className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
                   >
                     Xem tất cả công việc

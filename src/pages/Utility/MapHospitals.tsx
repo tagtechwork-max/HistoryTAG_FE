@@ -177,8 +177,9 @@ function jitterAroundCenter(center: { lat: number; lng: number }, hospitalId: nu
   const b = hashUnitInterval(hospitalId + 12345);
   const angle = a * 2 * Math.PI;
 
-  // Roughly 2-5km radius at province zoom (enough to visually separate markers).
-  const radius = 0.02 + b * 0.03;
+  // Very small radius so "approximate" markers don't look random.
+  // 0.001~0.003 degrees is ~100~330m depending on latitude.
+  const radius = 0.001 + b * 0.002;
 
   return {
     lat: center.lat + radius * Math.sin(angle),
@@ -244,6 +245,7 @@ export default function MapHospitals() {
       category: StatusCategory;
       position: { lat: number; lng: number };
       icon: any;
+      usedFallbackCenter: boolean;
     }> = [];
 
     for (const p of points) {
@@ -257,13 +259,19 @@ export default function MapHospitals() {
         typeof p.latitude === "number" && Number.isFinite(p.latitude) &&
         typeof p.longitude === "number" && Number.isFinite(p.longitude);
 
+      const usedFallbackCenter = !hasPrecise;
+
       const position = hasPrecise
         ? { lat: p.latitude as number, lng: p.longitude as number }
         : (() => {
             const center = getProvinceCenter(province);
             if (!center) return null;
-            // When we only have province centroid (no precise lat/lng), spread markers
-            // so "many points" don't look like "a few points stacked together".
+
+            // If user is filtering to a single province, avoid moving markers
+            // away from the centroid (accuracy > visual separation).
+            if (selectedProvince.trim()) return center;
+
+            // Otherwise (overview), jitter only a tiny amount to reduce stacking.
             return jitterAroundCenter(center, p.hospitalId);
           })();
 
@@ -274,6 +282,7 @@ export default function MapHospitals() {
         category,
         position,
         icon: icons[category],
+        usedFallbackCenter,
       });
     }
 
@@ -488,6 +497,11 @@ export default function MapHospitals() {
                             {m.point.projectStatusDisplayName || m.category}
                           </span>
                         </div>
+                        {m.usedFallbackCenter ? (
+                          <div className="text-xs text-gray-500">
+                            Tọa độ bệnh viện chưa có; hiển thị ước tính tại trung tâm tỉnh.
+                          </div>
+                        ) : null}
                         <a
                           href={buildGoogleMapsDirectionsUrl(m.point.hospitalName, m.point.province, m.point.address)}
                           target="_blank"

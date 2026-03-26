@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import PageMeta from "../../components/common/PageMeta";
 import AddHospitalImplementation from "./form/AddHospitalImplementation";
 import type { EditHospitalInitial, HospitalFormSubmitPayload } from "./form/AddHospitalImplementation";
@@ -19,6 +19,7 @@ import {
 import api from "../../api/client";
 import { useWebSocket } from "../../contexts/WebSocketContext";
 import toast from "react-hot-toast";
+import { IMPL_TASKS_LIST_SEARCH_KEY, type ImplTasksLocationState } from "./SubImplementationTask/implListNav";
 
 type PendingImplementationTask = {
   id: number;
@@ -294,6 +295,7 @@ function getRowDisplay(
 export default function ListHospitalImplementation() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { subscribe } = useWebSocket();
   const isSuperAdmin = location.pathname.startsWith("/superadmin");
   const [search, setSearch] = useState("");
@@ -308,8 +310,38 @@ export default function ListHospitalImplementation() {
   const [phase, setPhase] = useState("all");
   const [status, setStatus] = useState("all");
   const [deadline, setDeadline] = useState("all");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  /** Pagination in URL so back from detail keeps the same page (?page=2&size=10). */
+  const currentPage = useMemo(() => {
+    const raw = searchParams.get("page");
+    const p = raw ? parseInt(raw, 10) : 1;
+    return Number.isFinite(p) && p >= 1 ? p : 1;
+  }, [searchParams]);
+
+  const itemsPerPage = useMemo(() => {
+    const raw = searchParams.get("size");
+    const s = raw ? parseInt(raw, 10) : 10;
+    const allowed = [5, 10, 20, 50];
+    return allowed.includes(s) ? s : 10;
+  }, [searchParams]);
+
+  const setCurrentPage = useCallback(
+    (value: number | ((prev: number) => number)) => {
+      setSearchParams(
+        (prev) => {
+          const sp = new URLSearchParams(prev);
+          const currentP = Math.max(1, parseInt(sp.get("page") || "1", 10) || 1);
+          const nextPage = typeof value === "function" ? value(currentP) : value;
+          const p = Math.max(1, Math.floor(Number(nextPage)));
+          if (p <= 1) sp.delete("page");
+          else sp.set("page", String(p));
+          return sp;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<DOMRect | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -688,8 +720,18 @@ export default function ListHospitalImplementation() {
   }, [data]);
 
   const handleItemsPerPageChange = (value: number) => {
-    setItemsPerPage(value);
-    setCurrentPage(1);
+    const allowed = [5, 10, 20, 50];
+    const v = allowed.includes(value) ? value : 10;
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev);
+        sp.delete("page");
+        if (v === 10) sp.delete("size");
+        else sp.set("size", String(v));
+        return sp;
+      },
+      { replace: true },
+    );
   };
 
   const MENU_HEIGHT = 180;
@@ -739,7 +781,10 @@ export default function ListHospitalImplementation() {
     closeMenu();
     if (action === "view") {
       const base = isSuperAdmin ? "/superadmin/implementation-tasks-new" : "/implementation-tasks-new";
-      navigate(`${base}/${id}`);
+      const listNavState: ImplTasksLocationState | undefined = location.search
+        ? { [IMPL_TASKS_LIST_SEARCH_KEY]: location.search }
+        : undefined;
+      navigate(`${base}/${id}`, listNavState ? { state: listNavState } : undefined);
       return;
     }
     if (action === "edit") {
@@ -1150,6 +1195,11 @@ export default function ListHospitalImplementation() {
                             isSuperAdmin
                               ? `/superadmin/implementation-tasks-new/${row.id}`
                               : `/implementation-tasks-new/${row.id}`
+                          }
+                          state={
+                            location.search
+                              ? ({ [IMPL_TASKS_LIST_SEARCH_KEY]: location.search } satisfies ImplTasksLocationState)
+                              : undefined
                           }
                           className="block cursor-pointer font-medium text-gray-900 transition hover:text-blue-600 dark:text-white dark:hover:text-blue-400"
                         >

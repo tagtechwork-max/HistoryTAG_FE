@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import PageMeta from "../../../components/common/PageMeta";
 import ViewTaskPhaseImplementation, { type TaskDetail } from "../view/ViewTaskPhaseImplementation";
 import type { WorkItemDetailDto } from "../../../api/api";
@@ -21,6 +21,7 @@ import {
   type WorkItemListDto,
   type MilestoneDto,
 } from "../../../api/api";
+import { implTasksListTo, parseListSearchFromState } from "./implListNav";
 
 const COLUMN_IDS = ["todo", "in_progress", "completed", "blocked"] as const;
 
@@ -354,6 +355,8 @@ export default function TaskPhaseImplementation() {
     ? "/superadmin/implementation-tasks-new"
     : "/implementation-tasks-new";
   const navigate = useNavigate();
+  const location = useLocation();
+  const listPath = implTasksListTo(basePath, parseListSearchFromState(location.state));
 
   const handleCompletePhaseClick = () => {
     setShowCompletePhaseConfirm(true);
@@ -368,9 +371,9 @@ export default function TaskPhaseImplementation() {
       setShowCompletePhaseConfirm(false);
       const nextPhase = phase.number + 1;
       if (nextPhase <= 4) {
-        navigate(`${basePath}/${hospitalId}/${nextPhase}`);
+        navigate(`${basePath}/${hospitalId}/${nextPhase}`, { state: location.state });
       } else {
-        navigate(`${basePath}/${hospitalId}`);
+        navigate(`${basePath}/${hospitalId}`, { state: location.state });
       }
     } catch (e) {
       const err = e as { response?: { status?: number }; message?: string };
@@ -380,9 +383,9 @@ export default function TaskPhaseImplementation() {
         setShowCompletePhaseConfirm(false);
         const nextPhase = phase.number + 1;
         if (nextPhase <= 4) {
-          navigate(`${basePath}/${hospitalId}/${nextPhase}`);
+          navigate(`${basePath}/${hospitalId}/${nextPhase}`, { state: location.state });
         } else {
-          navigate(`${basePath}/${hospitalId}`);
+          navigate(`${basePath}/${hospitalId}`, { state: location.state });
         }
       } else {
         const msg = e instanceof Error ? e.message : "Không thể hoàn thành giai đoạn.";
@@ -416,12 +419,13 @@ export default function TaskPhaseImplementation() {
           {hospitalId && (
             <Link
               to={`${basePath}/${hospitalId}`}
+              state={location.state}
               className="text-sm text-blue-600 hover:underline dark:text-blue-400"
             >
               ← Quay lại lộ trình giai đoạn
             </Link>
           )}
-          <Link to={basePath} className="text-sm text-blue-600 hover:underline dark:text-blue-400">
+          <Link to={listPath} className="text-sm text-blue-600 hover:underline dark:text-blue-400">
             ← Quay lại danh sách
           </Link>
         </div>
@@ -488,12 +492,13 @@ export default function TaskPhaseImplementation() {
 
       <div className="flex min-h-screen flex-col">
       <nav className="flex items-center gap-1.5 px-4 pt-4 pb-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-                <Link to={basePath} className="hover:text-blue-600 dark:hover:text-blue-400">
+                <Link to={listPath} className="hover:text-blue-600 dark:hover:text-blue-400">
                   Bệnh viện
                 </Link>
                 <span className="text-slate-400">›</span>
                 <Link
                   to={`${basePath}/${hospitalId}`}
+                  state={location.state}
                   className="hover:text-blue-600 dark:hover:text-blue-400"
                 >
                   {task.hospitalName}
