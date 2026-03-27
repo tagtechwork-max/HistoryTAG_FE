@@ -29,6 +29,7 @@ import {
   getContractStatusCounts
 } from "../../api/customerCare.api";
 import { getMaintainContracts } from "../../api/maintain.api";
+import toast from "react-hot-toast";
 
 // ===================== TYPES =====================
 interface Contract {
@@ -282,6 +283,7 @@ export default function HospitalCareList() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedHospitalId, setSelectedHospitalId] = useState<number | null>(null);
   const [editingHospital, setEditingHospital] = useState<AddHospitalToCareFormData & { id: number } | null>(null);
+  const [refreshSeq, setRefreshSeq] = useState(0);
   
   // API states
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
@@ -526,7 +528,7 @@ export default function HospitalCareList() {
 
     loadData();
     return () => abortController.abort();
-  }, [location.search, currentPage, itemsPerPage, searchTerm, priorityFilter, customerTypeFilter, picFilter, activeTab]);
+  }, [location.search, currentPage, itemsPerPage, searchTerm, priorityFilter, customerTypeFilter, picFilter, activeTab, refreshSeq]);
 
   // Load customer types on mount
   useEffect(() => {
@@ -725,44 +727,12 @@ export default function HospitalCareList() {
   };
 
   const handleAddHospitalToCare = async (data: AddHospitalToCareFormData) => {
-    // Form đã handle API call, chỉ cần refresh list
+    const wasEditing = Boolean(editingHospital);
+    // Form đã handle API call, chỉ cần trigger reload theo luồng useEffect chính.
     setShowAddHospitalModal(false);
     setEditingHospital(null);
-    
-    // Refresh list và contract status counts
-    try {
-      const params: any = {
-        page: currentPage,
-        size: itemsPerPage,
-        sortBy: "lastContactDate", // Sắp xếp theo lịch sử liên hệ mới nhất
-        sortDir: "desc", // Mới nhất lên đầu
-      };
-      if (searchTerm) params.search = searchTerm;
-      if (priorityFilter) params.priority = priorityFilter;
-      
-      const response = await getAllCustomerCares(params);
-      const data = response.content || response.data || (Array.isArray(response) ? response : []);
-      const total = response.totalElements || response.total || data.length;
-      const pages = response.totalPages || Math.ceil(total / itemsPerPage);
-      
-      const convertedHospitals = Array.isArray(data) 
-        ? data.map(convertApiResponseToHospital)
-        : [];
-      
-      setHospitals(convertedHospitals);
-      setTotalItems(total);
-      setTotalPages(pages);
-      
-      // ✅ Refresh contract status counts sau khi có thay đổi
-      try {
-        const counts = await getContractStatusCounts();
-        setContractStatusCounts(counts);
-      } catch (countsErr) {
-        console.warn("Error refreshing contract status counts:", countsErr);
-      }
-    } catch (err) {
-      console.error("Error refreshing list:", err);
-    }
+    setRefreshSeq((s) => s + 1);
+    toast.success(wasEditing ? "Đã cập nhật thông tin chăm sóc." : "Đã thêm bệnh viện vào danh sách chăm sóc.");
   };
 
   return (

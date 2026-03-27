@@ -99,8 +99,8 @@ function AddIslandLabelPane() {
     const paneName = "island-labels";
     if (!map.getPane(paneName)) {
       const pane = map.createPane(paneName);
-      // Put island labels above tiles/markers.
-      pane.style.zIndex = "1200";
+      // Keep labels above map markers, but still below app-wide modals/overlays.
+      pane.style.zIndex = "460";
     }
   }, [map]);
 
@@ -310,13 +310,13 @@ export default function MapHospitals() {
           {!filterOpen ? (
             <button
               type="button"
-              className="absolute z-[500] top-3 right-3 rounded-lg border border-gray-200 bg-white/95 px-3 py-1.5 text-sm font-semibold text-gray-800 shadow-sm hover:bg-white"
+              className="absolute z-20 top-3 right-3 rounded-lg border border-gray-200 bg-white/95 px-3 py-1.5 text-sm font-semibold text-gray-800 shadow-sm hover:bg-white"
               onClick={() => setFilterOpen(true)}
             >
               Bộ lọc
             </button>
           ) : (
-            <div className="absolute z-[500] top-3 right-3 w-[320px] max-w-[90vw]">
+            <div className="absolute z-20 top-3 right-3 w-[320px] max-w-[90vw]">
               <div className="space-y-2 rounded-xl bg-white/95 p-3 shadow">
                 <div className="flex items-center justify-between gap-2">
                   <div className="font-semibold text-gray-900">Bộ lọc</div>
@@ -433,7 +433,7 @@ export default function MapHospitals() {
             </div>
           )}
 
-          <div className="h-[70vh] w-full">
+          <div className="relative z-0 h-[70vh] w-full">
             {error ? (
               <div className="flex items-center justify-center h-full">
                 <div className="text-red-600 text-sm">{error}</div>
@@ -458,14 +458,14 @@ export default function MapHospitals() {
                   position={[16.75, 111.9]}
                   icon={createIslandLabelIcon("Trường Sa")}
                   interactive={false}
-                  zIndexOffset={10000}
+                  zIndexOffset={0}
                   pane="island-labels"
                 />
                 <MarkerAny
                   position={[10.6, 114.3]}
                   icon={createIslandLabelIcon("Hoàng Sa")}
                   interactive={false}
-                  zIndexOffset={10000}
+                  zIndexOffset={0}
                   pane="island-labels"
                 />
 

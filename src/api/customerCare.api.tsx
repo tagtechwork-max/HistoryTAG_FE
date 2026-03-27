@@ -122,6 +122,7 @@ export type CustomerCareCreateRequestDTO = {
 };
 
 export type CustomerCareUpdateRequestDTO = {
+  hospitalId?: number;
   status?: string;
   priority?: string;
   reason?: string;

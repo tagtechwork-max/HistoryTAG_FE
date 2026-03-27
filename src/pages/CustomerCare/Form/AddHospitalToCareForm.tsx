@@ -280,6 +280,7 @@ export default function AddHospitalToCareForm({
       if (editingData) {
         // Update existing care
         const updatePayload: CustomerCareUpdateRequestDTO = {
+          hospitalId: formData.hospitalId || undefined,
           priority: formData.priority,
           reason: formData.reason || undefined,
           notes: formData.notes || undefined,
