@@ -93,6 +93,7 @@ const navItems: NavItem[] = [
     icon: <PlugInIcon />,
     subItems: [
       { name: "Bản đồ bệnh viện", path: "/utility/map-hospitals", pro: false },
+      { name: "Link tài liệu", path: "/utility/document-links", pro: false },
       { name: "Tool mã hóa", path: "/tool-encryption", pro: false },
     ],
     

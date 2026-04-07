@@ -199,28 +199,6 @@ function getStatusDisplay(row: ImplementationTaskListItem, health: string, healt
   };
 }
 
-function getCurrentPhaseNumberFromMilestones(
-  row: ImplementationTaskListItem,
-  milestones?: MilestoneDto[]
-): number {
-  if (!Array.isArray(milestones) || milestones.length === 0) {
-    return Number.isFinite(row.phase) ? row.phase : 1;
-  }
-
-  const sorted = [...milestones]
-    .filter((m) => Number.isFinite(m.number))
-    .sort((a, b) => a.number - b.number);
-
-  if (sorted.length === 0) {
-    return Number.isFinite(row.phase) ? row.phase : 1;
-  }
-
-  const firstIncomplete = sorted.find((m) => m.status !== "completed");
-  if (firstIncomplete) return firstIncomplete.number;
-
-  return sorted[sorted.length - 1]?.number ?? (Number.isFinite(row.phase) ? row.phase : 1);
-}
-
 /** Derive phase label, progress %, health and label from row + milestones.
  * When we have milestones and all 4 are completed, show "Hoàn thành" even if API list did not set health (backend may compute health from other source). */
 function getRowDisplay(
@@ -520,37 +498,8 @@ export default function ListHospitalImplementation() {
   const displayedRows = (() => {
     let rows = data;
 
-    if (phase !== "all") {
-      const selectedPhase = Number(phase);
-      if (Number.isFinite(selectedPhase)) {
-        rows = rows.filter((row) => {
-          const milestones = milestonesByTaskId[String(row.id)] ?? [];
-          const currentPhase = getCurrentPhaseNumberFromMilestones(row, milestones);
-          return currentPhase === selectedPhase;
-        });
-      }
-    }
-
-    if (status !== "all") {
-      rows = rows.filter((row) => {
-        const display = getRowDisplay(row, milestonesByTaskId[String(row.id)]);
-        return display.health === status;
-      });
-    }
-
-    if (deadline === "this_week") {
-      const now = new Date();
-      now.setHours(0, 0, 0, 0);
-      const end = new Date(now);
-      end.setDate(end.getDate() + 7);
-      rows = rows.filter((row) => {
-        if (!row.goLiveDeadline) return false;
-        const d = new Date(String(row.goLiveDeadline).includes("T") ? String(row.goLiveDeadline) : `${String(row.goLiveDeadline)}T00:00:00`);
-        if (Number.isNaN(d.getTime())) return false;
-        d.setHours(0, 0, 0, 0);
-        return d >= now && d <= end;
-      });
-    }
+    // Giai đoạn, trạng thái (health), hạn go-live tuần này: backend đã lọc qua GET /api/v1/implementation-tasks.
+    // Không lọc lại ở đây — logic milestone/display.health trên FE khác currentPhaseNumber/health trên server nên dễ ra bảng trống.
 
     if (ownerFilterIds.length === 0) return rows;
 
@@ -1080,7 +1029,7 @@ export default function ListHospitalImplementation() {
               <option value="all">Trạng thái: Tất cả</option>
               <option value="in_progress">Đang triển khai</option>
               <option value="at_risk">Có rủi ro</option>
-              <option value="blocked">Đang bị chặn</option>
+              {/* <option value="blocked">Đang bị chặn</option> */}
               <option value="completed">Hoàn thành</option>
             </select>
             <select

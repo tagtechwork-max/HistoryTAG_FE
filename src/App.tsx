@@ -49,6 +49,7 @@ import HospitalDetail from "./pages/CustomerCare/HospitalDetail";
 import LogOT from "./pages/PageClients/LogOT";
 import SuperAdminLogOT from "./pages/SuperAdmin/LogOT";
 import MapHospitals from "./pages/Utility/MapHospitals";
+import DocumentLinksPage from "./pages/Utility/DocumentLinksPage";
 import ListTicketPage from "./pages/Ticket/listticket";
 import ToolEncryption from "./pages/Tool/ToolEncryption";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -177,6 +178,7 @@ export default function App() {
             <Route path="/superadmin/hospital-care/:id" element={<HospitalDetail />} />
             <Route path="/superadmin/log-ot" element={<SuperAdminLogOT />} />
             <Route path="/superadmin/utility/map-hospitals" element={<MapHospitals />} />
+            <Route path="/superadmin/utility/document-links" element={<DocumentLinksPage />} />
             <Route path="/superadmin/tickets" element={<ListTicketPage />} />
 
           </Route>
@@ -228,6 +230,7 @@ export default function App() {
             <Route path="/notifications" element={<AllNotificationsPage />} />
             <Route path="/log-ot" element={<LogOT />} />
             <Route path="/utility/map-hospitals" element={<MapHospitals />} />
+            <Route path="/utility/document-links" element={<DocumentLinksPage />} />
             <Route path="/tickets" element={<ListTicketPage />} />
             <Route path="/tool-encryption" element={<ToolEncryption />} />
           </Route>
