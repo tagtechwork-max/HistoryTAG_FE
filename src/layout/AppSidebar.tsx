@@ -94,7 +94,7 @@ const navItems: NavItem[] = [
     subItems: [
       { name: "Bản đồ bệnh viện", path: "/utility/map-hospitals", pro: false },
       { name: "Link tài liệu", path: "/utility/document-links", pro: false },
-      { name: "Tool mã hóa", path: "/tool-encryption", pro: false },
+      { name: "Tool mã hóa -Test CI/CD", path: "/tool-encryption", pro: false },
     ],
     
   },

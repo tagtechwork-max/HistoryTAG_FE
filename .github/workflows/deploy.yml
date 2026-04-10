@@ -1,1 +1,47 @@
 
+name: CI/CD Frontend
+
+on:
+  push:
+    branches: [ main ] # Tự động chạy khi bạn push vào branch main
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          # Đặt tên image cho FE
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/tagweb_frontend:latest 
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # Di chuyển vào folder chứa docker-compose của Frontend
+            cd /home/tag/HistoryTAG_FE 
+            # Kéo bản mới nhất từ Docker Hub về
+            docker compose pull frontend
+            # Cập nhật lại container (không ảnh hưởng đến các service khác)
+            docker compose up -d frontend
+            # Dọn dẹp image cũ để tránh đầy ổ cứng server
+            docker image prune -f
