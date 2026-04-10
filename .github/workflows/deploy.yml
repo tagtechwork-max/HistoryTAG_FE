@@ -26,9 +26,10 @@ jobs:
           # Đặt tên image cho FE
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/tagweb_frontend:latest 
           build-args: |
-            VITE_API_URL=/api
-            VITE_NOTIFICATION_STOMP_URL=/ws
-            VITE_LOGOUT_URL=/api/v1/auth/logout          
+            VITE_API_URL=
+            VITE_NOTIFICATION_STOMP_URL=/ws  # đổi host/port theo backend thật
+            VITE_NOTIFICATION_STOMP_DEST=/user/queue/notifications
+            VITE_LOGOUT_URL=/api/v1/auth/logout         
 
   deploy:
     needs: build-and-push
