@@ -74,7 +74,7 @@ const navItems: NavItem[] = [
     icon: <TaskIcon />,
     subItems: [
       // { name: "Công việc triển khai", path: "/implementation-tasks", pro: false },
-      { name: "Công việc triển khai mới", path: "/implementation-tasks-new", pro: false },
+      { name: "Công việc triển khai", path: "/implementation-tasks-new", pro: false },
       // { name: "Công việc DEV", path: "/dev-tasks", pro: false },
       { name: "Công việc bảo trì", path: "/maintenance-tasks", pro: false },
     ],
@@ -94,7 +94,7 @@ const navItems: NavItem[] = [
     subItems: [
       { name: "Bản đồ bệnh viện", path: "/utility/map-hospitals", pro: false },
       { name: "Link tài liệu", path: "/utility/document-links", pro: false },
-      { name: "Tool mã hóa -Test CI/CD", path: "/tool-encryption", pro: false },
+      { name: "Tool mã hóa", path: "/tool-encryption", pro: false },
     ],
     
   },

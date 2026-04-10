@@ -77,7 +77,7 @@ const navItems: NavItem[] = [
     icon: <TaskIcon />,
     subItems: [
       // { name: "Công việc Triển khai ", path: "/superadmin/implementation-tasks", pro: false },
-      { name: "Công việc triển khai mới", path: "/superadmin/implementation-tasks-new", pro: false },
+      { name: "Công việc triển khai", path: "/superadmin/implementation-tasks-new", pro: false },
       // { name: "Công việc Dev", path: "/superadmin/dev-tasks", pro: false },
       { name: "Công việc Bảo Trì", path: "/superadmin/maintenance-tasks", pro: false },
     ],
@@ -248,7 +248,7 @@ const SuperAdminSidebar: React.FC = () => {
                               case "Danh sách người dùng":
                                 return <UserCircleIcon className="w-4 h-4" />;
                               case "Công việc Triển khai ":
-                              case "Công việc triển khai mới":
+                              case "Công việc triển khai ":
                                 return <CalenderIcon className="w-4 h-4" />;
                               default:
                                 return <TableIcon className="w-4 h-4" />;
