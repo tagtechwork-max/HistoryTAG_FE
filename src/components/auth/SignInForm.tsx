@@ -149,9 +149,9 @@ export default function SignInForm() {
         <h1 className="text-3xl font-bold text-white-600 mb-2">
           Đăng nhập
         </h1>
-        {/* <p className="text-white-800 text-sm">
+        <p className="text-white-800 text-sm">
           Đăng nhập để tiếp tục trải nghiệm
-        </p> */}
+        </p>
       </div>
 
       {/* Form Card */}
