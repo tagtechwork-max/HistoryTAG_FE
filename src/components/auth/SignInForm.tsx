@@ -145,17 +145,17 @@ export default function SignInForm() {
   return (
     <div className="w-full max-w-md mx-auto">
       {/* Header */}
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">
+      <div className="text-center mb-8 -mt-18 ">
+        <h1 className="text-3xl font-bold text-white-600 mb-2">
           Đăng nhập
         </h1>
-        <p className="text-blue-100 text-sm">
+        {/* <p className="text-white-800 text-sm">
           Đăng nhập để tiếp tục trải nghiệm
-        </p>
+        </p> */}
       </div>
 
       {/* Form Card */}
-      <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl">
+      <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl mt-10">
         <form onSubmit={onSubmit} noValidate className="space-y-6">
           {err && (
             <div className="bg-red-500/20 border border-red-400/50 text-red-100 text-sm rounded-lg p-3">

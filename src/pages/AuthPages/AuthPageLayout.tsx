@@ -43,11 +43,13 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         {/* LEFT */}
         <div
           ref={containerRef}
-          className="relative flex flex-1 h-full bg-brand-950 text-white items-center justify-center"
+          className="relative flex flex-1 h-full text-white items-center justify-center bg-cover bg-center bg-no-repeat"
+          style={{ backgroundImage: "url('/backlogin.png')" }}
         >
+          <div className="absolute inset-0 bg-black/0" />
           <div className="w-full flex justify-center -mt-12">
             <div
-              className="origin-center transition-transform duration-300 ease-out"
+              className="origin-center transition-transform duration-300 ease-out relative z-10"
               style={{
                 transform: `scale(${scale})`,
                 width: "100%",
