@@ -189,7 +189,7 @@ export default function SignUpForm() {
               </div>
 
               <div className="col-span-12 lg:col-span-6 space-y-2 min-w-0">
-                <Label className="text-white">
+                <Label className="text-black">
                   Email <span className="text-red-500">*</span>
                 </Label>
                 <Input

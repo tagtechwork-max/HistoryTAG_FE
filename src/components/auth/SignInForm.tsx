@@ -1,10 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { EyeCloseIcon, EyeIcon } from "../../icons";
-import Label from "../form/Label";
-import Input from "../form/input/InputField";
-import Checkbox from "../form/input/Checkbox";
-import Button from "../ui/button/Button";
 import { signIn, normalizeRoles, pickErrMsg, getUserAccount } from "../../api/auth.api";
 import api from "../../api/client";
 import toast from "react-hot-toast";
@@ -143,137 +139,138 @@ export default function SignInForm() {
   };
 
   return (
-    <div className="w-full max-w-md mx-auto">
-      {/* Header */}
-      <div className="text-center mb-8 -mt-18 ">
-        <h1 className="text-3xl font-bold text-white-600 mb-2">
-          Đăng nhập
+    <div className="w-full">
+      {/* <Link to="/" className="inline-flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600">
+          <div className="grid grid-cols-2 gap-0.5">
+            <span className="h-1.5 w-1.5 rounded-[1px] bg-white" />
+            <span className="h-1.5 w-1.5 rounded-[1px] bg-white" />
+            <span className="h-1.5 w-1.5 rounded-[1px] bg-white" />
+            <span className="h-1.5 w-1.5 rounded-[1px] bg-white" />
+          </div>
+        </div>
+        <span className="text-lg font-bold tracking-tight text-slate-900">ManagerTAG</span>
+      </Link> */}
+
+      <div className="mt-0 align-center text-center">
+        <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+          Chào mừng trở lại
         </h1>
-        <p className="text-white-800 text-sm">
-          Đăng nhập để tiếp tục trải nghiệm
+        <p className="mt-2 text-sm text-slate-500">
+          Vui lòng nhập thông tin để truy cập hệ thống.
         </p>
       </div>
 
-      {/* Form Card */}
-      <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl mt-10">
-        <form onSubmit={onSubmit} noValidate className="space-y-6">
-          {err && (
-            <div className="bg-red-500/20 border border-red-400/50 text-red-100 text-sm rounded-lg p-3">
-              {err}
-            </div>
-          )}
+<form
+  onSubmit={onSubmit}
+  noValidate
+  className="mt-10 space-y-6 rounded-3xl border border-white/35 bg-gradient-to-br from-white/20 via-white/10 to-blue-500/20 p-10 shadow-[0_12px_40px_rgba(15,23,42,0.28)] backdrop-blur-2xl"
+>
+        {err && (
+          <div className="rounded-2xl border border-red-300/45 bg-red-500/15 px-4 py-3 text-sm text-red-100 backdrop-blur-sm">
+            {err}
+          </div>
+        )}
 
-          {/* Username Field */}
-          <div className="space-y-2">
-            <Label className="text-white/90 text-sm font-medium">
-              Tên đăng nhập <span className="text-red-400">*</span>
-            </Label>
-            <Input
-              placeholder="Nhập tên đăng nhập"
-              value={form.username}
-              onChange={onChange("username")}
+        <div>
+          <label className="mb-2 block text-[11px] font-bold uppercase tracking-wider text-black/85">
+            Tên đăng nhập<span className="text-red-500">*</span>
+          </label>
+          <input
+            placeholder="Nhập tên đăng nhập"
+            value={form.username}
+            onChange={onChange("username")}
+            onBlur={() => {
+              setErrors((prev: FormErrors) => ({
+                ...prev,
+                username: validateField("username", form.username),
+              }));
+            }}
+            autoComplete="username"
+            aria-invalid={!!errors.username}
+            aria-describedby="username-error"
+            className={`w-full rounded-2xl border py-3.5 px-5 text-base text-slate-800 placeholder:text-slate-400/90 shadow-inner backdrop-blur-md transition-all focus:outline-none focus:ring-2 focus:ring-blue-300/45 ${
+              errors.username
+                ? "border-red-300/70 bg-white/85 focus:border-red-300"
+                : "border-white/35 bg-white/90 focus:border-blue-300"
+            }`}
+          />
+          {errors.username && (
+            <p id="username-error" className="mt-1.5 block text-xs text-red-200">
+              {errors.username}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label className="mb-2 block text-[11px] font-bold uppercase tracking-wider text-black/85">
+            Mật khẩu<span className="text-red-500">*</span>
+          </label>
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              placeholder="••••••••"
+              value={form.password}
+              onChange={onChange("password")}
               onBlur={() => {
                 setErrors((prev: FormErrors) => ({
                   ...prev,
-                  username: validateField("username", form.username),
+                  password: validateField("password", form.password),
                 }));
               }}
-              autoComplete="username"
-              aria-invalid={!!errors.username}
-              aria-describedby="username-error"
-              className={`w-full h-12 px-4 text-gray-900 bg-white/95 border rounded-lg transition-all ${
-                errors.username
-                  ? "border-red-400 ring-2 ring-red-400/30"
-                  : "border-white/30 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30"
+              autoComplete="current-password"
+              aria-invalid={!!errors.password}
+              aria-describedby="password-error"
+              className={`w-full rounded-2xl border py-3.5 pl-5 pr-12 text-base text-slate-800 placeholder:text-slate-400/90 shadow-inner backdrop-blur-md transition-all focus:outline-none focus:ring-2 focus:ring-blue-300/45 ${
+                errors.password
+                  ? "border-red-300/70 bg-white/85 focus:border-red-300"
+                  : "border-white/35 bg-white/90 focus:border-blue-300"
               }`}
             />
-            {errors.username && (
-              <p id="username-error" className="text-sm text-red-300">
-                {errors.username}
-              </p>
-            )}
-          </div>
-
-          {/* Password Field */}
-          <div className="space-y-2">
-            <Label className="text-white/90 text-sm font-medium">
-              Mật khẩu <span className="text-red-400">*</span>
-            </Label>
-            <div className="relative">
-              <Input
-                type={showPassword ? "text" : "password"}
-                placeholder="Nhập mật khẩu"
-                value={form.password}
-                onChange={onChange("password")}
-                onBlur={() => {
-                  setErrors((prev: FormErrors) => ({
-                    ...prev,
-                    password: validateField("password", form.password),
-                  }));
-                }}
-                autoComplete="current-password"
-                aria-invalid={!!errors.password}
-                aria-describedby="password-error"
-                className={`w-full h-12 px-4 pr-12 text-gray-900 bg-white/95 border rounded-lg transition-all ${
-                  errors.password
-                    ? "border-red-400 ring-2 ring-red-400/30"
-                    : "border-white/30 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30"
-                }`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
-                aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
-              >
-                {showPassword ? (
-                  <EyeIcon className="fill-gray-500 size-5" />
-                ) : (
-                  <EyeCloseIcon className="fill-gray-500 size-5" />
-                )}
-              </button>
-            </div>
-            {errors.password && (
-              <p id="password-error" className="text-sm text-red-300">
-                {errors.password}
-              </p>
-            )}
-          </div>
-
-          {/* Remember & Forgot */}
-          <div className="flex items-center justify-between">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <Checkbox
-                checked={remember}
-                onChange={(e: React.ChangeEvent<HTMLInputElement> | boolean) => {
-                  if (typeof e === "boolean") setRemember(e);
-                  else setRemember(e.target.checked);
-                }}
-                className="w-4 h-4"
-              />
-              <span className="text-sm text-white/80">
-                Ghi nhớ đăng nhập
-              </span>
-            </label>
-
-            <Link
-              to="/forgot-password"
-              className="text-sm text-blue-300 hover:text-blue-200 transition-colors"
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-slate-500 transition-colors hover:bg-white/70 hover:text-slate-700"
+              aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
             >
-              Quên mật khẩu?
-            </Link>
+              {showPassword ? (
+                <EyeIcon className="fill-slate-500 size-5" />
+              ) : (
+                <EyeCloseIcon className="fill-slate-500 size-5" />
+              )}
+            </button>
           </div>
+          {errors.password && (
+            <p id="password-error" className="mt-1.5 block text-xs text-red-200">
+              {errors.password}
+            </p>
+          )}
+        </div>
 
-          {/* Submit Button */}
-          <Button
-            type="submit"
-            disabled={loading}
-            className="w-full h-12 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? "Đang đăng nhập..." : "Đăng nhập"}
-          </Button>
-        </form>
-      </div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-black/90">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemember(e.target.checked)}
+              className="h-5 w-5 rounded-md border-white/45 bg-white/10 text-blue-500 focus:ring-blue-300/50"
+            />
+            <span>Ghi nhớ đăng nhập</span>
+          </label>
+
+          <Link to="/forgot-password" className="text-sm font-semibold text-sky-500 transition-colors hover:text-sky-100 hover:underline">
+            Quên mật khẩu?
+          </Link>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full rounded-2xl bg-gradient-to-r from-blue-600 via-blue-500 to-blue-700 py-3.5 text-xl font-bold text-white shadow-[0_10px_30px_rgba(37,99,235,0.45)] transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {loading ? "Đang đăng nhập..." : "Đăng nhập"}
+        </button>
+      </form>
     </div>
   );
 }

@@ -62,7 +62,7 @@ export default function ForgotPasswordForm() {
         <h1 className="text-3xl font-bold text-white mb-2">
           Quên mật khẩu
         </h1>
-        <p className="text-blue-100 text-sm">
+        <p className="text-black-100 text-sm">
           Nhập email của bạn để nhận link đặt lại mật khẩu
         </p>
       </div>
@@ -78,7 +78,7 @@ export default function ForgotPasswordForm() {
 
           {/* Email Field */}
           <div className="space-y-2">
-            <Label className="text-white/90 text-sm font-medium">
+            <Label className="text-black/90 text-sm font-medium">
               Email <span className="text-red-400">*</span>
             </Label>
             <Input
