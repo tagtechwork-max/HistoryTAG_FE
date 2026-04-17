@@ -51,6 +51,7 @@ const navItems: NavItem[] = [
     icon: <GroupIcon />,
     subItems: [
       { name: "Danh sách người dùng", path: "/superadmin/users", pro: false },
+      { name: "Danh sách hoạt động", path: "/superadmin/user-analytics", pro: false },
     ],
   },
   {

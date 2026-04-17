@@ -258,7 +258,7 @@ export default function SignInForm() {
             <span>Ghi nhớ đăng nhập</span>
           </label>
 
-          <Link to="/forgot-password" className="text-sm font-semibold text-sky-500 transition-colors hover:text-sky-100 hover:underline">
+          <Link to="/forgot-password" className="text-sm font-semibold text-sky-500 transition-colors hover:text-sky-300 hover:underline">
             Quên mật khẩu?
           </Link>
         </div>
