@@ -17,11 +17,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/45 to-cyan-950/30" />
           <div className="absolute inset-0 flex flex-col justify-end p-10 xl:p-14">
             <h2 className="max-w-lg text-3xl font-bold leading-tight text-white xl:text-4xl">
-              Atmospheric Precision.
+            Internal Management Page.
             </h2>
             <p className="mt-4 max-w-md text-sm leading-relaxed text-white/85">
-              Kiến tạo không gian làm việc chuyên nghiệp với nền tảng quản trị thông minh ManagerTAG
-              Enterprise.
+              Kiến tạo không gian làm việc chuyên nghiệp với nền tảng quản trị thông minh TAG.
             </p>
           </div>
         </div>

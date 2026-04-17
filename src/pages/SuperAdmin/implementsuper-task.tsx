@@ -1665,7 +1665,7 @@ const ImplementSuperTaskPage: React.FC = () => {
                   onClick={() => { void handleNewTaskClick(); }}
                   type="button"
                 >
-                  + Thêm task mới
+                  + Thêm công việc mới
                 </button>
                 <button
                   className="relative inline-flex items-center gap-2 rounded-full border border-gray-300 text-gray-800 px-4 py-2 text-sm bg-white hover:bg-gray-50"
@@ -2071,7 +2071,7 @@ const ImplementSuperTaskPage: React.FC = () => {
                     setModalOpen(true);
                   }}
                 >
-                  + Thêm task mới
+                  + Thêm công việc mới
                 </button>
                 <button className="rounded-full border px-4 py-2 text-sm shadow-sm" onClick={async () => {
                   setSearchTerm(''); setStatusFilter(''); setSortBy('id'); setSortDir('asc'); setPage(0);

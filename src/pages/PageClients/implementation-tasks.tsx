@@ -1890,7 +1890,7 @@ const ImplementationTasksPage: React.FC = () => {
       }}
       type="button"
     >
-      + Thêm task mới
+      + Thêm công việc mới
     </button>
   ) : (
     <button
