@@ -295,7 +295,10 @@ const MaintenanceSuperTaskPage: React.FC = () => {
   const [hospitalRegionFilter, setHospitalRegionFilter] = useState<string>("");
   const [hospitalRegionQuery, setHospitalRegionQuery] = useState<string>("");
   const [hospitalStatusFilter, setHospitalStatusFilter] = useState<string>("");
-  const [hospitalPicQuery, setHospitalPicQuery] = useState<string>("");
+  /** Selected PIC display names for hospital list filter (OR). */
+  const [hospitalPicFilters, setHospitalPicFilters] = useState<string[]>([]);
+  /** Typing for autocomplete to add more PICs. */
+  const [hospitalPicInput, setHospitalPicInput] = useState<string>("");
   const [isPicSuggestOpen, setIsPicSuggestOpen] = useState<boolean>(false);
   const [isRegionSuggestOpen, setIsRegionSuggestOpen] = useState<boolean>(false);
   const [picOptions, setPicOptions] = useState<Array<{ id: string; label: string }>>([]);
@@ -308,13 +311,14 @@ const MaintenanceSuperTaskPage: React.FC = () => {
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
   const defaultHospitalPicQueryAppliedRef = useRef(false);
+  const hospitalPicInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (!showHospitalList) return;
     if (defaultHospitalPicQueryAppliedRef.current) return;
     if (picOptions.length === 0) return;
     const next = resolveDefaultHospitalPicQuery(picOptions);
     if (!next?.trim()) return;
-    setHospitalPicQuery(next);
+    setHospitalPicFilters([next.trim()]);
     defaultHospitalPicQueryAppliedRef.current = true;
   }, [showHospitalList, picOptions]);
 
@@ -961,13 +965,16 @@ const MaintenanceSuperTaskPage: React.FC = () => {
     else if (hospitalStatusFilter === 'fromDeployment') list = list.filter(h => h.fromDeployment && !h.acceptedByMaintenance);
     else if (hospitalStatusFilter === 'acceptedFromDeployment') list = list.filter(h => h.fromDeployment && h.acceptedByMaintenance);
     else if (hospitalStatusFilter === 'hasOpenTickets') list = list.filter(h => h.id && (ticketOpenCounts[h.id] ?? 0) > 0);
-    // Search by PIC name (single keyword input)
-    if (hospitalPicQuery.trim()) {
-      const picQ = hospitalPicQuery.trim().toLowerCase();
+    // Search by PIC name(s): any selected tag matches maintenance or deployment PIC (OR)
+    if (hospitalPicFilters.length > 0) {
       list = list.filter((h) => {
         const maintenancePic = String(h.maintenancePersonInChargeName || "").toLowerCase();
         const deploymentPics = (h.picDeploymentNames || []).map((name) => String(name).toLowerCase());
-        return maintenancePic.includes(picQ) || deploymentPics.some((name) => name.includes(picQ));
+        return hospitalPicFilters.some((tag) => {
+          const picQ = tag.trim().toLowerCase();
+          if (!picQ) return false;
+          return maintenancePic.includes(picQ) || deploymentPics.some((name) => name.includes(picQ));
+        });
       });
     }
     // ✅ Sort: Ưu tiên bệnh viện có ticket mở lên đầu, sau đó sort theo tên
@@ -994,7 +1001,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
       return a.label.localeCompare(b.label, "vi", { sensitivity: "base" });
     });
     return list;
-  }, [hospitalsWithTasks, hospitalSearch, hospitalCodeSearch, hospitalRegionQuery, hospitalStatusFilter, hospitalPicQuery, ticketOpenCounts, ticketCountLoading]);
+  }, [hospitalsWithTasks, hospitalSearch, hospitalCodeSearch, hospitalRegionQuery, hospitalStatusFilter, hospitalPicFilters, ticketOpenCounts, ticketCountLoading]);
 
   /** Full hospital list from this page (summary) for task form dropdown — same data as the hospital grid, not search API. */
   const pageHospitalOptionsForTaskModal = useMemo(
@@ -1018,11 +1025,11 @@ const MaintenanceSuperTaskPage: React.FC = () => {
   }, [picOptions]);
 
   const filteredPicNameOptions = useMemo(() => {
-    const q = hospitalPicQuery.trim().toLowerCase();
+    const q = hospitalPicInput.trim().toLowerCase();
     if (!q) return [];
-    const source = picNameOptions.filter((name) => name.toLowerCase().includes(q));
-    return source.slice(0, 8);
-  }, [picNameOptions, hospitalPicQuery]);
+    const notSelected = picNameOptions.filter((name) => !hospitalPicFilters.includes(name));
+    return notSelected.filter((name) => name.toLowerCase().includes(q));
+  }, [picNameOptions, hospitalPicInput, hospitalPicFilters]);
 
   const filteredRegionOptions = useMemo(() => {
     const q = normalizeSearchText(hospitalRegionQuery);
@@ -1377,32 +1384,101 @@ const MaintenanceSuperTaskPage: React.FC = () => {
                     <div>
                       <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">Phụ trách chính</label>
                       <div className="relative">
-                        <input
-                          type="text"
-                          value={hospitalPicQuery}
-                          onChange={(e) => {
-                            setHospitalPicQuery(e.target.value);
-                            setHospitalPage(0);
-                            setIsPicSuggestOpen(true);
+                        <div
+                          className={`flex min-h-10 w-full cursor-text flex-wrap items-center gap-1 rounded-lg border border-[#dfe4f0] bg-white py-1.5 pl-2 text-sm text-gray-700 ${
+                            hospitalPicFilters.length > 0 || hospitalPicInput.trim() ? "pr-10" : "pr-3"
+                          }`}
+                          onMouseDown={(e) => {
+                            const el = e.target as HTMLElement;
+                            if (el.closest("button")) return;
+                            hospitalPicInputRef.current?.focus();
                           }}
-                          onFocus={() => setIsPicSuggestOpen(true)}
-                          onBlur={() => window.setTimeout(() => setIsPicSuggestOpen(false), 120)}
-                          placeholder="Tìm theo tên phụ trách"
-                          className="h-10 w-full rounded-lg border border-[#dfe4f0] bg-white px-3 text-sm text-gray-700 outline-none"
-                        />
+                        >
+                          {hospitalPicFilters.map((name) => (
+                            <span
+                              key={name}
+                              className="inline-flex max-w-full items-center gap-0.5 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-gray-800 dark:bg-slate-700 dark:text-slate-100"
+                            >
+                              <span className="max-w-[180px] truncate" title={name}>
+                                {name}
+                              </span>
+                              <button
+                                type="button"
+                                className="shrink-0 rounded p-0.5 text-gray-500 hover:bg-slate-200 hover:text-gray-800 dark:hover:bg-slate-600 dark:hover:text-white"
+                                aria-label={`Xóa ${name}`}
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                  setHospitalPicFilters((prev) => prev.filter((n) => n !== name));
+                                  setHospitalPage(0);
+                                }}
+                              >
+                                <FiX className="h-3.5 w-3.5" aria-hidden />
+                              </button>
+                            </span>
+                          ))}
+                          <input
+                            ref={hospitalPicInputRef}
+                            type="text"
+                            value={hospitalPicInput}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setHospitalPicInput(v);
+                              setHospitalPage(0);
+                              setIsPicSuggestOpen(v.trim().length > 0);
+                            }}
+                            onFocus={() => setIsPicSuggestOpen(hospitalPicInput.trim().length > 0)}
+                            onBlur={() => window.setTimeout(() => setIsPicSuggestOpen(false), 120)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Backspace" && !hospitalPicInput && hospitalPicFilters.length > 0) {
+                                setHospitalPicFilters((prev) => prev.slice(0, -1));
+                                setHospitalPage(0);
+                                return;
+                              }
+                              if (e.key === "Enter" && hospitalPicInput.trim()) {
+                                e.preventDefault();
+                                const raw = hospitalPicInput.trim();
+                                setHospitalPicFilters((prev) => (prev.includes(raw) ? prev : [...prev, raw]));
+                                setHospitalPicInput("");
+                                setHospitalPage(0);
+                                setIsPicSuggestOpen(false);
+                              }
+                            }}
+                            placeholder={
+                              hospitalPicFilters.length ? "Thêm người phụ trách..." : "Tìm theo tên phụ trách"
+                            }
+                            className="min-h-[1.5rem] min-w-[6rem] flex-1 border-0 bg-transparent px-1 py-0.5 text-sm text-gray-700 outline-none placeholder:text-gray-400"
+                          />
+                        </div>
+                        {(hospitalPicFilters.length > 0 || hospitalPicInput.trim()) && (
+                          <button
+                            type="button"
+                            className="absolute right-2 top-1/2 z-[5] -translate-y-1/2 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                            aria-label="Xóa lọc phụ trách"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setHospitalPicFilters([]);
+                              setHospitalPicInput("");
+                              setHospitalPage(0);
+                              setIsPicSuggestOpen(false);
+                            }}
+                          >
+                            <FiX className="h-4 w-4" aria-hidden />
+                          </button>
+                        )}
                         {isPicSuggestOpen && filteredPicNameOptions.length > 0 && (
-                          <div className="absolute z-20 mt-1 max-h-52 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+                          <div className="absolute z-20 mt-1 max-h-80 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-900">
                             {filteredPicNameOptions.map((name) => (
                               <button
                                 key={name}
                                 type="button"
                                 onMouseDown={(e) => {
                                   e.preventDefault();
-                                  setHospitalPicQuery(name);
+                                  setHospitalPicFilters((prev) => (prev.includes(name) ? prev : [...prev, name]));
+                                  setHospitalPicInput("");
                                   setHospitalPage(0);
                                   setIsPicSuggestOpen(false);
                                 }}
-                                className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+                                className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800"
                               >
                                 {name}
                               </button>

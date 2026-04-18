@@ -273,10 +273,10 @@ export default function TaskCardNew({
       >
         {leadingTopLeft && <div className="absolute left-2 top-3 z-[5]">{leadingTopLeft}</div>}
         <div className={`grid grid-cols-1 gap-4 px-4 py-4 md:grid-cols-12 md:items-center md:gap-4 ${leadingTopLeft ? "pl-9" : ""}`}>
-          <div className="flex min-w-0 gap-3 md:col-span-4">
-            <div className="flex shrink-0 flex-col items-center">
+          <div className="flex min-w-0 items-center gap-3 md:col-span-4">
+            <div className="flex shrink-0 items-center justify-center">
               <div
-                className={`flex h-9 min-w-[2.75rem] items-center justify-center rounded-lg border text-xs font-bold ${
+                className={`flex h-9 min-w-[2.75rem] items-center justify-center rounded-lg border text-xs font-bold leading-none ${
                   fromBusiness
                     ? "border-purple-200 bg-purple-50 text-purple-800 dark:border-purple-600 dark:bg-purple-950 dark:text-purple-100"
                     : "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
@@ -290,7 +290,7 @@ export default function TaskCardNew({
                 {task.name}
               </h3>
               {updatedLine && (
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Cập nhật: {updatedLine}</p>
+                <p className="mt-1 text-xs text-blue-800 dark:text-blue-200">Cập nhật: {updatedLine}</p>
               )}
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 Tiếp nhận bởi: <span className="font-medium text-slate-700 dark:text-slate-200">{receiverLabel}</span>
