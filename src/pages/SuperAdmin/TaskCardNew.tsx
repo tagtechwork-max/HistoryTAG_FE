@@ -1,4 +1,4 @@
-﻿// This file contains the TaskCardNew component
+// This file contains the TaskCardNew component
 // It is responsible for displaying task information in a card format
 
 import { AiOutlineEdit, AiOutlineDelete, AiOutlineEye } from "react-icons/ai";
@@ -75,6 +75,83 @@ function getDisplayStatus(status?: string) {
   return status;
 }
 
+/** Normalize role typos / shorthand from API for list display (Admin + SuperAdmin). */
+function formatPersonDisplayLabel(raw: string | null | undefined): string {
+  if (raw == null || String(raw).trim() === "") return "-";
+  let s = String(raw).trim();
+  s = s.replace(/\(\s*supper\s*\)/gi, "(SuperAdmin)");
+  s = s.replace(/\(\s*super\s*admin\s*\)/gi, "(SuperAdmin)");
+  s = s.replace(/\bsupper\b/gi, "SuperAdmin");
+  s = s.replace(/\(\s*adm\s*\)/gi, "(Admin)");
+  return s;
+}
+
+function formatRelativeUpdatedVi(task: ImplTask): string | null {
+  const raw =
+    (task as any).updatedAt || (task as any).completionDate || task.receivedDate || task.startDate;
+  if (!raw) return null;
+  const d = new Date(String(raw));
+  if (Number.isNaN(d.getTime())) return null;
+  const diffMs = Date.now() - d.getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "vừa xong";
+  if (mins < 60) return `${mins} phút trước`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} giờ trước`;
+  const days = Math.floor(hrs / 24);
+  if (days < 45) return `${days} ngày trước`;
+  return d.toLocaleDateString("vi-VN");
+}
+
+function splitPrimarySecondaryPics(task: ImplTask): { primary: string; secondaryText: string } {
+  const fmt = formatPersonDisplayLabel;
+  const mainId = (task as any).picDeploymentId as number | undefined;
+  const ids = ((task as any).picDeploymentIds as number[] | undefined) ?? [];
+  const names = ((task as any).picDeploymentNames as string[] | undefined) ?? [];
+  let primary = fmt(task.picDeploymentName ?? undefined);
+
+  const second: string[] = [];
+  if (ids.length && names.length) {
+    ids.forEach((id, i) => {
+      const n = names[i];
+      if (!n || !String(n).trim()) return;
+      if (mainId != null && Number(id) === Number(mainId)) return;
+      second.push(fmt(String(n)));
+    });
+  }
+
+  if (second.length === 0) {
+    const additionalReq = (task as any).additionalRequest as string | undefined;
+    if (additionalReq) {
+      const match = additionalReq.match(/\[PIC_IDS:\s*([^\]]+)\]/);
+      if (match) {
+        const picIds = match[1].split(",").map((x) => Number(x.trim())).filter((x) => !Number.isNaN(x) && x > 0);
+        const allIds = mainId ? [...new Set([mainId, ...picIds])] : picIds;
+        if (allIds.length > 1 && primary !== "-") {
+          return { primary, secondaryText: `+${allIds.length - 1} người phụ` };
+        }
+      }
+    }
+  }
+
+  return { primary, secondaryText: second.length ? second.join(", ") : "—" };
+}
+
+/** Calendar days from record creation (local date) to today; prefers createdAt. */
+function daysSinceCreatedLabel(task: ImplTask): string {
+  const raw = (task as any).createdAt ?? task.receivedDate ?? task.startDate;
+  if (!raw) return "—";
+  const dt = new Date(String(raw));
+  if (Number.isNaN(dt.getTime())) return "—";
+  const createdDay = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.floor((today.getTime() - createdDay.getTime()) / 86400000);
+  if (!Number.isFinite(diffDays)) return "—";
+  if (diffDays < 0) return "0 ngày";
+  return `${diffDays} ngày`;
+}
+
 export default function TaskCardNew({
   task,
   onEdit,
@@ -90,6 +167,7 @@ export default function TaskCardNew({
   statusClassOverride,
   leadingTopLeft,
   allowEditCompleted = false, // ✅ Cho phép SuperAdmin sửa/xóa task đã hoàn thành
+  clinicalTaskRow = false,
 }: {
   task: ImplTask;
   onEdit: (t: ImplTask) => void;
@@ -105,6 +183,8 @@ export default function TaskCardNew({
   statusClassOverride?: (status?: string) => string;
   leadingTopLeft?: React.ReactNode;
   allowEditCompleted?: boolean; // ✅ Cho phép SuperAdmin sửa/xóa task đã hoàn thành
+  /** Maintenance hospital task list: table-like row (Admin + SuperAdmin). */
+  clinicalTaskRow?: boolean;
 }) {
   const delayMs = typeof idx === "number" && idx > 0 ? 2000 + (idx - 1) * 80 : 0;
   const style = animate ? { animation: "fadeInUp 220ms both", animationDelay: `${delayMs}ms` } : undefined;
@@ -167,6 +247,145 @@ export default function TaskCardNew({
     Boolean((task as any)?.fromBusinessContract) ||
     Boolean((task as any)?.businessProjectId) ||
     isBusinessContractTask(taskTitle);
+
+  const updatedLine = formatRelativeUpdatedVi(task);
+  const { primary: picPrimary } = splitPrimarySecondaryPics(task);
+  const receiverLabel = formatPersonDisplayLabel(task.receivedByName ?? undefined);
+  const startStr = task.startDate ? new Date(task.startDate).toLocaleDateString("vi-VN") : "—";
+  const deadlineStr = task.deadline ? new Date(task.deadline).toLocaleDateString("vi-VN") : "—";
+  const picInitial =
+    picPrimary && picPrimary !== "-"
+      ? (() => {
+          const m = picPrimary.match(/[A-Za-zÀ-ỹ0-9]/);
+          return (m ? m[0] : picPrimary.charAt(0)).toUpperCase();
+        })()
+      : "?";
+
+  if (clinicalTaskRow) {
+    return (
+      <div
+        className={`group relative w-full overflow-hidden rounded-2xl border bg-white shadow-sm transition-all dark:bg-gray-900 ${
+          fromBusiness
+            ? "border-purple-300 ring-1 ring-purple-200/70 dark:border-purple-600"
+            : "border-slate-200/90 hover:border-sky-300/80 dark:border-slate-700 dark:hover:border-sky-700/50"
+        } hover:shadow-md`}
+        style={style}
+      >
+        {leadingTopLeft && <div className="absolute left-2 top-3 z-[5]">{leadingTopLeft}</div>}
+        <div className={`grid grid-cols-1 gap-4 px-4 py-4 md:grid-cols-12 md:items-center md:gap-4 ${leadingTopLeft ? "pl-9" : ""}`}>
+          <div className="flex min-w-0 gap-3 md:col-span-4">
+            <div className="flex shrink-0 flex-col items-center">
+              <div
+                className={`flex h-9 min-w-[2.75rem] items-center justify-center rounded-lg border text-xs font-bold ${
+                  fromBusiness
+                    ? "border-purple-200 bg-purple-50 text-purple-800 dark:border-purple-600 dark:bg-purple-950 dark:text-purple-100"
+                    : "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                }`}
+              >
+                {orderLabel}
+              </div>
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-base font-semibold leading-snug text-slate-900 dark:text-white" style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}>
+                {task.name}
+              </h3>
+              {updatedLine && (
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Cập nhật: {updatedLine}</p>
+              )}
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Tiếp nhận bởi: <span className="font-medium text-slate-700 dark:text-slate-200">{receiverLabel}</span>
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                <span>Bắt đầu: {startStr}</span>
+                <span>Deadline: {deadlineStr}</span>
+              </div>
+              {task.hisSystemName && (
+                <div className="mt-1 truncate text-[11px] text-slate-500 dark:text-slate-400">HIS: {task.hisSystemName}</div>
+              )}
+              {task.apiUrl && (
+                <div className="mt-1 truncate text-[11px]">
+                  <a className="text-orange-600 underline hover:text-orange-700 dark:text-orange-400" href={task.apiUrl} target="_blank" rel="noreferrer">
+                    API
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 md:col-span-2 md:flex-col md:items-center md:justify-center md:gap-1.5">
+            {(statusValue || transferredToMaintenance) && (
+              <span className={`inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${badgeClass}`}>{badgeLabel}</span>
+            )}
+            {deadlineStatus && (
+              <span className={`inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${deadlineStatus.class}`}>
+                {deadlineStatus.label}
+              </span>
+            )}
+          </div>
+
+          <div className="min-w-0 md:col-span-2">
+            <div className="mb-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 md:hidden">PIC chính</div>
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-600 dark:bg-slate-700 dark:text-slate-200">
+                {picInitial}
+              </span>
+              <span className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{picPrimary}</span>
+            </div>
+          </div>
+
+          <div className="min-w-0 md:col-span-2">
+            <div className="mb-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 md:hidden">Thời gian tạo</div>
+            <div className="flex min-w-0 items-center md:min-h-[2.5rem]">
+              <span className="text-sm font-semibold tabular-nums text-slate-800 dark:text-slate-100">{daysSinceCreatedLabel(task)}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-end gap-2 md:col-span-2">
+            {canEdit && (allowEditCompleted || !task.readOnlyForDeployment) && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(task);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-white px-2.5 py-1.5 text-xs font-medium text-orange-600 hover:bg-orange-50 dark:border-orange-800 dark:bg-gray-900 dark:text-orange-400 dark:hover:bg-orange-950/40"
+              >
+                <AiOutlineEdit />
+                <span>Sửa</span>
+              </button>
+            )}
+            {canDelete && (allowEditCompleted || !task.readOnlyForDeployment) && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(task.id);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:bg-gray-900 dark:text-red-400 dark:hover:bg-red-950/40"
+              >
+                <AiOutlineDelete />
+                <span>Xóa</span>
+              </button>
+            )}
+            {canView && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpen(task);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-2.5 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-400"
+                title="Xem"
+              >
+                <AiOutlineEye className="text-sm" />
+                <span>Xem</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -243,7 +462,7 @@ export default function TaskCardNew({
                       const picIds = (task as any).picDeploymentIds as number[];
                       const mainPicId = (task as any).picDeploymentId;
                       const allPicIds = mainPicId ? [...new Set([mainPicId, ...picIds])] : picIds;
-                      const mainPic = task.picDeploymentName || "-";
+                      const mainPic = formatPersonDisplayLabel(task.picDeploymentName || "-");
                       if (allPicIds.length > 1) {
                         return `${mainPic} (+${allPicIds.length - 1} người khác)`;
                       }
@@ -259,11 +478,11 @@ export default function TaskCardNew({
                         const picIds = match[1].split(',').map((id: string) => Number(id.trim())).filter((id: number) => !isNaN(id) && id > 0);
                         const allPicIds = picId ? [...new Set([picId, ...picIds])] : picIds;
                         // Hiển thị PIC đầu tiên + số lượng PIC khác
-                        const mainPic = task.picDeploymentName || "-";
+                        const mainPic = formatPersonDisplayLabel(task.picDeploymentName || "-");
                         return allPicIds.length > 1 ? `${mainPic} (+${allPicIds.length - 1} người khác)` : mainPic;
                       }
                     }
-                    return task.picDeploymentName ?? "-";
+                    return formatPersonDisplayLabel(task.picDeploymentName ?? "-");
                   })()}
                 </span>
               </div>  
@@ -286,7 +505,7 @@ export default function TaskCardNew({
               <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                 Tiếp nhận bởi:{" "}
                 <span className="font-medium text-gray-800 dark:text-gray-200">
-                  {task.receivedByName ?? "-"}
+                  {formatPersonDisplayLabel(task.receivedByName ?? undefined)}
                 </span>
               </div>
             </div>

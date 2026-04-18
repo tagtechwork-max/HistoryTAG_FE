@@ -3309,7 +3309,7 @@ const ImplementationTasksPage: React.FC = () => {
             <span className="font-bold text-gray-900">{totalCount ?? data.length}</span>
             {typeof completedCount === "number" && (
               <span className="text-sm font-normal text-gray-500 whitespace-nowrap">
-                - Đã hoàn thành: <span className="text-sm font-bold text-gray-900 whitespace-nowrap" >{completedCount}/{totalCount ?? data.length} Task </span>
+                - Đã hoàn thành: <span className="text-sm font-bold text-gray-900 whitespace-nowrap" >{completedCount}/{totalCount ?? data.length} công việc </span>
               </span>
             )}
             {hiddenPendingSummary > 0 && (
