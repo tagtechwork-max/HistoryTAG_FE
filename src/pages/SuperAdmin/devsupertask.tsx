@@ -5,6 +5,7 @@ import TaskFormModal from "./TaskFormModal";
 import TaskCard from "./TaskCardNew";
 import toast from "react-hot-toast";
 import { useAuth } from '../../contexts/AuthContext';
+import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 
 const API_ROOT = import.meta.env.VITE_API_URL || "";
 const MIN_LOADING_MS = 2000;
@@ -131,6 +132,8 @@ const DevSuperTaskPage: React.FC = () => {
   const [enableItemAnimation, setEnableItemAnimation] =
     useState<boolean>(true);
 
+  const { ask: askConfirm, dialog: genericConfirmDialog } = useConfirmDialog();
+
   const apiBase = `${API_ROOT}/api/v1/superadmin/dev/tasks`;
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -245,7 +248,13 @@ const DevSuperTaskPage: React.FC = () => {
   }, [searchTerm, statusFilter, sortBy, sortDir]);
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Xóa bản ghi này?")) return;
+    const ok = await askConfirm({
+      title: "Xóa công việc?",
+      message: "Bạn có chắc muốn xóa bản ghi này? Hành động này không thể hoàn tác.",
+      variant: "danger",
+      confirmLabel: "Xóa",
+    });
+    if (!ok) return;
     const res = await fetch(`${apiBase}/${id}`, {
       method: "DELETE",
       headers: authHeaders(),
@@ -578,6 +587,7 @@ const DevSuperTaskPage: React.FC = () => {
           readOnly={false}
         />
       )}
+      {genericConfirmDialog}
     </div>
   );
 };

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
+import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import TaskCardNew from "../SuperAdmin/TaskCardNew";
 
 // =====================
@@ -1109,6 +1110,7 @@ const ImplementationTasksPage: React.FC = () => {
     const [hospitalCount, setHospitalCount] = useState<number | null>(null);
     const [hospitalCountLoading, setHospitalCountLoading] = useState<boolean>(false);
     const searchDebounce = useRef<number | null>(null);
+    const { ask: askConfirm, dialog: genericConfirmDialog } = useConfirmDialog();
 
     const readStored = <T = unknown>(key: string): T | null => {
         try {
@@ -1273,7 +1275,13 @@ const ImplementationTasksPage: React.FC = () => {
     };
 
     const handleDelete = async (id: number) => {
-        if (!confirm("Xóa bản ghi này?")) return;
+        const ok = await askConfirm({
+            title: "Xóa công việc?",
+            message: "Bạn có chắc muốn xóa bản ghi này? Hành động này không thể hoàn tác.",
+            variant: "danger",
+            confirmLabel: "Xóa",
+        });
+        if (!ok) return;
         const res = await fetch(`${apiBase}/${id}`, {
             method: "DELETE",
             headers: authHeaders(),
@@ -1472,6 +1480,7 @@ const ImplementationTasksPage: React.FC = () => {
             />
 
             <DetailModal open={detailOpen} onClose={() => setDetailOpen(false)} item={detailItem} />
+            {genericConfirmDialog}
         </div>
     );
 };

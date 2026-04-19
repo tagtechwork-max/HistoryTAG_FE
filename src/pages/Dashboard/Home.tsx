@@ -8,6 +8,7 @@ import PageMeta from "../../components/common/PageMeta";
 import TetCelebration from "../../components/common/TetCelebration";
 import FlowerFall from "../../components/common/FlowerFall";
 import UserDashboard from "../../components/reports/UserDashboard";
+import WorkReportExportButton from "../../components/reports/WorkReportExportButton";
 
 export default function Home() {
   // Kiểm tra team của user hiện tại
@@ -48,29 +49,39 @@ export default function Home() {
 
       {isCSKH ? (
         /* === Dashboard riêng cho team CSKH === */
-        <UserDashboard />
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <WorkReportExportButton role="admin" />
+          </div>
+          <UserDashboard />
+        </div>
       ) : (
         /* === Dashboard mặc định cho các team khác === */
-        <div className="grid grid-cols-12 gap-4 md:gap-6">
-          <div className="col-span-12">
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <WorkReportExportButton role="admin" />
+          </div>
+          <div className="grid grid-cols-12 gap-4 md:gap-6">
+            <div className="col-span-12">
             <EcommerceMetrics />
-          </div>
+            </div>
           
-          <div className="col-span-12 space-y-6">
-            <MonthlySalesChart />
-          </div>
+            <div className="col-span-12 space-y-6">
+              <MonthlySalesChart />
+            </div>
 
-          <div className="col-span-12">
-            <StatisticsChart />
-          </div>
+            <div className="col-span-12">
+              <StatisticsChart />
+            </div>
 
-          {/* <div className="col-span-12 xl:col-span-5">
+            {/* <div className="col-span-12 xl:col-span-5">
             <DemographicCard />
           </div>
 
           <div className="col-span-12 xl:col-span-7">
             <RecentOrders />
           </div> */}
+          </div>
         </div>
       )}
     </>

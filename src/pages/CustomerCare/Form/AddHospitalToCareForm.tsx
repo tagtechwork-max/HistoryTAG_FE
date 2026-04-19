@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import toast from "react-hot-toast";
 import { FiX, FiSave, FiSearch, FiUser, FiCalendar, FiTag, FiAlertTriangle, FiEye } from "react-icons/fi";
 import { searchHospitals } from "../../../api/business.api";
 import { getCustomerCareUserOptions, createCustomerCare, updateCustomerCare, changeCustomerCareStatus, CustomerCareCreateRequestDTO, CustomerCareUpdateRequestDTO, getCustomerTypes, getActiveCareTasksByHospitalId, CustomerCareResponseDTO } from "../../../api/customerCare.api";
@@ -259,19 +260,19 @@ export default function AddHospitalToCareForm({
     e.preventDefault();
     
     if (!formData.hospitalId) {
-      alert("Vui lòng chọn bệnh viện");
+      toast.error("Vui lòng chọn bệnh viện");
       return;
     }
     if (!formData.careType) {
-      alert("Vui lòng chọn loại chăm sóc");
+      toast.error("Vui lòng chọn loại chăm sóc");
       return;
     }
     if (!formData.reason.trim()) {
-      alert("Vui lòng nhập lý do cần chăm sóc");
+      toast.error("Vui lòng nhập lý do cần chăm sóc");
       return;
     }
     if (!formData.targetDate) {
-      alert("Vui lòng chọn ngày mục tiêu");
+      toast.error("Vui lòng chọn ngày mục tiêu");
       return;
     }
 
@@ -335,7 +336,7 @@ export default function AddHospitalToCareForm({
     } catch (error: any) {
       console.error("Error submitting form:", error);
       const errorMessage = error?.response?.data?.message || error?.message || "Có lỗi xảy ra khi lưu dữ liệu";
-      alert(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }

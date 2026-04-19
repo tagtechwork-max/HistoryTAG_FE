@@ -57,7 +57,8 @@ const navItems: NavItem[] = [
     icon: <DocsIcon />,
     subItems: [
       { name: "Bệnh viện", path: "/hospitals", pro: false },
-      { name: "Đơn vị HIS", path: "/his-sys", pro: false }
+      { name: "Đơn vị HIS", path: "/his-sys", pro: false },
+      { name: "Cơ sở hành chính công", path: "/hcc-facilities", pro: false },
     ],
   },
   {

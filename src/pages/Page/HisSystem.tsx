@@ -8,6 +8,7 @@ import { FiMail, FiPhone, FiUser, FiClock, FiMapPin, FiDownload } from "react-ic
 import { motion, AnimatePresence } from "framer-motion";
 import ExcelJS from "exceljs";
 import toast from "react-hot-toast";
+import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 
 // ===================== Types ===================== //
 export type SortDir = "asc" | "desc";
@@ -291,6 +292,8 @@ const HisSystemPage: React.FC = () => {
       return false;
     }
   })();
+
+  const { ask: askConfirm, dialog: genericConfirmDialog } = useConfirmDialog();
 
   // ------- data fetching (server paging compatible) ------- //
   async function fetchList() {
@@ -678,7 +681,13 @@ const HisSystemPage: React.FC = () => {
       toast.error("Bạn không có quyền xóa HIS");
       return;
     }
-    if (!confirm("Xóa HIS này?")) return;
+    const ok = await askConfirm({
+      title: "Xóa HIS?",
+      message: "Bạn có chắc muốn xóa HIS này? Hành động này không thể hoàn tác.",
+      variant: "danger",
+      confirmLabel: "Xóa",
+    });
+    if (!ok) return;
     setLoading(true);
     try {
       // ✅ DELETE request: dùng admin API nếu là admin, superadmin API nếu là superadmin
@@ -1193,6 +1202,7 @@ const HisSystemPage: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+      {genericConfirmDialog}
     </>
   );
 };

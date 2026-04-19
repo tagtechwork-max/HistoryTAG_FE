@@ -59,6 +59,7 @@ const navItems: NavItem[] = [
     subItems: [
       { name: "Bệnh viện", path: "/superadmin/hospitals", pro: false },
       { name: "Đơn vị HIS", path: "/superadmin/his-systems", pro: false },
+      { name: "Cơ sở hành chính công", path: "/superadmin/hcc-facilities", pro: false },
       { name: "Đại lý", path: "/superadmin/agencies", pro: false },
       { name: "Phần cứng", path: "/superadmin/hardware", pro: false },
     ],

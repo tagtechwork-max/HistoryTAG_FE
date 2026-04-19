@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
+import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import PageMeta from "../../components/common/PageMeta";
 import { Modal } from "../../components/ui/modal";
 import {
@@ -172,6 +173,7 @@ export default function LogOT() {
   const [submitting, setSubmitting] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
   const itemsPerPage = 4;
+  const { ask: askConfirm, dialog: genericConfirmDialog } = useConfirmDialog();
 
   const monthParams = useMemo(() => parseMonthValue(selectedMonth), [selectedMonth]);
 
@@ -290,7 +292,13 @@ export default function LogOT() {
 
   const handleDelete = async (id: number) => {
     if (isReadOnly) return;
-    if (!window.confirm("Bạn có chắc muốn xóa mục tăng ca này?")) return;
+    const ok = await askConfirm({
+      title: "Xóa mục tăng ca?",
+      message: "Bạn có chắc muốn xóa mục tăng ca này?",
+      variant: "danger",
+      confirmLabel: "Xóa",
+    });
+    if (!ok) return;
     try {
       await deleteAdminOTEntry(id);
       await loadByPeriod();
@@ -303,7 +311,11 @@ export default function LogOT() {
 
   const handleSubmitApproval = async () => {
     if (!requestId || submitting || isReadOnly) return;
-    const confirmed = window.confirm("Bạn có muốn gửi phê duyệt OT tháng này?");
+    const confirmed = await askConfirm({
+      title: "Gửi phê duyệt OT?",
+      message: "Bạn có muốn gửi phê duyệt OT tháng này?",
+      confirmLabel: "Gửi",
+    });
     if (!confirmed) return;
     setSubmitting(true);
     try {
@@ -701,6 +713,7 @@ export default function LogOT() {
           </div>
         </div>
       </Modal>
+      {genericConfirmDialog}
     </>
   );
 }

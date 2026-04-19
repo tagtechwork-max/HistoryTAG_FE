@@ -11,6 +11,7 @@ import { useWebSocket } from "../../contexts/WebSocketContext";
 import { isBusinessContractTaskName as isBusinessContractTask } from "../../utils/businessContract";
 import { getHospitalTickets } from "../../api/ticket.api";
 import { useAuth } from '../../contexts/AuthContext';
+import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 
 // Helper function để parse PIC IDs từ additionalRequest
 function parsePicIdsFromAdditionalRequest(additionalRequest?: string | null, picDeploymentId?: number | null): number[] {
@@ -1279,43 +1280,6 @@ function DetailModal({
     }
   };
 
-  const handleDeleteMyNote = async (noteId: number) => {
-    if (!noteId) return;
-    const ok = window.confirm("Bạn chắc chắn muốn xóa ghi chú này?");
-    if (!ok) return;
-
-    if (!item || !item.id) {
-      toast.error("Không xác định được task");
-      return;
-    }
-
-    try {
-      // Call the new admin implementation task-note delete endpoint
-      const url = `${apiBase}/${item.id}/notes/${noteId}`;
-      console.log("Calling DELETE:", url);
-
-      const res = await fetch(url, {
-        method: "DELETE",
-        headers: authHeaders(),
-        credentials: "include",
-      });
-
-      if (res.status === 204 || res.ok) {
-        setMyNotes((prev) => prev.filter((n) => n.id !== noteId));
-        toast.success("Đã xóa ghi chú");
-        // refresh allNotes as well
-        setAllNotes((prev) => prev.filter((n) => n.id !== noteId));
-        return;
-      }
-
-      const txt = await res.text().catch(() => "");
-      throw new Error(txt || `Lỗi ${res.status}`);
-    } catch (err: any) {
-      console.error("Lỗi xóa ghi chú:", err);
-      toast.error("Xóa thất bại: " + (err.message || "Lỗi không xác định"));
-    }
-  };
-
   if (!open || !item) return null;
 
   // console.log("DetailModal item startDate", item.startDate);
@@ -1690,6 +1654,7 @@ const ImplementationTasksPage: React.FC = () => {
   const [enableItemAnimation, setEnableItemAnimation] = useState<boolean>(true);
 
   const { subscribe } = useWebSocket();
+  const { ask: askConfirm, dialog: genericConfirmDialog } = useConfirmDialog();
 
   const [hospitalQuery, setHospitalQuery] = useState<string>("");
   const [hospitalOptions, setHospitalOptions] = useState<Array<{ id: number; label: string }>>([]);
@@ -3161,7 +3126,13 @@ const ImplementationTasksPage: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Xóa bản ghi này?")) return;
+    const ok = await askConfirm({
+      title: "Xóa công việc?",
+      message: "Bạn có chắc muốn xóa bản ghi này? Hành động này không thể hoàn tác.",
+      variant: "danger",
+      confirmLabel: "Xóa",
+    });
+    if (!ok) return;
     const res = await fetch(`${apiBase}/${id}`, {
       method: "DELETE",
       headers: authHeaders(),
@@ -3193,7 +3164,12 @@ const ImplementationTasksPage: React.FC = () => {
       toast.error("Không xác định được bệnh viện để chuyển sang bảo trì.");
       return;
     }
-    if (!confirm(`Chuyển bệnh viện ${hospital.label} sang bảo trì?`)) return;
+    const okTransfer = await askConfirm({
+      title: "Chuyển sang bảo trì?",
+      message: `Chuyển bệnh viện ${hospital.label} sang bảo trì?`,
+      confirmLabel: "Chuyển",
+    });
+    if (!okTransfer) return;
     try {
       // ✅ API mới: Chuyển bệnh viện (không phải task)
       const res = await fetch(
@@ -3905,6 +3881,7 @@ const ImplementationTasksPage: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+      {genericConfirmDialog}
     </div>
   );
 };

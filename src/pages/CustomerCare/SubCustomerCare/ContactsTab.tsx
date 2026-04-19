@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import toast from "react-hot-toast";
+import { useConfirmDialog } from "../../../hooks/useConfirmDialog";
 import { FiUser, FiPhone, FiMail, FiSettings, FiFileText, FiPlus, FiEdit2, FiTrash2, FiX, FiSave } from "react-icons/fi";
 import {
   getHospitalContacts,
@@ -38,6 +40,7 @@ export default function ContactsTab({
   canManage = false,
   onContactsChange
 }: ContactsTabProps) {
+  const { ask: askConfirm, dialog: genericConfirmDialog } = useConfirmDialog();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [showContactModal, setShowContactModal] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
@@ -112,16 +115,17 @@ export default function ContactsTab({
   };
 
   const handleDeleteContact = async (contactId: number) => {
-    if (!hospitalId) {
-      // Fallback: local delete if no hospitalId
-      if (confirm("Bạn có chắc chắn muốn xóa liên hệ này?")) {
-        const updatedContacts = contacts.filter(c => c.id !== contactId);
-        setContacts(updatedContacts);
-      }
-      return;
-    }
+    const ok = await askConfirm({
+      title: "Xóa liên hệ?",
+      message: "Bạn có chắc muốn xóa liên hệ này?",
+      variant: "danger",
+      confirmLabel: "Xóa",
+    });
+    if (!ok) return;
 
-    if (!confirm("Bạn có chắc chắn muốn xóa liên hệ này?")) {
+    if (!hospitalId) {
+      const updatedContacts = contacts.filter((c) => c.id !== contactId);
+      setContacts(updatedContacts);
       return;
     }
 
@@ -134,8 +138,9 @@ export default function ContactsTab({
       // onContactsChange will be called in loadContacts
     } catch (err: any) {
       console.error("Error deleting contact:", err);
-      setError(err?.response?.data?.message || err?.message || "Không thể xóa liên hệ");
-      alert(err?.response?.data?.message || err?.message || "Không thể xóa liên hệ");
+      const msg = err?.response?.data?.message || err?.message || "Không thể xóa liên hệ";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -143,7 +148,7 @@ export default function ContactsTab({
 
   const handleSaveContact = async () => {
     if (!contactForm.name.trim() || !contactForm.role.trim()) {
-      alert("Vui lòng điền đầy đủ thông tin (Tên và Vai trò)");
+      toast.error("Vui lòng điền đầy đủ thông tin (Tên và Vai trò)");
       return;
     }
 
@@ -195,8 +200,9 @@ export default function ContactsTab({
       setEditingContact(null);
     } catch (err: any) {
       console.error("Error saving contact:", err);
-      setError(err?.response?.data?.message || err?.message || "Không thể lưu liên hệ");
-      alert(err?.response?.data?.message || err?.message || "Không thể lưu liên hệ");
+      const msg = err?.response?.data?.message || err?.message || "Không thể lưu liên hệ";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -425,6 +431,7 @@ export default function ContactsTab({
           </div>
         </div>
       )}
+      {genericConfirmDialog}
     </div>
   );
 }

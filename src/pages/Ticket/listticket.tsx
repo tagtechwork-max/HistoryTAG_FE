@@ -18,6 +18,7 @@ import {
 } from "react-icons/fi";
 import { FaHospital } from "react-icons/fa";
 import toast from "react-hot-toast";
+import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import {
   getAllTickets,
   updateHospitalTicket,
@@ -218,6 +219,8 @@ export default function ListTicketPage() {
   
   // Combined permission: SuperAdmin OR Maintenance Leader
   const canManage = isSuperAdmin || isMaintenanceLeader;
+
+  const { ask: askConfirm, dialog: genericConfirmDialog } = useConfirmDialog();
 
   // Load tickets
   const loadTickets = useCallback(async () => {
@@ -422,8 +425,14 @@ export default function ListTicketPage() {
 
   // Handlers
   const handleDelete = async (ticket: TicketResponseDTO) => {
-    if (!window.confirm(`Bạn có chắc muốn xóa ticket "${ticket.ticketCode}"?`)) return;
-    
+    const ok = await askConfirm({
+      title: "Xóa ticket?",
+      message: `Bạn có chắc muốn xóa ticket "${ticket.ticketCode}"? Hành động này không thể hoàn tác.`,
+      variant: "danger",
+      confirmLabel: "Xóa",
+    });
+    if (!ok) return;
+
     try {
       await deleteHospitalTicket(ticket.hospitalId, ticket.id, canManage);
       toast.success("Đã xóa ticket");
@@ -1294,6 +1303,7 @@ export default function ListTicketPage() {
           </motion.div>
         )}
       </AnimatePresence>
+      {genericConfirmDialog}
     </div>
   );
 }

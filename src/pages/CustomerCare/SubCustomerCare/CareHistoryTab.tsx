@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useConfirmDialog } from "../../../hooks/useConfirmDialog";
 import { FiPlus, FiPhoneCall, FiSend, FiUser, FiMail, FiFileText, FiEdit2, FiTrash2, FiCalendar, FiX, FiMessageCircle } from "react-icons/fi";
 import { FaViber } from "react-icons/fa";
 import AddCareActivityForm, { CareActivityFormData } from "../Form/AddCareActivityForm";
@@ -61,6 +62,7 @@ export default function CareHistoryTab({
   onUpdateActivity,
   onDeleteActivity 
 }: CareHistoryTabProps) {
+  const { ask: askConfirm, dialog: genericConfirmDialog } = useConfirmDialog();
   const [showAddActivityModal, setShowAddActivityModal] = useState(false);
   const [editingActivity, setEditingActivity] = useState<CareActivity | null>(null);
   const [dateFilter, setDateFilter] = useState<string>("");
@@ -113,10 +115,15 @@ export default function CareHistoryTab({
     setShowAddActivityModal(true);
   };
 
-  const handleDeleteActivity = (id: number) => {
-    if (confirm("Bạn có chắc chắn muốn xóa hoạt động này?")) {
-      onDeleteActivity?.(id);
-    }
+  const handleDeleteActivity = async (id: number) => {
+    const ok = await askConfirm({
+      title: "Xóa hoạt động?",
+      message: "Bạn có chắc muốn xóa hoạt động này? Hành động này không thể hoàn tác.",
+      variant: "danger",
+      confirmLabel: "Xóa",
+    });
+    if (!ok) return;
+    onDeleteActivity?.(id);
   };
 
   const handleCloseModal = () => {
@@ -269,7 +276,7 @@ export default function CareHistoryTab({
                       )}
                       {onDeleteActivity && (
                         <button
-                          onClick={() => handleDeleteActivity(item.id)}
+                          onClick={() => void handleDeleteActivity(item.id)}
                           className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition dark:hover:bg-red-900/20"
                           title="Xóa"
                         >
@@ -328,6 +335,7 @@ export default function CareHistoryTab({
         hospitalName={hospitalName}
         editingActivity={editingActivity}
       />
+      {genericConfirmDialog}
     </div>
   );
 }

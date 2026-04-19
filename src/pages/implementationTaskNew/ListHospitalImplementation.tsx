@@ -20,6 +20,7 @@ import api from "../../api/client";
 import { useWebSocket } from "../../contexts/WebSocketContext";
 import toast from "react-hot-toast";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import { IMPL_TASKS_LIST_SEARCH_KEY, type ImplTasksLocationState } from "./SubImplementationTask/implListNav";
 
 type PendingImplementationTask = {
@@ -276,6 +277,7 @@ export default function ListHospitalImplementation() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { subscribe } = useWebSocket();
+  const { ask: askConfirm, dialog: confirmAskDialog } = useConfirmDialog();
   const isSuperAdmin = location.pathname.startsWith("/superadmin");
   const [search, setSearch] = useState("");
   const [ownerFilterIds, setOwnerFilterIds] = useState<string[]>([]);
@@ -766,7 +768,13 @@ export default function ListHospitalImplementation() {
       return;
     }
     if (action === "delete") {
-      if (!window.confirm("Bạn có chắc muốn xóa bệnh viện này khỏi danh sách triển khai?")) return;
+      const ok = await askConfirm({
+        title: "Xóa khỏi danh sách triển khai?",
+        message: "Bạn có chắc muốn xóa bệnh viện này khỏi danh sách triển khai? Hành động này không thể hoàn tác.",
+        variant: "danger",
+        confirmLabel: "Xóa",
+      });
+      if (!ok) return;
       try {
         await deleteImplementationTask(id);
         loadData();
@@ -1594,6 +1602,7 @@ export default function ListHospitalImplementation() {
           </div>
         </div>
       )}
+      {confirmAskDialog}
     </>
   );
 }

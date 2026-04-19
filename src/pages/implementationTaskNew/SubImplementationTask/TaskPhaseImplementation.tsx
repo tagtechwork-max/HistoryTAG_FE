@@ -22,6 +22,7 @@ import {
   type MilestoneDto,
 } from "../../../api/api";
 import { implTasksListTo, parseListSearchFromState } from "./implListNav";
+import { useConfirmDialog } from "../../../hooks/useConfirmDialog";
 
 const COLUMN_IDS = ["todo", "in_progress", "completed", "blocked"] as const;
 
@@ -140,6 +141,7 @@ export default function TaskPhaseImplementation() {
   const [completingPhase, setCompletingPhase] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const { ask: askConfirm, dialog: genericConfirmDialog } = useConfirmDialog();
 
   const openMenu = useCallback((taskId: string, button: HTMLButtonElement) => {
     const rect = button.getBoundingClientRect();
@@ -292,7 +294,13 @@ export default function TaskPhaseImplementation() {
       return;
     }
     if (action === "delete") {
-      if (!window.confirm("Bạn có chắc muốn xóa công việc này?")) return;
+      const ok = await askConfirm({
+        title: "Xóa công việc?",
+        message: "Bạn có chắc muốn xóa công việc này? Hành động này không thể hoàn tác.",
+        variant: "danger",
+        confirmLabel: "Xóa",
+      });
+      if (!ok) return;
       try {
         await deleteWorkItem(taskId);
         const mid = resolvedMilestoneId ?? phaseId;
@@ -919,6 +927,7 @@ export default function TaskPhaseImplementation() {
           })(),
           document.body
         )}
+      {genericConfirmDialog}
     </>
   );
 }

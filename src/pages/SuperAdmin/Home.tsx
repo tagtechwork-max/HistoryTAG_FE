@@ -11,6 +11,7 @@ import api, { getAuthToken } from "../../api/client";
 import toast from "react-hot-toast";
 import Pagination from "../../components/common/Pagination";
 import CSKHReport from "../../components/reports/CSKHReport";
+import WorkReportExportButton from "../../components/reports/WorkReportExportButton";
 
 
 // ExcelJS is heavy; import dynamically inside export functions to reduce initial bundle size
@@ -2368,6 +2369,9 @@ export default function SuperAdminHome() {
       {/* <TetCelebration /> */}
 
       <div className="space-y-6">
+        <div className="flex justify-end">
+          <WorkReportExportButton role="superadmin" />
+        </div>
         <header className="relative overflow-hidden rounded-2xl p-6 text-white shadow-md">
           {/* animated gradient background */}
           <div

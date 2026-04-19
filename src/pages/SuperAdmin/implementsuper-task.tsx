@@ -13,6 +13,7 @@ import TicketsTab from "../../pages/CustomerCare/SubCustomerCare/TicketsTab";
 import { isBusinessContractTaskName as isBusinessContractTask } from "../../utils/businessContract";
 import { getHospitalTickets } from "../../api/ticket.api";
 import { useAuth } from '../../contexts/AuthContext';
+import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 
 const API_ROOT = import.meta.env.VITE_API_URL || "";
 const MIN_LOADING_MS = 2000; // ensure spinner shows at least ~2s for perceived smoothness
@@ -196,6 +197,7 @@ const ImplementSuperTaskPage: React.FC = () => {
   const [enableItemAnimation, setEnableItemAnimation] = useState<boolean>(true);
 
   const { subscribe } = useWebSocket();
+  const { ask: askConfirm, dialog: genericConfirmDialog } = useConfirmDialog();
 
   const [picOptions, setPicOptions] = useState<Array<{ id: string; label: string }>>([]);
   const [acceptedCount, setAcceptedCount] = useState<number | null>(null);
@@ -897,7 +899,12 @@ const ImplementSuperTaskPage: React.FC = () => {
       return;
     }
 
-    if (!confirm(`Chuyển bệnh viện ${hospital.label} sang bảo trì?`)) return;
+    const okTransfer = await askConfirm({
+      title: "Chuyển sang bảo trì?",
+      message: `Chuyển bệnh viện ${hospital.label} sang bảo trì?`,
+      confirmLabel: "Chuyển",
+    });
+    if (!okTransfer) return;
 
     try {
       // ✅ API mới: Chuyển bệnh viện (không phải task)
@@ -1313,7 +1320,13 @@ const ImplementSuperTaskPage: React.FC = () => {
   }, [sortBy, sortDir]);
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Xóa bản ghi này?")) return;
+    const ok = await askConfirm({
+      title: "Xóa công việc?",
+      message: "Bạn có chắc muốn xóa bản ghi này? Hành động này không thể hoàn tác.",
+      variant: "danger",
+      confirmLabel: "Xóa",
+    });
+    if (!ok) return;
     const res = await fetch(`${apiBase}/${id}`, {
       method: "DELETE",
       headers: authHeaders(),
@@ -2410,6 +2423,7 @@ const ImplementSuperTaskPage: React.FC = () => {
         )}
       </AnimatePresence>
 
+      {genericConfirmDialog}
     </div>
   );
 };

@@ -23,6 +23,7 @@ import { getMaintainContractPicOptions } from "../../../api/maintain.api";
 import { searchHospitals } from "../../../api/business.api";
 import api from "../../../api/client";
 import toast from "react-hot-toast";
+import { useConfirmDialog } from "../../../hooks/useConfirmDialog";
 
 interface ContractsTabProps {
   contracts?: Contract[];
@@ -56,6 +57,7 @@ export default function ContractsTab({
   hospitalId,
   careId 
 }: ContractsTabProps) {
+  const { ask: askConfirm, dialog: genericConfirmDialog } = useConfirmDialog();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showContractModal, setShowContractModal] = useState(false);
   const [editingContract, setEditingContract] = useState<Contract | null>(null);
@@ -490,9 +492,13 @@ export default function ContractsTab({
   };
 
   const handleDeleteContract = async (contractId: string) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa hợp đồng này?")) {
-      return;
-    }
+    const ok = await askConfirm({
+      title: "Xóa hợp đồng?",
+      message: "Bạn có chắc muốn xóa hợp đồng này? Hành động này không thể hoàn tác.",
+      variant: "danger",
+      confirmLabel: "Xóa",
+    });
+    if (!ok) return;
 
     setLoading(true);
     setError(null);
@@ -559,10 +565,12 @@ export default function ContractsTab({
       return;
     }
 
-    // Xác nhận gia hạn
-    if (!confirm(`Bạn có chắc chắn muốn gia hạn hợp đồng ${contract.code}?`)) {
-      return;
-    }
+    const okRenew = await askConfirm({
+      title: "Gia hạn hợp đồng?",
+      message: `Bạn có chắc muốn gia hạn hợp đồng ${contract.code}?`,
+      confirmLabel: "Tiếp tục",
+    });
+    if (!okRenew) return;
 
     try {
       // Mở form tạo hợp đồng mới với thông tin từ hợp đồng cũ
@@ -1386,6 +1394,7 @@ export default function ContractsTab({
         paidAmountError={paidAmountError}
         careId={careId}
       />
+      {genericConfirmDialog}
     </div>
   );
 }

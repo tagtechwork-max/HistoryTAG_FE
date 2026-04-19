@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import TaskCardNew from "../SuperAdmin/TaskCardNew";
 import TaskNotes from "../../components/TaskNotes";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import { AiOutlineEye } from "react-icons/ai";
 import toast from "react-hot-toast";
 import { FaHospital } from "react-icons/fa";
@@ -150,6 +151,8 @@ export type ImplementationTaskResponseDTO = {
     name: string;
     hospitalId: number | null;
     hospitalName?: string | null;
+    hccFacilityId?: number | null;
+    hccFacilityName?: string | null;
     picDeploymentId: number | null;
     picDeploymentName?: string | null;
     picDeploymentIds?: number[] | null;
@@ -202,7 +205,8 @@ type PendingHospital = {
 
 export type ImplementationTaskRequestDTO = {
     name: string;
-    hospitalId: number;
+    hospitalId?: number | null;
+    hccFacilityId?: number | null;
     picDeploymentId: number;
     picDeploymentIds?: number[];
     agencyId?: number | null;
@@ -639,7 +643,13 @@ function RemoteSelect({
             try {
                 const res = await fetchOptions(q.trim());
                 if (!alive) return;
-                const mapped = Array.isArray(res) ? res.map((o: any) => ({ id: Number(o.id), name: String(o.name) })) : [];
+                const mapped = Array.isArray(res)
+                    ? res.map((o: any) => ({
+                        ...o,
+                        id: Number(o.id),
+                        name: String(o.name),
+                    }))
+                    : [];
                 const filtered = excludeIds && excludeIds.length ? mapped.filter((o) => !excludeIds.includes(o.id)) : mapped;
                 if (alive) setOptions(filtered);
             } catch {
@@ -755,6 +765,7 @@ function RemoteSelect({
                             if (highlight >= 0 && filteredOptions[highlight]) {
                                 onChange(filteredOptions[highlight]);
                                 setOpen(false);
+                                setFocused(false);
                                 setQ("");
                             }
                         } else if (e.key === "Escape") {
@@ -826,6 +837,7 @@ function RemoteSelect({
                                     e.preventDefault();
                                     onChange(opt);
                                     setOpen(false);
+                                    setFocused(false);
                                     setQ("");
                                 }}
                             >
@@ -883,20 +895,33 @@ function TaskFormModal({
     userTeam: string;
     pageHospitalOptions?: Array<{ id: number; name: string }>;
 }) {
+    type FacilityOption = { id: number; name: string; facilityType: "HOSPITAL" | "HCC" };
     // ===== Fetchers cho RemoteSelect =====
     const searchHospitals = useMemo(
         () => async (term: string) => {
-            const url = `${API_ROOT}/api/v1/admin/hospitals/search?name=${encodeURIComponent(term)}`;
-            const res = await fetch(url, { headers: authHeaders(), credentials: "include" });
-            if (!res.ok) return [];
-            const list = await res.json();
-            const mapped = Array.isArray(list)
-                ? list.map((h: { id?: number; label?: string; name?: string; hospitalName?: string; code?: string }) => ({
-                    id: Number(h.id),
-                    name: String(h.label ?? h.name ?? h.hospitalName ?? h.code ?? h?.id),
-                }))
+            const [hospitalRes, hccRes] = await Promise.all([
+                fetch(`${API_ROOT}/api/v1/admin/hospitals/search?name=${encodeURIComponent(term)}`, { headers: authHeaders(), credentials: "include" }),
+                fetch(`${API_ROOT}/api/v1/admin/hcc-facilities?search=${encodeURIComponent(term)}&page=0&size=20`, { headers: authHeaders(), credentials: "include" }),
+            ]);
+            const hospitals: FacilityOption[] = hospitalRes.ok
+                ? ((await hospitalRes.json()) as Array<{ id?: number; label?: string; name?: string; hospitalName?: string; code?: string }>)
+                    .map((h) => ({
+                        id: Number(h.id),
+                        name: String(h.label ?? h.name ?? h.hospitalName ?? h.code ?? h?.id),
+                        facilityType: "HOSPITAL" as const,
+                    }))
+                    .filter((x) => Number.isFinite(x.id) && x.name)
                 : [];
-            return mapped.filter((x: { id: number; name: string }) => Number.isFinite(x.id) && x.name);
+            const hccPayload = hccRes.ok ? await hccRes.json() : { content: [] };
+            const hccList = Array.isArray(hccPayload?.content) ? hccPayload.content : [];
+            const hccs: FacilityOption[] = hccList
+                .map((f: { id?: number; name?: string }) => ({
+                    id: -Number(f.id), // negative id to avoid collision in shared select
+                    name: `${String(f.name ?? f?.id)} (HCC)`,
+                    facilityType: "HCC" as const,
+                }))
+                .filter((x: FacilityOption) => Number.isFinite(x.id) && x.name);
+            return [...hospitals, ...hccs];
         },
         []
     );
@@ -1052,10 +1077,13 @@ function TaskFormModal({
     });
 
     // Lưu selection theo {id, name} để hiển thị tên
-    const [hospitalOpt, setHospitalOpt] = useState<{ id: number; name: string } | null>(() => {
-        const id = (initial?.hospitalId as number) || 0;
-        const nm = (initial?.hospitalName as string) || "";
-        return id ? { id, name: nm || String(id) } : null;
+    const [hospitalOpt, setHospitalOpt] = useState<{ id: number; name: string; facilityType: "HOSPITAL" | "HCC" } | null>(() => {
+        const hospitalId = (initial?.hospitalId as number) || 0;
+        const hccId = Number((initial as any)?.hccFacilityId || 0);
+        const nm = (initial?.hospitalName as string) || (initial as any)?.hccFacilityName || "";
+        if (hospitalId) return { id: hospitalId, name: nm || String(hospitalId), facilityType: "HOSPITAL" };
+        if (hccId) return { id: -hccId, name: nm || `HCC #${hccId}`, facilityType: "HCC" };
+        return null;
     });
     // 1) State lưu danh sách những người ĐÃ chọn (dạng mảng)
     const buildPicOptsFromInitial = (init?: any) => {
@@ -1165,8 +1193,15 @@ function TaskFormModal({
             });
 
             const hid = (initial?.hospitalId as number) || 0;
-            const hnm = (initial?.hospitalName as string) || "";
-            setHospitalOpt(hid ? { id: hid, name: hnm || String(hid) } : null);
+            const hccId = Number((initial as any)?.hccFacilityId || 0);
+            const hnm = (initial?.hospitalName as string) || (initial as any)?.hccFacilityName || "";
+            setHospitalOpt(
+                hid
+                    ? { id: hid, name: hnm || String(hid), facilityType: "HOSPITAL" }
+                    : hccId
+                        ? { id: -hccId, name: hnm || `HCC #${hccId}`, facilityType: "HCC" }
+                        : null
+            );
 
             // Set danh sách PICs: dùng helper để ghép id->name ổn định, tránh sai lệch chỉ số
             setPicOpts(buildPicOptsFromInitial(initial));
@@ -1254,7 +1289,8 @@ function TaskFormModal({
         }
 
         // Resolve cho Hospital & PIC
-        resolveById((initial?.hospitalId as number) || null, setHospitalOpt, "/api/v1/admin/hospitals", ["name", "hospitalName", "label", "code"]);
+        resolveById((initial?.hospitalId as number) || null, (v) => setHospitalOpt(v ? { ...v, facilityType: "HOSPITAL" } : null), "/api/v1/admin/hospitals", ["name", "hospitalName", "label", "code"]);
+        resolveById(((initial as any)?.hccFacilityId as number) || null, (v) => setHospitalOpt(v ? { id: -v.id, name: v.name, facilityType: "HCC" } : null), "/api/v1/admin/hcc-facilities", ["name", "label"]);
 
         // Resolve PIC: 
         // - Nếu là task mới và có currentUserId: luôn fetch để đảm bảo có tên đầy đủ
@@ -1412,7 +1448,7 @@ function TaskFormModal({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!model.name?.trim()) { toast.error("Tên dự án không được để trống"); return; }
-        if (!hospitalOpt?.id) { toast.error("Bệnh viện không được để trống"); return; }
+        if (!hospitalOpt?.id) { toast.error("Cơ sở y tế/hành chính công không được để trống"); return; }
         if (!picOpts || picOpts.length === 0) { toast.error("Người phụ trách không được để trống"); return; }
 
         const normalizedStatus = normalizeStatus(model.status) ?? "RECEIVED";
@@ -1427,7 +1463,8 @@ function TaskFormModal({
 
         const payload: ImplementationTaskRequestDTO = {
             ...model,
-            hospitalId: hospitalOpt.id,
+            hospitalId: hospitalOpt.facilityType === "HOSPITAL" ? hospitalOpt.id : undefined,
+            hccFacilityId: hospitalOpt.facilityType === "HCC" ? Math.abs(hospitalOpt.id) : undefined,
             picDeploymentId: picIds[0],
             picDeploymentIds: picIds,
             status: normalizedStatus,
@@ -1447,7 +1484,7 @@ function TaskFormModal({
         }
     };
 
-    const lockHospital = !initial?.id && (Boolean(initial?.hospitalId) || Boolean(initial?.hospitalName));
+    const lockHospital = !initial?.id && (Boolean(initial?.hospitalId) || Boolean((initial as any)?.hccFacilityId) || Boolean(initial?.hospitalName));
 
     return (
         <div className="fixed inset-0 z-50 flex">
@@ -1526,25 +1563,22 @@ function TaskFormModal({
 
                             <div className="grid min-w-0 max-w-full grid-cols-1 items-start gap-4 sm:grid-cols-2">
                                 {lockHospital ? (
-                                    <Field label="Bệnh viện" required variant="curator">
+                                    <Field label="Cơ sở y tế, hành chính công" required variant="curator">
                                         <div className="flex min-h-[2.75rem] min-w-0 max-w-full items-start rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-normal leading-snug text-slate-900 whitespace-normal break-words dark:border-slate-600 dark:bg-slate-900/80 dark:text-slate-100">
                                             {hospitalOpt?.name || "-"}
                                         </div>
                                     </Field>
                                 ) : (
                                     <RemoteSelect
-                                        label="Bệnh viện"
+                                        label="Cơ sở y tế, hành chính công"
                                         fieldVariant="curator"
                                         curator
                                         trailing="chevron"
                                         required
-                                        placeholder="Chọn bệnh viện"
+                                        placeholder="Chọn cơ sở y tế hoặc cơ sở hành chính công"
                                         fetchOptions={searchHospitals}
-                                        staticOptions={
-                                            pageHospitalOptions && pageHospitalOptions.length > 0 ? pageHospitalOptions : undefined
-                                        }
                                         value={hospitalOpt}
-                                        onChange={setHospitalOpt}
+                                        onChange={(v) => setHospitalOpt(v ? { ...v, facilityType: (v as any).facilityType ?? "HOSPITAL" } : null)}
                                         disabled={readOnly}
                                         wrapSelectedLabel
                                     />
@@ -1876,7 +1910,7 @@ function DetailModal({
                     {/* Grid Info */}
                     <div className="grid  grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
                         <Info icon={<FiTag />} label="Tên" value={item.name} />
-                        <Info icon={<FaHospital />} label="Bệnh viện" value={item.hospitalName} />
+                        <Info icon={<FaHospital />} label="Cơ sở" value={item.hospitalName} />
 
                         {/* Người phụ trách (chính) */}
                         <Info
@@ -2028,6 +2062,7 @@ const ImplementationTasksPage: React.FC = () => {
     const [enableItemAnimation, setEnableItemAnimation] = useState<boolean>(true);
 
     const { subscribe } = useWebSocket();
+    const { ask: askConfirm, dialog: genericConfirmDialog } = useConfirmDialog();
 
     const [hospitalQuery, setHospitalQuery] = useState<string>("");
     const [hospitalOptions, setHospitalOptions] = useState<Array<{ id: number; label: string }>>([]);
@@ -2268,18 +2303,11 @@ const ImplementationTasksPage: React.FC = () => {
         }
     }, []);
 
-    const handleAcceptPendingGroup = async (group: PendingTransferGroup) => {
+    const acceptPendingHospitalCore = async (group: PendingTransferGroup) => {
         if (!group || !group.hospitalId) {
             toast.error("Không có bệnh viện nào để tiếp nhận.");
             return;
         }
-
-        if (
-            !confirm(
-                `Tiếp nhận bệnh viện ${group.hospitalName} và chuyển sang danh sách bảo trì?`,
-            )
-        )
-            return;
 
         try {
             // ✅ API mới: Tiếp nhận bệnh viện (1 API call thay vì loop qua từng task)
@@ -2289,7 +2317,7 @@ const ImplementationTasksPage: React.FC = () => {
                 credentials: "include",
             });
             if (!res.ok) {
-                const msg = await res.text();
+                await res.text();
                 toast.error(`Tiếp nhận thất bại: Bạn không có quyền tiếp nhận !`);
                 return;
             }
@@ -2306,25 +2334,41 @@ const ImplementationTasksPage: React.FC = () => {
         }
     };
 
+    const handleAcceptPendingGroup = async (group: PendingTransferGroup) => {
+        if (!group || !group.hospitalId) {
+            toast.error("Không có bệnh viện nào để tiếp nhận.");
+            return;
+        }
+
+        const ok = await askConfirm({
+            title: "Tiếp nhận bệnh viện?",
+            message: `Tiếp nhận bệnh viện ${group.hospitalName} và chuyển sang danh sách bảo trì?`,
+            confirmLabel: "Tiếp nhận",
+        });
+        if (!ok) return;
+
+        await acceptPendingHospitalCore(group);
+    };
+
     const handleAcceptAll = async () => {
         if (pendingTasks.length === 0) {
             toast.error("Không có bệnh viện nào để tiếp nhận.");
             return;
         }
 
-        if (
-            !confirm(
-                `Tiếp nhận tất cả ${pendingTasks.length} bệnh viện và chuyển sang danh sách bảo trì?`,
-            )
-        )
-            return;
+        const ok = await askConfirm({
+            title: "Tiếp nhận tất cả?",
+            message: `Tiếp nhận tất cả ${pendingTasks.length} bệnh viện và chuyển sang danh sách bảo trì?`,
+            confirmLabel: "Tiếp nhận tất cả",
+        });
+        if (!ok) return;
 
-        // Accept all hospitals sequentially
+        // Accept all hospitals sequentially (no per-row confirm)
         for (const group of [...pendingTasks]) {
             if (group.hospitalId) {
                 try {
                     // eslint-disable-next-line no-await-in-loop
-                    await handleAcceptPendingGroup(group);
+                    await acceptPendingHospitalCore(group);
                 } catch (err) {
                     console.error(`Failed to accept hospital ${group.hospitalName}:`, err);
                 }
@@ -2946,7 +2990,7 @@ const ImplementationTasksPage: React.FC = () => {
     return (
         <div className="min-h-screen bg-[#f3f4f9] p-6 xl:p-10">
             <div className="mb-6 flex items-center justify-between">
-                <h1 className="text-3xl font-extrabold">{showHospitalList ? "Danh ách các bệnh viện bảo trì" : "Danh sách công việc bảo trì"}</h1>
+                <h1 className="text-3xl font-extrabold">{showHospitalList ? "Danh sách các bệnh viện bảo trì" : "Danh sách công việc bảo trì"}</h1>
                 {!showHospitalList && (
                     <button
                         type="button"
@@ -3058,12 +3102,19 @@ const ImplementationTasksPage: React.FC = () => {
                                             type="button"
                                             className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-blue-700"
                                             onClick={async () => {
+                                                const selected = hospitalsWithTasks.find((h) => h.label === selectedHospital);
                                                 let hid: number | null = null;
-                                                if (selectedHospital) hid = await resolveHospitalIdByName(selectedHospital);
+                                                if (!selected && selectedHospital) {
+                                                    hid = await resolveHospitalIdByName(selectedHospital);
+                                                }
                                                 setEditing(
-                                                    hid
-                                                        ? ({ hospitalId: hid, hospitalName: selectedHospital } as any)
-                                                        : ({ hospitalName: selectedHospital } as any)
+                                                    selected && selected.id < 0
+                                                        ? ({ hccFacilityId: Math.abs(selected.id), hccFacilityName: selected.label, hospitalName: selected.label } as any)
+                                                        : selected && selected.id > 0
+                                                            ? ({ hospitalId: selected.id, hospitalName: selected.label } as any)
+                                                            : hid
+                                                                ? ({ hospitalId: hid, hospitalName: selectedHospital } as any)
+                                                                : ({ hospitalName: selectedHospital } as any)
                                                 );
                                                 setModalOpen(true);
                                             }}
@@ -3372,10 +3423,7 @@ const ImplementationTasksPage: React.FC = () => {
                                                     </div>
 
                                                     <div className="min-w-[130px] text-right">
-                                                        <span className="inline-flex items-center rounded-full bg-orange-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-orange-700">
-                                                            {(hospital.acceptedCount ?? 0) < (hospital.taskCount ?? 0) ? "Maintenance" : "Waiting"}
-                                                        </span>
-                                                        <div className="mt-2 text-[10px] text-gray-600">
+                                                        <div className="text-[10px] text-gray-600">
                                                             {hospital.overdueCount ? `Quá hạn: ${hospital.overdueCount}` : hospital.nearDueCount ? `Sắp hạn: ${hospital.nearDueCount}` : "Cập nhật gần đây"}
                                                         </div>
                                                     </div>
@@ -3594,6 +3642,7 @@ const ImplementationTasksPage: React.FC = () => {
                 }}
                 onConfirm={confirmDeleteTask}
             />
+            {genericConfirmDialog}
 
             {/* Tickets Modal */}
             <AnimatePresence>

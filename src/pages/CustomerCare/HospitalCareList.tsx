@@ -30,6 +30,7 @@ import {
 } from "../../api/customerCare.api";
 import { getMaintainContracts } from "../../api/maintain.api";
 import toast from "react-hot-toast";
+import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 
 // ===================== TYPES =====================
 interface Contract {
@@ -266,6 +267,7 @@ export default function HospitalCareList() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { ask: askConfirm, dialog: genericConfirmDialog } = useConfirmDialog();
 
   // Initialize state from URL so returning from detail keeps page/filters
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get("search") ?? "");
@@ -694,35 +696,40 @@ export default function HospitalCareList() {
 
   // Quick actions handlers
   const handleDeleteHospital = async (careId: number) => {
-    if (window.confirm("Bạn có chắc chắn muốn xóa bệnh viện này khỏi danh sách chăm sóc?")) {
-      try {
-        await deleteCustomerCare(careId);
-        // Refresh list
-        const params: any = {
-          page: currentPage,
-          size: itemsPerPage,
-          sortBy: "lastContactDate",
-          sortDir: "desc",
-        };
-        if (searchTerm) params.search = searchTerm;
-        if (priorityFilter) params.priority = priorityFilter;
-        
-        const response = await getAllCustomerCares(params);
-        const data = response.content || response.data || (Array.isArray(response) ? response : []);
-        const total = response.totalElements || response.total || data.length;
-        const pages = response.totalPages || Math.ceil(total / itemsPerPage);
-        
-        const convertedHospitals = Array.isArray(data) 
-          ? data.map(convertApiResponseToHospital)
-          : [];
-        
-        setHospitals(convertedHospitals);
-        setTotalItems(total);
-        setTotalPages(pages);
-      } catch (err: any) {
-        console.error("Error deleting customer care:", err);
-        alert(err?.response?.data?.message || err?.message || "Có lỗi xảy ra khi xóa");
-      }
+    const ok = await askConfirm({
+      title: "Xóa khỏi danh sách chăm sóc?",
+      message: "Bạn có chắc muốn xóa bệnh viện này khỏi danh sách chăm sóc? Hành động này không thể hoàn tác.",
+      variant: "danger",
+      confirmLabel: "Xóa",
+    });
+    if (!ok) return;
+
+    try {
+      await deleteCustomerCare(careId);
+      // Refresh list
+      const params: Record<string, unknown> = {
+        page: currentPage,
+        size: itemsPerPage,
+        sortBy: "lastContactDate",
+        sortDir: "desc",
+      };
+      if (searchTerm) params.search = searchTerm;
+      if (priorityFilter) params.priority = priorityFilter;
+
+      const response = await getAllCustomerCares(params);
+      const data = response.content || response.data || (Array.isArray(response) ? response : []);
+      const total = response.totalElements || response.total || data.length;
+      const pages = response.totalPages || Math.ceil(total / itemsPerPage);
+
+      const convertedHospitals = Array.isArray(data) ? data.map(convertApiResponseToHospital) : [];
+
+      setHospitals(convertedHospitals);
+      setTotalItems(total);
+      setTotalPages(pages);
+      toast.success("Đã xóa khỏi danh sách chăm sóc.");
+    } catch (err: any) {
+      console.error("Error deleting customer care:", err);
+      toast.error(err?.response?.data?.message || err?.message || "Có lỗi xảy ra khi xóa");
     }
   };
 
@@ -1251,7 +1258,7 @@ export default function HospitalCareList() {
                                 setShowAddHospitalModal(true);
                                 } catch (error) {
                                   console.error("Error loading care details:", error);
-                                  alert("Không thể tải chi tiết. Vui lòng thử lại.");
+                                  toast.error("Không thể tải chi tiết. Vui lòng thử lại.");
                                 }
                               }}
                               className="rounded-lg p-1.5 text-gray-500 transition hover:bg-blue-100 hover:text-blue-600"
@@ -1434,6 +1441,7 @@ export default function HospitalCareList() {
           />
         )}
       </div>
+      {genericConfirmDialog}
     </>
   );
 }

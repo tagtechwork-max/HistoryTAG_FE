@@ -10,6 +10,7 @@ import TaskCard from "./TaskCardNew";
 import TaskFormModal from "./TaskFormModal";
 import TaskNotes from "../../components/TaskNotes";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import TicketsTab from "../../pages/CustomerCare/SubCustomerCare/TicketsTab";
 import { getHospitalTickets } from "../../api/ticket.api";
 import { useAuth } from '../../contexts/AuthContext';
@@ -274,6 +275,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
     useState<boolean>(true);
 
   const { subscribe } = useWebSocket();
+  const { ask: askConfirm, dialog: genericConfirmDialog } = useConfirmDialog();
 
   const apiBase = `${API_ROOT}/api/v1/superadmin/maintenance/tasks`;
 
@@ -536,18 +538,11 @@ const MaintenanceSuperTaskPage: React.FC = () => {
     }
   }
 
-  const handleAcceptPendingGroup = async (group: PendingTransferGroup) => {
+  const acceptPendingHospitalCore = async (group: PendingTransferGroup) => {
     if (!group || !group.hospitalId) {
       toastError("Không có bệnh viện nào để tiếp nhận.");
       return;
     }
-
-    if (
-      !confirm(
-        `Tiếp nhận bệnh viện ${group.hospitalName} và chuyển sang danh sách bảo trì?`,
-      )
-    )
-      return;
 
     try {
       // ✅ API mới: Tiếp nhận bệnh viện (1 API call thay vì loop qua từng task)
@@ -574,25 +569,41 @@ const MaintenanceSuperTaskPage: React.FC = () => {
     }
   };
 
+  const handleAcceptPendingGroup = async (group: PendingTransferGroup) => {
+    if (!group || !group.hospitalId) {
+      toastError("Không có bệnh viện nào để tiếp nhận.");
+      return;
+    }
+
+    const ok = await askConfirm({
+      title: "Tiếp nhận bệnh viện?",
+      message: `Tiếp nhận bệnh viện ${group.hospitalName} và chuyển sang danh sách bảo trì?`,
+      confirmLabel: "Tiếp nhận",
+    });
+    if (!ok) return;
+
+    await acceptPendingHospitalCore(group);
+  };
+
   const handleAcceptAll = async () => {
     if (pendingTasks.length === 0) {
       toastError("Không có bệnh viện nào để tiếp nhận.");
       return;
     }
 
-    if (
-      !confirm(
-        `Tiếp nhận tất cả ${pendingTasks.length} bệnh viện và chuyển sang danh sách bảo trì?`,
-      )
-    )
-      return;
+    const ok = await askConfirm({
+      title: "Tiếp nhận tất cả?",
+      message: `Tiếp nhận tất cả ${pendingTasks.length} bệnh viện và chuyển sang danh sách bảo trì?`,
+      confirmLabel: "Tiếp nhận tất cả",
+    });
+    if (!ok) return;
 
-    // Accept all hospitals sequentially
+    // Accept all hospitals sequentially (no per-row confirm)
     for (const group of [...pendingTasks]) {
       if (group.hospitalId) {
         try {
           // eslint-disable-next-line no-await-in-loop
-          await handleAcceptPendingGroup(group);
+          await acceptPendingHospitalCore(group);
         } catch (err) {
           console.error(`Failed to accept hospital ${group.hospitalName}:`, err);
         }
@@ -1601,10 +1612,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
                       </div>
 
                       <div className="min-w-[130px] text-right">
-                        <span className="inline-flex items-center rounded-full bg-orange-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-orange-700">
-                          {(hospital.acceptedCount ?? 0) < (hospital.taskCount ?? 0) ? "Maintenance" : "Waiting"}
-                        </span>
-                        <div className="mt-2 text-[10px] text-gray-600">
+                        <div className="text-[10px] text-gray-600">
                           {hospital.overdueCount ? `Quá hạn: ${hospital.overdueCount}` : hospital.nearDueCount ? `Sắp hạn: ${hospital.nearDueCount}` : "Cập nhật gần đây"}
                         </div>
                       </div>
@@ -1822,6 +1830,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
         }}
         onConfirm={confirmDeleteTask}
       />
+      {genericConfirmDialog}
 
       {/* Tickets Modal */}
       <AnimatePresence>

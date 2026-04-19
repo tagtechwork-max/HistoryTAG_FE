@@ -25,6 +25,7 @@ import {
   type TicketRequestDTO
 } from "../../../api/ticket.api";
 import toast from "react-hot-toast";
+import { useConfirmDialog } from "../../../hooks/useConfirmDialog";
 
 const API_ROOT = import.meta.env.VITE_API_URL || "";
 
@@ -97,6 +98,7 @@ export default function TicketsTab({
   hospitalId,
   useTicketsProp = false // Mặc định không dùng tickets prop, load từ API
 }: TicketsTabProps) {
+  const { ask: askConfirm, dialog: genericConfirmDialog } = useConfirmDialog();
   const [localTickets, setLocalTickets] = useState<Ticket[]>(tickets);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -404,9 +406,13 @@ export default function TicketsTab({
   };
 
   const handleDeleteTicket = async (ticketId: string) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa ticket này?")) {
-      return;
-    }
+    const ok = await askConfirm({
+      title: "Xóa ticket?",
+      message: "Bạn có chắc muốn xóa ticket này? Hành động này không thể hoàn tác.",
+      variant: "danger",
+      confirmLabel: "Xóa",
+    });
+    if (!ok) return;
 
     if (!hospitalId) {
       // Fallback: local delete if no hospitalId
@@ -1256,6 +1262,7 @@ export default function TicketsTab({
           </div>
         </div>
       )}
+      {genericConfirmDialog}
     </div>
   );
 }

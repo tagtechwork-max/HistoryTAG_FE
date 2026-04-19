@@ -843,19 +843,19 @@ export default function TaskFormModal({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!model.name?.trim()) {
-            alert("Tên công việc không được để trống");
+            toast.error("Tên công việc không được để trống");
             return;
         }
         if (!hospitalOpt?.id) {
-            alert("Bệnh viện không được để trống");
+            toast.error("Bệnh viện không được để trống");
             return;
         }
         if (picOpts.length === 0) {
-            alert("Vui lòng thêm ít nhất một người phụ trách");
+            toast.error("Vui lòng thêm ít nhất một người phụ trách");
             return;
         }
         if (!model.status) {
-            alert("Trạng thái không được để trống");
+            toast.error("Trạng thái không được để trống");
             return;
         }
 
