@@ -265,15 +265,52 @@ export const logout = async () => {
 export const normalizeRoles = (roles: RoleLike[] = []) =>
   roles.map((r) => (typeof r === "string" ? r : r.roleName));
 
-export const pickErrMsg = (err: any): string => {
-  const data = err?.response?.data;
-  if (!data) return "Đã xảy ra lỗi";
-  if (typeof data.data === "string") return data.data;
-  if (data.data && typeof data.data === "object") {
-    const first = Object.values(data.data)[0];
-    if (typeof first === "string") return first;
+/**
+ * Map axios/API errors to a user-visible string.
+ * "Đã xảy ra lỗi" used to appear when `response.data` was missing (network/CORS/offline).
+ */
+export const pickErrMsg = (err: unknown): string => {
+  const e = err as {
+    message?: string;
+    code?: string;
+    response?: { status?: number; data?: unknown };
+  };
+
+  if (!e?.response) {
+    const m = e?.message;
+    if (m === "Network Error" || e?.code === "ERR_NETWORK") {
+      return "Không kết nối được máy chủ. Kiểm tra backend ";
+    }
+    if (typeof m === "string" && m.trim().length > 0 && m !== "Error") {
+      return m;
+    }
+    return "Không có phản hồi HTTP (mạng, CORS hoặc máy chủ tắt). Mở F12 → Network để xem chi tiết.";
   }
-  return data.message || data.error || "Yêu cầu không hợp lệ";
+
+  const status = e.response.status ?? 0;
+  const raw = e.response.data;
+
+  if (raw == null || raw === "") {
+    return `Lỗi ${status}: máy chủ không trả nội dung.`;
+  }
+
+  // Spring DataError: { code, message }
+  if (typeof raw === "object" && raw !== null) {
+    const o = raw as { message?: unknown; data?: unknown; error?: unknown };
+    if (typeof o.message === "string") return o.message;
+    if (typeof o.error === "string") return o.error;
+    const nested = o.data;
+    if (typeof nested === "string") return nested;
+    if (nested && typeof nested === "object") {
+      const first = Object.values(nested as Record<string, unknown>)[0];
+      if (typeof first === "string") return first;
+    }
+  }
+  if (typeof raw === "string") {
+    return raw.length > 400 ? raw.slice(0, 400) + "…" : raw;
+  }
+
+  return "Yêu cầu không hợp lệ";
 };
 
 export const pickFieldErrors = (err: any): Record<string, string> => {

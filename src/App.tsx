@@ -32,7 +32,6 @@ import HisSystemPage from "./pages/Page/HisSystem";
 import SuperAdminHome from "./pages/SuperAdmin/Home";
 import SuperAdminUsers from "./pages/SuperAdmin/Users";
 import ListActivity from "./pages/UserAnalytics/ListActivity";
-import DetailActivity from "./pages/UserAnalytics/DetailActivity";
 import Agencies from "./pages/SuperAdmin/Agencies";
 import Hardware from "./pages/SuperAdmin/Hardware";
 import SuperAdminProfile from "./pages/SuperAdmin/Profile";
@@ -155,7 +154,10 @@ export default function App() {
             <Route path="/superadmin/home" element={<SuperAdminHome />} />
             <Route path="/superadmin/deployment-dashboard" element={<DeploymentDashboard />} />
             <Route path="/superadmin/users" element={<SuperAdminUsers />} />
-            <Route path="/superadmin/user-analytics/:userId" element={<DetailActivity />} />
+            <Route
+              path="/superadmin/user-analytics/:userId"
+              element={<Navigate to="/superadmin/user-analytics" replace />}
+            />
             <Route path="/superadmin/user-analytics" element={<ListActivity />} />
             <Route path="/superadmin/hospitals" element={<Hospitals />} />
             <Route path="/superadmin/his-systems" element={<HisSystemPage />} />

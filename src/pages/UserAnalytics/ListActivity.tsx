@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
+import { downloadUserAnalyticsUsersExport } from "../../api/userAnalytics.api";
 import {
   HiArrowLeft,
   HiArrowRight,
@@ -10,10 +11,17 @@ import {
   HiUserGroup,
 } from "react-icons/hi";
 import {
-  MOCK_USERS,
   STATUS_META,
   type EngagementStatus,
 } from "./userAnalyticsMock";
+import {
+  buildMockUserListCsvBlob,
+  buildUserAnalyticsListExportParams,
+  getVisiblePages,
+  triggerBlobDownload,
+} from "./userAnalyticsHelpers";
+import UserAnalyticsAvatar from "./UserAnalyticsAvatar";
+import { useUserAnalyticsListData } from "./useUserAnalyticsListData";
 
 function TrendPill({ value }: { value: number }) {
   const positive = value >= 0;
@@ -73,14 +81,13 @@ function MetricCard({
 }
 
 export default function ListActivity() {
-  const navigate = useNavigate();
   const [deptAll, setDeptAll] = useState(true);
   const [deptTech, setDeptTech] = useState(false);
   const [deptDesign, setDeptDesign] = useState(false);
   const [deptOps, setDeptOps] = useState(false);
 
   const [statusFilter, setStatusFilter] = useState<EngagementStatus | "all">(
-    "high"
+    "all"
   );
 
   const [sortBy, setSortBy] = useState("score");
@@ -92,52 +99,60 @@ export default function ListActivity() {
     ops: boolean;
   }>({ all: true, tech: false, design: false, ops: false });
 
-  const summary = useMemo(
-    () => ({
-      activeUsers: "12,842",
-      totalLogins: "84,920",
-      totalEvents: "312,481",
-      avgScore: "85.4/100",
-      trends: { active: 12.5, logins: 5.2, events: -2.4, score: 8.1 },
-    }),
-    []
-  );
+  const [exporting, setExporting] = useState(false);
 
-  const filteredUsers = useMemo(() => {
-    let rows = [...MOCK_USERS];
-    if (statusFilter !== "all") {
-      rows = rows.filter((u) => u.status === statusFilter);
-    }
-    if (!appliedDept.all) {
-      const allow = new Set<string>();
-      if (appliedDept.tech) allow.add("Kỹ thuật");
-      if (appliedDept.design) allow.add("Thiết kế");
-      if (appliedDept.ops) allow.add("Vận hành");
-      if (allow.size > 0) {
-        rows = rows.filter((u) => allow.has(u.department));
+  const {
+    liveApi,
+    summary,
+    loading,
+    error,
+    reload,
+    pageRows,
+    totalUsers,
+    totalPages,
+    safePage,
+    loadingSummary,
+    loadingTable,
+    mockRowsForExport,
+  } = useUserAnalyticsListData(appliedDept, statusFilter, sortBy, page);
+
+  async function handleExportList() {
+    setExporting(true);
+    try {
+      if (liveApi) {
+        const blob = await downloadUserAnalyticsUsersExport(
+          buildUserAnalyticsListExportParams(
+            appliedDept,
+            statusFilter,
+            sortBy
+          )
+        );
+        triggerBlobDownload(blob, "user-analytics-users.csv");
+        toast.success("Đã tải file CSV.");
+      } else {
+        const rows = mockRowsForExport ?? [];
+        const blob = buildMockUserListCsvBlob(rows);
+        triggerBlobDownload(blob, "user-analytics-users-mock.csv");
+        toast.success("Đã xuất CSV (dữ liệu mẫu).");
       }
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === "object" && "message" in e
+          ? String((e as { message?: string }).message)
+          : "Không xuất được CSV.";
+      toast.error(msg);
+    } finally {
+      setExporting(false);
     }
-    rows.sort((a, b) => {
-      if (sortBy === "score") return b.score - a.score;
-      if (sortBy === "logins") return b.logins - a.logins;
-      if (sortBy === "activeDays") return b.activeDays - a.activeDays;
-      return a.name.localeCompare(b.name, "vi");
-    });
-    return rows;
-  }, [statusFilter, sortBy, appliedDept]);
+  }
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, appliedDept]);
+  }, [statusFilter, appliedDept, sortBy]);
 
-  const totalUsers = 1284;
-  const pageSize = 10;
-  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const pageRows = filteredUsers.slice(
-    (safePage - 1) * pageSize,
-    safePage * pageSize
-  );
+  useEffect(() => {
+    setPage((p) => Math.min(p, totalPages));
+  }, [totalPages]);
 
   function toggleDeptAll() {
     const next = !deptAll;
@@ -159,9 +174,36 @@ export default function ListActivity() {
           <p className="mt-1 text-sm text-slate-500">
             Theo dõi mức độ đăng nhập và tương tác trên hệ thống (Super Admin).
           </p>
+          {!liveApi && (
+            <p className="mt-2 text-xs text-amber-700">
+              Đang dùng dữ liệu mẫu. Bật API:{" "}
+              <code className="rounded bg-amber-100 px-1">VITE_USE_USER_ANALYTICS_API=true</code>{" "}
+              khi backend đã triển khai.
+            </p>
+          )}
         </div>
 
-        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
+        {liveApi && error && (
+          <div
+            className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+            role="alert"
+          >
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={() => reload()}
+              className="rounded-lg bg-red-100 px-3 py-1.5 font-semibold text-red-900 hover:bg-red-200"
+            >
+              Thử lại
+            </button>
+          </div>
+        )}
+
+        <div
+          className={`mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4 ${
+            liveApi && loadingSummary ? "opacity-60" : ""
+          }`}
+        >
           <MetricCard
             title="Người dùng hoạt động"
             value={summary.activeUsers}
@@ -232,7 +274,7 @@ export default function ListActivity() {
                       disabled={deptAll}
                       onChange={(e) => setDeptDesign(e.target.checked)}
                     />
-                    Thiết kế
+                    Kinh doanh
                   </label>
                   <label className="flex cursor-pointer items-center gap-2">
                     <input
@@ -303,9 +345,11 @@ export default function ListActivity() {
               </p>
               <button
                 type="button"
-                className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-white underline-offset-4 hover:underline"
+                onClick={() => void handleExportList()}
+                disabled={exporting || loading}
+                className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-white underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Export Data
+                {exporting ? "Đang xuất…" : "Export Data"}
                 <span aria-hidden>→</span>
               </button>
             </div>
@@ -313,7 +357,11 @@ export default function ListActivity() {
 
           {/* Main table */}
           <div className="min-w-0 flex-1">
-            <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+            <div
+              className={`overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm ${
+                liveApi && loadingTable ? "opacity-60" : ""
+              }`}
+            >
               <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                 <h2 className="text-sm font-bold text-slate-900 sm:text-base">
                   Danh sách người dùng chuyên sâu
@@ -356,12 +404,6 @@ export default function ListActivity() {
                   <tbody className="divide-y divide-slate-50">
                     {pageRows.map((user) => {
                       const meta = STATUS_META[user.status];
-                      const initials = user.name
-                        .split(" ")
-                        .map((p) => p[0])
-                        .join("")
-                        .slice(0, 2)
-                        .toUpperCase();
                       return (
                         <tr
                           key={user.id}
@@ -380,9 +422,11 @@ export default function ListActivity() {
                         >
                           <td className="px-3 py-4 sm:px-5">
                             <div className="flex items-center gap-3">
-                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-xs font-bold text-white">
-                                {initials}
-                              </div>
+                              <UserAnalyticsAvatar
+                                name={user.name}
+                                avatarUrl={user.avatarUrl}
+                                className="h-10 w-10"
+                              />
                               <div className="min-w-0">
                                 <p className="truncate font-semibold text-slate-900">
                                   {user.name}
@@ -444,17 +488,18 @@ export default function ListActivity() {
                   <button
                     type="button"
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={safePage <= 1}
+                    disabled={safePage <= 1 || loading}
                     className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                     aria-label="Trang trước"
                   >
                     <HiArrowLeft className="h-4 w-4" />
                   </button>
-                  {[1, 2, 3].map((n) => (
+                  {getVisiblePages(safePage, totalPages, 5).map((n) => (
                     <button
                       key={n}
                       type="button"
                       onClick={() => setPage(n)}
+                      disabled={loading}
                       className={`inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-lg px-2 text-sm font-semibold ${
                         safePage === n
                           ? "bg-blue-600 text-white shadow-sm"
@@ -469,7 +514,7 @@ export default function ListActivity() {
                     onClick={() =>
                       setPage((p) => Math.min(totalPages, p + 1))
                     }
-                    disabled={safePage >= totalPages}
+                    disabled={safePage >= totalPages || loading}
                     className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                     aria-label="Trang sau"
                   >
