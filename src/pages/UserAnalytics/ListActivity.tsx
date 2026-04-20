@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { downloadUserAnalyticsUsersExport } from "../../api/userAnalytics.api";
 import {
@@ -81,6 +82,7 @@ function MetricCard({
 }
 
 export default function ListActivity() {
+  const navigate = useNavigate();
   const [deptAll, setDeptAll] = useState(true);
   const [deptTech, setDeptTech] = useState(false);
   const [deptDesign, setDeptDesign] = useState(false);

@@ -962,7 +962,7 @@ export default function TaskFormModal({
         const isHccFacility =
             curatorLayout &&
             (hospitalOpt.facilityType === "HCC" || hospitalOpt.id < 0);
-        const payload: ImplementationTaskRequestDTO & { hospitalId?: number | null; hccFacilityId?: number | null } =
+        const payload =
             curatorLayout
                 ? {
                       name: model.name!.trim(),
