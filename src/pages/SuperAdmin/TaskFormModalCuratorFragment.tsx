@@ -9,7 +9,12 @@ export function TaskFormModalCuratorView(props: {
     onSubmit: (e: React.FormEvent) => void;
     submitting: boolean;
     readOnly?: boolean;
-    initial?: { id?: number; name?: string };
+    initial?: {
+        id?: number;
+        name?: string;
+        hospitalName?: string | null;
+        hccFacilityName?: string | null;
+    };
     fromBusinessContract: boolean;
     lockHospital: boolean;
     isTransferred: boolean;
@@ -87,6 +92,11 @@ export function TaskFormModalCuratorView(props: {
     } = props;
 
     const statusOpts = excludeAccepted ? STATUS_OPTIONS.filter((o) => String(o.value) !== "ACCEPTED") : STATUS_OPTIONS;
+    const lockedFacilityLabel =
+        hospitalOpt?.name ||
+        (typeof initial?.hccFacilityName === "string" && initial.hccFacilityName.trim()) ||
+        (typeof initial?.hospitalName === "string" && initial.hospitalName.trim()) ||
+        "-";
 
     return (
         <div className="fixed inset-0 z-50 flex">
@@ -167,7 +177,7 @@ export function TaskFormModalCuratorView(props: {
                                 {lockHospital ? (
                                     <Field label="Bệnh viện / HCC" required variant="curator">
                                         <div className="flex min-h-[2.75rem] min-w-0 max-w-full items-start rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-normal leading-snug text-slate-900 whitespace-normal break-words dark:border-slate-600 dark:bg-slate-900/80 dark:text-slate-100">
-                                            {hospitalOpt?.name || "-"}
+                                            {lockedFacilityLabel}
                                         </div>
                                     </Field>
                                 ) : (

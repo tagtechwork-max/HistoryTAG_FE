@@ -2138,15 +2138,57 @@ const ImplementationTasksPage: React.FC = () => {
 
     const defaultHospitalPicQueryAppliedRef = useRef(false);
     const hospitalPicInputRef = useRef<HTMLInputElement>(null);
+
+    const mergePicOptionsFromUsers = useCallback(async () => {
+        try {
+            const params = new URLSearchParams();
+            if (userTeam === "MAINTENANCE") {
+                params.set("team", "MAINTENANCE");
+            } else if (userTeam === "DEPLOYMENT") {
+                params.set("team", "DEPLOYMENT");
+            }
+            const queryString = params.toString();
+            const usersUrl = queryString
+                ? `${API_ROOT}/api/v1/admin/users/search?${queryString}`
+                : `${API_ROOT}/api/v1/admin/users/search`;
+            const usersRes = await fetch(usersUrl, { headers: authHeaders(), credentials: "include" });
+            if (!usersRes.ok) return;
+            const usersList = await usersRes.json();
+            const users = Array.isArray(usersList) ? usersList : [];
+            setPicOptions((prev) => {
+                const map = new Map<string, { id: string; label: string }>();
+                prev.forEach((p) => {
+                    if (p.id && p.label) map.set(String(p.id), { id: String(p.id), label: String(p.label) });
+                });
+                users.forEach((u: any) => {
+                    const userId = String(u?.id ?? "").trim();
+                    if (!userId) return;
+                    const userName = String(u?.label ?? u?.name ?? u?.fullName ?? u?.fullname ?? u?.username ?? "").trim();
+                    if (!userName) return;
+                    if (!map.has(userId)) {
+                        map.set(userId, { id: userId, label: userName });
+                    }
+                });
+                return Array.from(map.values());
+            });
+        } catch {
+            // ignore, keep current options
+        }
+    }, [userTeam]);
+
     useEffect(() => {
         if (!showHospitalList) return;
         if (defaultHospitalPicQueryAppliedRef.current) return;
         if (picOptions.length === 0) return;
+        if (hospitalPicFilters.length > 0) {
+            defaultHospitalPicQueryAppliedRef.current = true;
+            return;
+        }
         const next = resolveDefaultHospitalPicQuery(picOptions);
         if (!next?.trim()) return;
         setHospitalPicFilters([next.trim()]);
         defaultHospitalPicQueryAppliedRef.current = true;
-    }, [showHospitalList, picOptions]);
+    }, [showHospitalList, picOptions, hospitalPicFilters.length]);
 
     // Keep hospital drill-down in the URL so browser Back returns to the list instead of leaving the page.
     useEffect(() => {
@@ -3003,25 +3045,63 @@ const ImplementationTasksPage: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[#f3f4f9] p-6 xl:p-10">
-            <div className="mb-6 flex items-center justify-between">
+        <div className="min-h-screen p-6 xl:p-10">
+            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <h1 className="text-3xl font-extrabold">{showHospitalList ? "Danh sách các bệnh viện bảo trì" : "Danh sách công việc bảo trì"}</h1>
-                {!showHospitalList && (
-                    <button
-                        type="button"
-                        onClick={() => {
-                            backToHospitalListInHistory();
-                            setSearchTerm("");
-                            setStatusFilter("");
-                            setPage(0);
-                            setData([]);
-                            void fetchHospitalsWithTasks();
-                        }}
-                        className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 text-sm font-medium"
-                    >
-                        ← Quay lại danh sách bệnh viện
-                    </button>
-                )}
+                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                    {showHospitalList ? (
+                        (isSuperAdmin || userTeam === "MAINTENANCE") && (
+                            <>
+                                <button
+                                    className="rounded-xl bg-blue-600 px-5 py-2 text-white shadow hover:bg-blue-700"
+                                    onClick={() => { setEditing(null); setModalOpen(true); }}
+                                    type="button"
+                                >
+                                    + Thêm công việc mới
+                                </button>
+                                <button
+                                    className="relative inline-flex items-center gap-2 rounded-full border border-gray-300 bg-white px-4 py-2 text-sm text-gray-800 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+                                    onClick={() => { setPendingOpen(true); fetchPendingTasks(); }}
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                                    </svg>
+                                    Viện chờ tiếp nhận
+                                    {pendingTasks.length > 0 && (
+                                        <span className="absolute -top-1 -right-2 bg-red-600 text-white text-xs rounded-full px-2 py-0.5">
+                                            {pendingTasks.length}
+                                        </span>
+                                    )}
+                                </button>
+                                <button
+                                    className="inline-flex items-center gap-2 rounded-full border border-gray-300 bg-white px-4 py-2 text-sm text-gray-800 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+                                    onClick={() => {
+                                        const targetPath = isSuperAdmin ? "/superadmin/tickets" : "/tickets";
+                                        navigate(targetPath);
+                                    }}
+                                >
+                                    <FiTag className="w-5 h-5" />
+                                    Tickets
+                                </button>
+                            </>
+                        )
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                backToHospitalListInHistory();
+                                setSearchTerm("");
+                                setStatusFilter("");
+                                setPage(0);
+                                setData([]);
+                                void fetchHospitalsWithTasks();
+                            }}
+                            className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 text-sm font-medium"
+                        >
+                            ← Quay lại danh sách bệnh viện
+                        </button>
+                    )}
+                </div>
             </div>
 
             {error && <div className="text-red-600 mb-4">{error}</div>}
@@ -3175,47 +3255,8 @@ const ImplementationTasksPage: React.FC = () => {
                     ) : showHospitalList ? (
                         // hospital list table
                         <div className="mb-6">
-                            <div className="mb-6 rounded-2xl border border-[#e4e7f2] bg-[#eef1f7] p-5 shadow-none">
+                            <div className="mb-6 rounded-xl border bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
                                 <div className="flex flex-col gap-4">
-                                    <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-
-                                        {(isSuperAdmin || userTeam === "MAINTENANCE") && (
-                                            <>
-                                                <button
-                                                    className="rounded-xl bg-blue-600 text-white px-5 py-2 shadow hover:bg-blue-700"
-                                                    onClick={() => { setEditing(null); setModalOpen(true); }}
-                                                    type="button"
-                                                >
-                                                    + Thêm công việc mới
-                                                </button>
-                                                <button
-                                                    className="relative inline-flex items-center gap-2 rounded-full border border-gray-300 text-gray-800 px-4 py-2 text-sm bg-white hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:bg-gray-900"
-                                                    onClick={() => { setPendingOpen(true); fetchPendingTasks(); }}
-                                                >
-
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                                                    </svg> Viện chờ tiếp nhận
-                                                    {pendingTasks.length > 0 && (
-                                                        <span className="absolute -top-1 -right-2 bg-red-600 text-white text-xs rounded-full px-2 py-0.5">
-                                                            {pendingTasks.length}
-                                                        </span>
-                                                    )}
-                                                </button>
-                                                <button
-                                                    className="inline-flex items-center gap-2 rounded-full border border-gray-300 text-gray-800 px-4 py-2 text-sm bg-white hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:bg-gray-900"
-                                                    onClick={() => {
-                                                        const targetPath = isSuperAdmin ? "/superadmin/tickets" : "/tickets";
-                                                        navigate(targetPath);
-                                                    }}
-                                                >
-                                                    <FiTag className="w-5 h-5" />
-                                                    Tickets
-                                                </button>
-                                                
-                                            </>
-                                        )}
-                                    </div>
                                     <div className="w-full">
                                         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                                             {/* <div>
@@ -3227,113 +3268,107 @@ const ImplementationTasksPage: React.FC = () => {
                                                 </div>
                                             </div> */}
 
-                                            <div className="grid w-full max-w-[420px] grid-cols-1 gap-3 sm:grid-cols-2">
+                                            <div className="grid w-full max-w-[760px] grid-cols-1 gap-3 sm:grid-cols-3">
+                                                <div>
+                                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">Tên bệnh viện</label>
+                                                    <input
+                                                        type="text"
+                                                        value={hospitalSearch}
+                                                        onChange={(e) => {
+                                                            setHospitalSearch(e.target.value);
+                                                            setHospitalPage(0);
+                                                        }}
+                                                        placeholder="Tìm theo tên bệnh viện"
+                                                        className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+                                                    />
+                                                </div>
                                                 <div>
                                                     <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">Phụ trách chính</label>
                                                     <div className="relative">
-                                                        <div
-                                                            className={`flex min-h-10 w-full cursor-text flex-wrap items-center gap-1 rounded-lg border border-[#dfe4f0] bg-white py-1.5 pl-2 text-sm text-gray-700 ${
-                                                                hospitalPicFilters.length > 0 || hospitalPicInput.trim() ? "pr-10" : "pr-3"
-                                                            }`}
-                                                            onMouseDown={(e) => {
-                                                                const el = e.target as HTMLElement;
-                                                                if (el.closest("button")) return;
-                                                                hospitalPicInputRef.current?.focus();
-                                                            }}
-                                                        >
-                                                            {hospitalPicFilters.map((name) => (
-                                                                <span
-                                                                    key={name}
-                                                                    className="inline-flex max-w-full items-center gap-0.5 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-gray-800 dark:bg-slate-700 dark:text-slate-100"
-                                                                >
-                                                                    <span className="max-w-[180px] truncate" title={name}>
-                                                                        {name}
-                                                                    </span>
-                                                                    <button
-                                                                        type="button"
-                                                                        className="shrink-0 rounded p-0.5 text-gray-500 hover:bg-slate-200 hover:text-gray-800 dark:hover:bg-slate-600 dark:hover:text-white"
-                                                                        aria-label={`Xóa ${name}`}
-                                                                        onMouseDown={(e) => e.preventDefault()}
-                                                                        onClick={() => {
-                                                                            setHospitalPicFilters((prev) => prev.filter((n) => n !== name));
-                                                                            setHospitalPage(0);
-                                                                        }}
-                                                                    >
-                                                                        <FiX className="h-3.5 w-3.5" aria-hidden />
-                                                                    </button>
-                                                                </span>
-                                                            ))}
-                                                            <input
-                                                                ref={hospitalPicInputRef}
-                                                                type="text"
-                                                                value={hospitalPicInput}
-                                                                onChange={(e) => {
-                                                                    const v = e.target.value;
-                                                                    setHospitalPicInput(v);
-                                                                    setHospitalPage(0);
-                                                                    setIsPicSuggestOpen(v.trim().length > 0);
-                                                                }}
-                                                                onFocus={() => setIsPicSuggestOpen(hospitalPicInput.trim().length > 0)}
-                                                                onBlur={() => window.setTimeout(() => setIsPicSuggestOpen(false), 120)}
-                                                                onKeyDown={(e) => {
-                                                                    if (e.key === "Backspace" && !hospitalPicInput && hospitalPicFilters.length > 0) {
-                                                                        setHospitalPicFilters((prev) => prev.slice(0, -1));
-                                                                        setHospitalPage(0);
-                                                                        return;
-                                                                    }
-                                                                    if (e.key === "Enter" && hospitalPicInput.trim()) {
-                                                                        e.preventDefault();
-                                                                        const raw = hospitalPicInput.trim();
-                                                                        setHospitalPicFilters((prev) =>
-                                                                            prev.includes(raw) ? prev : [...prev, raw],
-                                                                        );
-                                                                        setHospitalPicInput("");
-                                                                        setHospitalPage(0);
-                                                                        setIsPicSuggestOpen(false);
-                                                                    }
-                                                                }}
-                                                                placeholder={
-                                                                    hospitalPicFilters.length ? "Thêm người phụ trách..." : "Tìm theo tên phụ trách"
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const nextOpen = !isPicSuggestOpen;
+                                                                setIsPicSuggestOpen(nextOpen);
+                                                                if (nextOpen) {
+                                                                    void mergePicOptionsFromUsers();
                                                                 }
-                                                                className="min-h-[1.5rem] min-w-[6rem] flex-1 border-0 bg-transparent px-1 py-0.5 text-sm text-gray-700 outline-none placeholder:text-gray-400"
-                                                            />
-                                                        </div>
-                                                        {(hospitalPicFilters.length > 0 || hospitalPicInput.trim()) && (
-                                                            <button
-                                                                type="button"
-                                                                className="absolute right-2 top-1/2 z-[5] -translate-y-1/2 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-                                                                aria-label="Xóa lọc phụ trách"
-                                                                onMouseDown={(e) => e.preventDefault()}
-                                                                onClick={() => {
-                                                                    setHospitalPicFilters([]);
-                                                                    setHospitalPicInput("");
-                                                                    setHospitalPage(0);
-                                                                    setIsPicSuggestOpen(false);
-                                                                }}
-                                                            >
-                                                                <FiX className="h-4 w-4" aria-hidden />
-                                                            </button>
-                                                        )}
-                                                        {isPicSuggestOpen && filteredPicNameOptions.length > 0 && (
-                                                            <div className="absolute z-20 mt-1 max-h-80 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-900">
-                                                                {filteredPicNameOptions.map((name) => (
-                                                                    <button
-                                                                        key={name}
-                                                                        type="button"
-                                                                        onMouseDown={(e) => {
-                                                                            e.preventDefault();
-                                                                            setHospitalPicFilters((prev) =>
-                                                                                prev.includes(name) ? prev : [...prev, name],
+                                                            }}
+                                                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-left text-sm text-gray-700 shadow-sm transition hover:bg-gray-50 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                                                        >
+                                                            {hospitalPicFilters.length === 0
+                                                                ? "Phụ trách chính: Tất cả"
+                                                                : `Phụ trách chính: ${hospitalPicFilters.length} đã chọn`}
+                                                        </button>
+
+                                                        {isPicSuggestOpen && (
+                                                            <div className="absolute left-0 z-20 mt-2 w-full rounded-xl border border-gray-200 bg-white p-3 shadow-lg dark:border-gray-700 dark:bg-gray-900">
+                                                                <div className="mb-2">
+                                                                    <input
+                                                                        ref={hospitalPicInputRef}
+                                                                        type="text"
+                                                                        value={hospitalPicInput}
+                                                                        onChange={(e) => setHospitalPicInput(e.target.value)}
+                                                                        placeholder="Tìm người phụ trách"
+                                                                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+                                                                    />
+                                                                </div>
+
+                                                                <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
+                                                                    {(hospitalPicInput.trim()
+                                                                        ? filteredPicNameOptions
+                                                                        : picNameOptions.filter((name) => !hospitalPicFilters.includes(name))
+                                                                    ).length === 0 ? (
+                                                                        <div className="py-3 text-center text-sm text-gray-500 dark:text-gray-400">Không có dữ liệu phụ trách</div>
+                                                                    ) : (
+                                                                        (hospitalPicInput.trim()
+                                                                            ? filteredPicNameOptions
+                                                                            : picNameOptions.filter((name) => !hospitalPicFilters.includes(name))
+                                                                        ).map((name) => {
+                                                                            const checked = hospitalPicFilters.includes(name);
+                                                                            return (
+                                                                                <label key={name} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        checked={checked}
+                                                                                        onChange={(e) => {
+                                                                                            if (e.target.checked) {
+                                                                                                setHospitalPicFilters((prev) => (prev.includes(name) ? prev : [...prev, name]));
+                                                                                            } else {
+                                                                                                setHospitalPicFilters((prev) => prev.filter((n) => n !== name));
+                                                                                            }
+                                                                                            setHospitalPage(0);
+                                                                                        }}
+                                                                                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                                                    />
+                                                                                    <span className="truncate">{name}</span>
+                                                                                </label>
                                                                             );
+                                                                        })
+                                                                    )}
+                                                                </div>
+
+                                                                <div className="mt-2 flex items-center justify-between">
+                                                                    <button
+                                                                        type="button"
+                                                                        className="px-3 py-1.5 text-xs text-blue-600 hover:underline disabled:pointer-events-none disabled:opacity-50"
+                                                                        disabled={hospitalPicFilters.length === 0}
+                                                                        onClick={() => {
+                                                                            setHospitalPicFilters([]);
                                                                             setHospitalPicInput("");
                                                                             setHospitalPage(0);
-                                                                            setIsPicSuggestOpen(false);
                                                                         }}
-                                                                        className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800"
                                                                     >
-                                                                        {name}
+                                                                        Bỏ lọc
                                                                     </button>
-                                                                ))}
+                                                                    <button
+                                                                        type="button"
+                                                                        className="rounded-full border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+                                                                        onClick={() => setIsPicSuggestOpen(false)}
+                                                                    >
+                                                                        Đóng
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                         )}
                                                     </div>
@@ -3352,7 +3387,7 @@ const ImplementationTasksPage: React.FC = () => {
                                                             onFocus={() => setIsRegionSuggestOpen(true)}
                                                             onBlur={() => window.setTimeout(() => setIsRegionSuggestOpen(false), 120)}
                                                             placeholder="Tìm tất cả tỉnh/thành"
-                                                            className="h-10 w-full rounded-lg border border-[#dfe4f0] bg-white px-3 text-sm text-gray-700 outline-none"
+                                                            className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
                                                         />
                                                         {isRegionSuggestOpen && filteredRegionOptions.length > 0 && (
                                                             <div className="absolute z-20 mt-1 max-h-52 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
@@ -3378,8 +3413,13 @@ const ImplementationTasksPage: React.FC = () => {
                                             </div>
                                         </div>
 
-                                        <div className="mt-6 mb-0.5 text-sm text-gray-600">
-                                            <span>Tổng bệnh viện: <span className="font-semibold text-gray-900">{loadingHospitals ? '...' : filteredHospitals.length}</span> </span>
+                                        <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+                                            <span className="font-semibold text-gray-800">
+                                                Tổng bệnh viện:
+                                                <span className="ml-1 font-bold text-gray-900 dark:text-gray-100">
+                                                    {loadingHospitals ? "..." : filteredHospitals.length}
+                                                </span>
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -3609,6 +3649,8 @@ const ImplementationTasksPage: React.FC = () => {
                         name: (editing as ImplementationTaskResponseDTO).name,
                         hospitalId: (editing as ImplementationTaskResponseDTO).hospitalId ?? undefined,
                         hospitalName: (editing as ImplementationTaskResponseDTO).hospitalName ?? null,
+                        hccFacilityId: (editing as ImplementationTaskResponseDTO).hccFacilityId ?? undefined,
+                        hccFacilityName: (editing as ImplementationTaskResponseDTO).hccFacilityName ?? null,
                         picDeploymentId: (editing as ImplementationTaskResponseDTO).picDeploymentId ?? undefined,
                         picDeploymentName: (editing as ImplementationTaskResponseDTO).picDeploymentName ?? null,
                         picDeploymentIds: (editing as ImplementationTaskResponseDTO).picDeploymentIds ?? undefined,
@@ -3619,7 +3661,13 @@ const ImplementationTasksPage: React.FC = () => {
                         completionDate: (editing as ImplementationTaskResponseDTO).completionDate ?? undefined,
                         status: (editing as ImplementationTaskResponseDTO).status ?? undefined,
                         startDate: (editing as ImplementationTaskResponseDTO).startDate ?? undefined,
-                    } as Partial<ImplementationTaskRequestDTO> & { id?: number; hospitalName?: string | null; picDeploymentName?: string | null })
+                    } as Partial<ImplementationTaskRequestDTO> & {
+                        id?: number;
+                        hospitalName?: string | null;
+                        hccFacilityId?: number | null;
+                        hccFacilityName?: string | null;
+                        picDeploymentName?: string | null;
+                    })
                     : undefined;
 
                 return (
