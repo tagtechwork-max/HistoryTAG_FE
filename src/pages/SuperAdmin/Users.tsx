@@ -21,6 +21,7 @@ import {
   type UserUpdateRequestDTO,
 } from "../../api/superadmin.api";
 import toast from "react-hot-toast";
+import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 
 type UserForm = {
   username: string;
@@ -142,6 +143,7 @@ export default function SuperAdminUsers() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState(""); // Debounced version for API calls
   const searchDebounceRef = useRef<number | null>(null);
+  const { ask: askConfirm, dialog: genericConfirmDialog } = useConfirmDialog();
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<UserResponseDTO | null>(null);
@@ -398,7 +400,13 @@ export default function SuperAdminUsers() {
   }
 
   async function onDelete(id: number) {
-    if (!confirm("Xóa người dùng này?")) return;
+    const ok = await askConfirm({
+      title: "Xóa người dùng?",
+      message: "Bạn có chắc muốn xóa người dùng này? Hành động này không thể hoàn tác.",
+      variant: "danger",
+      confirmLabel: "Xóa",
+    });
+    if (!ok) return;
 
     // Debug: Check if token exists
     const token = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
@@ -426,8 +434,12 @@ export default function SuperAdminUsers() {
 
   async function onToggleLock(id: number, currentStatus?: boolean) {
     const willLock = !!currentStatus; // if currently active(true) -> lock
-    const confirmMsg = willLock ? "Bạn có chắc muốn khóa tài khoản này?" : "Bạn có chắc muốn mở khóa tài khoản này?";
-    if (!confirm(confirmMsg)) return;
+    const ok = await askConfirm({
+      title: willLock ? "Khóa tài khoản?" : "Mở khóa tài khoản?",
+      message: willLock ? "Bạn có chắc muốn khóa tài khoản này?" : "Bạn có chắc muốn mở khóa tài khoản này?",
+      confirmLabel: willLock ? "Khóa" : "Mở khóa",
+    });
+    if (!ok) return;
 
     setLoading(true);
     try {
@@ -1164,6 +1176,7 @@ export default function SuperAdminUsers() {
           </div>
         </div>
       )}
+      {genericConfirmDialog}
     </>
   );
 }

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { toast } from "react-hot-toast";
+import { useConfirmDialog } from "../hooks/useConfirmDialog";
 
 const API_ROOT = import.meta.env.VITE_API_URL || "";
 // ✅ SockJS cần URL HTTP (không phải ws://), nó sẽ tự động upgrade sang WebSocket
@@ -57,6 +58,7 @@ export default function TaskNotes({
   const stompClientRef = useRef<any>(null);
   const subscriptionRef = useRef<any>(null);
   const notesContainerRef = useRef<HTMLDivElement | null>(null);
+  const { ask: askConfirm, dialog: deleteNoteConfirmDialog } = useConfirmDialog();
 
   const currentUserId: number | null = React.useMemo(() => {
     try {
@@ -410,7 +412,13 @@ export default function TaskNotes({
       toast.error("Bạn không có quyền xóa ghi chú này. Chỉ ADMIN/SUPERADMIN là tác giả của ghi chú mới được phép xóa.");
       return;
     }
-    if (!confirm("Bạn chắc chắn muốn xóa ghi chú này?")) return;
+    const ok = await askConfirm({
+      title: "Xóa ghi chú?",
+      message: "Bạn có chắc muốn xóa ghi chú này?",
+      variant: "danger",
+      confirmLabel: "Xóa",
+    });
+    if (!ok) return;
     try {
       const res = await fetch(`${apiBase}/${taskId}/notes/${noteId}`, {
         method: "DELETE",
@@ -491,6 +499,7 @@ export default function TaskNotes({
           </div>
         </div>
       )}
+      {deleteNoteConfirmDialog}
     </div>
   );
 }

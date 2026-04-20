@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useRef, useMemo } from "react";
+import React, { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { FiActivity, FiInfo, FiLink, FiUser, FiClock, FiCheckCircle, FiXCircle, FiTag, FiX } from "react-icons/fi";
 import { useWebSocket } from "../../contexts/WebSocketContext";
 import { FaHospital } from "react-icons/fa";
@@ -9,13 +9,64 @@ import toast, { ToastOptions } from "react-hot-toast";
 import TaskCard from "./TaskCardNew";
 import TaskFormModal from "./TaskFormModal";
 import TaskNotes from "../../components/TaskNotes";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import TicketsTab from "../../pages/CustomerCare/SubCustomerCare/TicketsTab";
 import { getHospitalTickets } from "../../api/ticket.api";
 import { useAuth } from '../../contexts/AuthContext';
+import { VIETNAM_PROVINCE_LABELS } from "../../utils/vietnamProvinceCenters";
 
 const API_ROOT = import.meta.env.VITE_API_URL || "";
 const MIN_LOADING_MS = 2000;
+const normalizeSearchText = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
 
+function readStoredUserJson(): Record<string, unknown> | null {
+  const raw = localStorage.getItem("user") ?? sessionStorage.getItem("user");
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function getStoredUserIdForPicFilter(): string | null {
+  const fromStorage = localStorage.getItem("userId") ?? sessionStorage.getItem("userId");
+  if (fromStorage?.trim()) return String(fromStorage).trim();
+  const u = readStoredUserJson();
+  if (!u) return null;
+  const id = u.id ?? u.userId;
+  if (id != null && String(id).trim()) return String(id).trim();
+  return null;
+}
+
+function getStoredUserDisplayNameForPicFilter(): string | null {
+  const u = readStoredUserJson();
+  if (!u) return null;
+  for (const key of ["fullName", "fullname", "name", "label", "username"] as const) {
+    const v = u[key];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return null;
+}
+
+/** Label for "Phụ trách chính" hospital list filter: match PIC list id first, else stored name. */
+function resolveDefaultHospitalPicQuery(picOptions: Array<{ id: string; label: string }>): string | null {
+  const uid = getStoredUserIdForPicFilter();
+  if (uid && picOptions.length > 0) {
+    const opt = picOptions.find((o) => {
+      const oid = String(o.id).trim();
+      return oid === uid || oid === String(Number(uid)) || String(Number(oid)) === String(Number(uid));
+    });
+    if (opt?.label?.trim()) return opt.label.trim();
+  }
+  return getStoredUserDisplayNameForPicFilter();
+}
 
 // Helper function để parse PIC IDs từ additionalRequest hoặc notes
 function parsePicIdsFromAdditionalRequest(additionalRequest?: string | null, notes?: string | null, picDeploymentId?: number | null): number[] {
@@ -38,6 +89,9 @@ type MaintTask = {
   id: number;
   name: string;
   hospitalName?: string | null;
+  /** When the task is tied to an HCC facility instead of a hospital. */
+  hccFacilityId?: number | null;
+  hccFacilityName?: string | null;
   picDeploymentName?: string | null;
   receivedById?: number | null;
   receivedByName?: string | null;
@@ -195,6 +249,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
   const { isSuperAdmin } = useAuth();
   const isSuper = isSuperAdmin;
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [data, setData] = useState<MaintTask[]>([]);
   const [loading, setLoading] = useState(false);
@@ -223,6 +278,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
     useState<boolean>(true);
 
   const { subscribe } = useWebSocket();
+  const { ask: askConfirm, dialog: genericConfirmDialog } = useConfirmDialog();
 
   const apiBase = `${API_ROOT}/api/v1/superadmin/maintenance/tasks`;
 
@@ -241,46 +297,71 @@ const MaintenanceSuperTaskPage: React.FC = () => {
   const [acceptedCount, setAcceptedCount] = useState<number | null>(null);
   const [hospitalSearch, setHospitalSearch] = useState<string>("");
   const [hospitalCodeSearch, setHospitalCodeSearch] = useState<string>("");
+  const [hospitalRegionFilter, setHospitalRegionFilter] = useState<string>("");
+  const [hospitalRegionQuery, setHospitalRegionQuery] = useState<string>("");
   const [hospitalStatusFilter, setHospitalStatusFilter] = useState<string>("");
-  const [hospitalPicFilter, setHospitalPicFilter] = useState<string[]>([]);
-  const [picFilterOpen, setPicFilterOpen] = useState<boolean>(false);
-  const [picFilterQuery, setPicFilterQuery] = useState<string>("");
+  /** Selected PIC display names for hospital list filter (OR). */
+  const [hospitalPicFilters, setHospitalPicFilters] = useState<string[]>([]);
+  /** Typing for autocomplete to add more PICs. */
+  const [hospitalPicInput, setHospitalPicInput] = useState<string>("");
+  const [isPicSuggestOpen, setIsPicSuggestOpen] = useState<boolean>(false);
+  const [isRegionSuggestOpen, setIsRegionSuggestOpen] = useState<boolean>(false);
   const [picOptions, setPicOptions] = useState<Array<{ id: string; label: string }>>([]);
-  const picFilterDropdownRef = useRef<HTMLDivElement | null>(null);
   const [showTicketsModal, setShowTicketsModal] = useState(false);
   const [selectedHospitalIdForTickets, setSelectedHospitalIdForTickets] = useState<number | null>(null);
   const [selectedHospitalNameForTickets, setSelectedHospitalNameForTickets] = useState<string | null>(null);
   const [ticketOpenCounts, setTicketOpenCounts] = useState<Record<number, number>>({});
   const [ticketCountLoading, setTicketCountLoading] = useState<Set<number>>(new Set());
+  const [deleteDialogId, setDeleteDialogId] = useState<number | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+
+  const defaultHospitalPicQueryAppliedRef = useRef(false);
+  const hospitalPicInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!showHospitalList) return;
+    if (defaultHospitalPicQueryAppliedRef.current) return;
+    if (picOptions.length === 0) return;
+    const next = resolveDefaultHospitalPicQuery(picOptions);
+    if (!next?.trim()) return;
+    setHospitalPicFilters([next.trim()]);
+    defaultHospitalPicQueryAppliedRef.current = true;
+  }, [showHospitalList, picOptions]);
 
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        picFilterDropdownRef.current &&
-        !picFilterDropdownRef.current.contains(event.target as Node)
-      ) {
-        setPicFilterOpen(false);
-      }
-    }
-    if (picFilterOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
+    const h = searchParams.get("hospital");
+    if (h && h.trim()) {
+      setSelectedHospital(h.trim());
+      setShowHospitalList(false);
     } else {
-      document.removeEventListener("mousedown", handleClickOutside);
+      setSelectedHospital(null);
+      setShowHospitalList(true);
     }
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [picFilterOpen]);
+  }, [searchParams]);
 
-  useEffect(() => {
-    if (!picFilterOpen) {
-      setPicFilterQuery("");
-    }
-  }, [picFilterOpen]);
+  const openHospitalTasksInHistory = useCallback(
+    (hospitalLabel: string) => {
+      setSearchParams(
+        (prev) => {
+          const p = new URLSearchParams(prev);
+          p.set("hospital", hospitalLabel);
+          return p;
+        },
+        { replace: false },
+      );
+    },
+    [setSearchParams],
+  );
 
-  const filteredPicOptions = useMemo(() => {
-    const q = picFilterQuery.trim().toLowerCase();
-    if (!q) return picOptions;
-    return picOptions.filter((opt) => opt.label.toLowerCase().includes(q));
-  }, [picOptions, picFilterQuery]);
+  const backToHospitalListInHistory = useCallback(() => {
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        p.delete("hospital");
+        return p;
+      },
+      { replace: true },
+    );
+  }, [setSearchParams]);
 
   async function fetchList(overrides?: { page?: number; size?: number; sortBy?: string; sortDir?: string }) {
     const start = Date.now();
@@ -383,27 +464,44 @@ const MaintenanceSuperTaskPage: React.FC = () => {
   useEffect(() => { if (!showHospitalList) fetchList(); /* eslint-disable-line */ }, [statusFilter]);
   useEffect(() => { if (!showHospitalList) fetchList(); /* eslint-disable-line */ }, [sortBy, sortDir]);
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Xóa bản ghi này?")) return;
-    const res = await fetch(`${apiBase}/${id}`, {
-      method: "DELETE",
-      headers: authHeaders(),
-      credentials: "include",
-    });
-    if (!res.ok) {
-      const msg = await res.text();
-      toastError(`Xóa thất bại: ${msg || res.status}`);
-      return;
-    }
-    if (showHospitalList) {
-      await fetchHospitalsWithTasks();
-    } else {
-      await fetchList();
-      if (selectedHospital) {
-        await fetchAcceptedCountForHospital(selectedHospital);
+  const deleteTargetName = useMemo(() => {
+    if (deleteDialogId == null) return null;
+    const row = data.find((x) => x.id === deleteDialogId);
+    return row?.name ?? null;
+  }, [deleteDialogId, data]);
+
+  const requestDelete = (id: number) => {
+    setDeleteDialogId(id);
+  };
+
+  const confirmDeleteTask = async () => {
+    if (deleteDialogId == null) return;
+    setDeleteSubmitting(true);
+    try {
+      const id = deleteDialogId;
+      const res = await fetch(`${apiBase}/${id}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const msg = await res.text();
+        toastError(`Xóa thất bại: ${msg || res.status}`);
+        return;
       }
+      if (showHospitalList) {
+        await fetchHospitalsWithTasks();
+      } else {
+        await fetchList();
+        if (selectedHospital) {
+          await fetchAcceptedCountForHospital(selectedHospital);
+        }
+      }
+      toastSuccess("Đã xóa");
+      setDeleteDialogId(null);
+    } finally {
+      setDeleteSubmitting(false);
     }
-    toastSuccess("Đã xóa");
   };
 
   // --- pending tasks (chờ) for maintenance: fetch & accept ---
@@ -443,18 +541,11 @@ const MaintenanceSuperTaskPage: React.FC = () => {
     }
   }
 
-  const handleAcceptPendingGroup = async (group: PendingTransferGroup) => {
+  const acceptPendingHospitalCore = async (group: PendingTransferGroup) => {
     if (!group || !group.hospitalId) {
       toastError("Không có bệnh viện nào để tiếp nhận.");
       return;
     }
-
-    if (
-      !confirm(
-        `Tiếp nhận bệnh viện ${group.hospitalName} và chuyển sang danh sách bảo trì?`,
-      )
-    )
-      return;
 
     try {
       // ✅ API mới: Tiếp nhận bệnh viện (1 API call thay vì loop qua từng task)
@@ -481,25 +572,41 @@ const MaintenanceSuperTaskPage: React.FC = () => {
     }
   };
 
+  const handleAcceptPendingGroup = async (group: PendingTransferGroup) => {
+    if (!group || !group.hospitalId) {
+      toastError("Không có bệnh viện nào để tiếp nhận.");
+      return;
+    }
+
+    const ok = await askConfirm({
+      title: "Tiếp nhận bệnh viện?",
+      message: `Tiếp nhận bệnh viện ${group.hospitalName} và chuyển sang danh sách bảo trì?`,
+      confirmLabel: "Tiếp nhận",
+    });
+    if (!ok) return;
+
+    await acceptPendingHospitalCore(group);
+  };
+
   const handleAcceptAll = async () => {
     if (pendingTasks.length === 0) {
       toastError("Không có bệnh viện nào để tiếp nhận.");
       return;
     }
 
-    if (
-      !confirm(
-        `Tiếp nhận tất cả ${pendingTasks.length} bệnh viện và chuyển sang danh sách bảo trì?`,
-      )
-    )
-      return;
+    const ok = await askConfirm({
+      title: "Tiếp nhận tất cả?",
+      message: `Tiếp nhận tất cả ${pendingTasks.length} bệnh viện và chuyển sang danh sách bảo trì?`,
+      confirmLabel: "Tiếp nhận tất cả",
+    });
+    if (!ok) return;
 
-    // Accept all hospitals sequentially
+    // Accept all hospitals sequentially (no per-row confirm)
     for (const group of [...pendingTasks]) {
       if (group.hospitalId) {
         try {
           // eslint-disable-next-line no-await-in-loop
-          await handleAcceptPendingGroup(group);
+          await acceptPendingHospitalCore(group);
         } catch (err) {
           console.error(`Failed to accept hospital ${group.hospitalName}:`, err);
         }
@@ -844,24 +951,6 @@ const MaintenanceSuperTaskPage: React.FC = () => {
     }
   }
 
-  const togglePicFilterValue = (value: string, checked: boolean) => {
-    setHospitalPicFilter((prev) => {
-      if (checked) {
-        if (prev.includes(value)) return prev;
-        return [...prev, value];
-      }
-      return prev.filter((id) => id !== value);
-    });
-    setHospitalPage(0);
-  };
-
-  const clearPicFilter = () => {
-    setHospitalPicFilter([]);
-    setHospitalPage(0);
-    setPicFilterOpen(false);
-    setPicFilterQuery("");
-  };
-
   const clearHospitalStatusFilter = () => {
     setHospitalStatusFilter("");
     setHospitalPage(0);
@@ -880,42 +969,26 @@ const MaintenanceSuperTaskPage: React.FC = () => {
     // Filter by hospital code
     const codeQ = hospitalCodeSearch.trim().toLowerCase();
     if (codeQ) list = list.filter(h => (h.hospitalCode || '').toLowerCase().includes(codeQ));
+    if (hospitalRegionQuery.trim()) {
+      const regionQ = normalizeSearchText(hospitalRegionQuery);
+      list = list.filter((h) => normalizeSearchText(h.subLabel || "").includes(regionQ));
+    }
     if (hospitalStatusFilter === 'accepted') list = list.filter(h => (h.acceptedCount || 0) > 0);
     else if (hospitalStatusFilter === 'incomplete') list = list.filter(h => (h.acceptedCount || 0) < (h.taskCount || 0));
     else if (hospitalStatusFilter === 'unaccepted') list = list.filter(h => (h.acceptedCount || 0) === 0);
     else if (hospitalStatusFilter === 'fromDeployment') list = list.filter(h => h.fromDeployment && !h.acceptedByMaintenance);
     else if (hospitalStatusFilter === 'acceptedFromDeployment') list = list.filter(h => h.fromDeployment && h.acceptedByMaintenance);
     else if (hospitalStatusFilter === 'hasOpenTickets') list = list.filter(h => h.id && (ticketOpenCounts[h.id] ?? 0) > 0);
-    // Filter by PIC
-    if (hospitalPicFilter.length > 0) {
-      const selected = new Set(hospitalPicFilter.map(id => String(id).trim()));
-      // Tạo map từ picOptions để có thể lookup name từ ID
-      const picIdToNameMap = new Map<string, string>();
-      picOptions.forEach(opt => {
-        picIdToNameMap.set(String(opt.id).trim(), String(opt.label).trim());
-      });
-      
+    // Search by PIC name(s): any selected tag matches maintenance or deployment PIC (OR)
+    if (hospitalPicFilters.length > 0) {
       list = list.filter((h) => {
-        // Check by ID (so sánh với picDeploymentIds)
-        const picIds = (h.picDeploymentIds || []).map(id => String(id).trim());
-        const hasMatchingId = picIds.some((idStr) => selected.has(idStr));
-        
-        // Check by name (so sánh với picDeploymentNames)
-        const picNames = (h.picDeploymentNames || []).map(name => String(name).trim());
-        const hasMatchingName = picNames.some((nameStr) => selected.has(nameStr));
-        
-        // ✅ Check by maintenancePersonInChargeName (người phụ trách bảo trì)
-        const maintenancePicName = h.maintenancePersonInChargeName ? String(h.maintenancePersonInChargeName).trim() : "";
-        const hasMatchingMaintenancePic = maintenancePicName && (
-          selected.has(maintenancePicName) || 
-          // Cũng kiểm tra xem ID trong filter có match với name này không
-          Array.from(selected).some(selectedValue => {
-            const nameFromId = picIdToNameMap.get(selectedValue);
-            return nameFromId && nameFromId === maintenancePicName;
-          })
-        );
-        
-        return hasMatchingId || hasMatchingName || hasMatchingMaintenancePic;
+        const maintenancePic = String(h.maintenancePersonInChargeName || "").toLowerCase();
+        const deploymentPics = (h.picDeploymentNames || []).map((name) => String(name).toLowerCase());
+        return hospitalPicFilters.some((tag) => {
+          const picQ = tag.trim().toLowerCase();
+          if (!picQ) return false;
+          return maintenancePic.includes(picQ) || deploymentPics.some((name) => name.includes(picQ));
+        });
       });
     }
     // ✅ Sort: Ưu tiên bệnh viện có ticket mở lên đầu, sau đó sort theo tên
@@ -942,7 +1015,42 @@ const MaintenanceSuperTaskPage: React.FC = () => {
       return a.label.localeCompare(b.label, "vi", { sensitivity: "base" });
     });
     return list;
-  }, [hospitalsWithTasks, hospitalSearch, hospitalCodeSearch, hospitalStatusFilter, hospitalPicFilter, ticketOpenCounts, ticketCountLoading, picOptions]);
+  }, [hospitalsWithTasks, hospitalSearch, hospitalCodeSearch, hospitalRegionQuery, hospitalStatusFilter, hospitalPicFilters, ticketOpenCounts, ticketCountLoading]);
+
+  /** Full hospital list from this page (summary) for task form dropdown — same data as the hospital grid, not search API. */
+  const pageHospitalOptionsForTaskModal = useMemo(
+    () =>
+      hospitalsWithTasks
+        .filter((h) => typeof h.id === "number" && Number.isFinite(h.id) && h.id > 0)
+        .map((h) => ({ id: Number(h.id), name: String(h.label ?? "").trim() || String(h.id) })),
+    [hospitalsWithTasks],
+  );
+
+  const regionOptions = useMemo(() => VIETNAM_PROVINCE_LABELS, []);
+
+  const picNameOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        picOptions
+          .map((opt) => (opt.label || "").trim())
+          .filter((v) => v.length > 0),
+      ),
+    ).sort((a, b) => a.localeCompare(b, "vi", { sensitivity: "base" }));
+  }, [picOptions]);
+
+  const filteredPicNameOptions = useMemo(() => {
+    const q = hospitalPicInput.trim().toLowerCase();
+    if (!q) return [];
+    const notSelected = picNameOptions.filter((name) => !hospitalPicFilters.includes(name));
+    return notSelected.filter((name) => name.toLowerCase().includes(q));
+  }, [picNameOptions, hospitalPicInput, hospitalPicFilters]);
+
+  const filteredRegionOptions = useMemo(() => {
+    const q = normalizeSearchText(hospitalRegionQuery);
+    if (!q) return [];
+    const source = regionOptions.filter((region) => normalizeSearchText(region).includes(q));
+    return source.slice(0, 8);
+  }, [regionOptions, hospitalRegionQuery]);
 
   const hospitalSummary = useMemo(() => {
     const total = hospitalsWithTasks.length;
@@ -1032,14 +1140,12 @@ const MaintenanceSuperTaskPage: React.FC = () => {
     // Debug: log click source to help diagnose unexpected reloads
     // eslint-disable-next-line no-console
     console.debug('[MaintenanceSuperTask] handleHospitalClick', { hospitalName, hasEvent: !!e });
-    setSelectedHospital(hospitalName);
-    setShowHospitalList(false);
+    openHospitalTasksInHistory(hospitalName);
     setPage(0);
   }
 
   async function handleBackToHospitals() {
-    setSelectedHospital(null);
-    setShowHospitalList(true);
+    backToHospitalListInHistory();
     setSearchTerm("");
     setStatusFilter("");
     setPage(0);
@@ -1114,10 +1220,10 @@ const MaintenanceSuperTaskPage: React.FC = () => {
   }
 
   return (
-    <div className="p-6">
+    <div className="min-h-screen bg-[#f3f4f9] p-6">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-semibold">
-          {showHospitalList ? "Danh sách bệnh viện cần bảo trì" : `Danh sách công việc bảo trì - ${selectedHospital}`}
+          {showHospitalList ? "Danh sách bệnh viện cần bảo trì" : "Danh sách công việc bảo trì"}
         </h1>
         {!showHospitalList && (
           <button
@@ -1131,157 +1237,126 @@ const MaintenanceSuperTaskPage: React.FC = () => {
 
       {error && <div className="text-red-600 mb-4">{error}</div>}
 
-      {/* Hospital List View */}
-      {showHospitalList && (
-        <div className="mb-6 space-y-4">
-          <div className="rounded-2xl border bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 p-5 shadow-sm">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-lg font-semibold mb-3">Tìm kiếm & Lọc</h3>
-                <div className="flex flex-wrap items-center gap-3">
+      {!showHospitalList && selectedHospital && (
+        <>
+          <div className="mb-5 rounded-2xl border border-sky-200/80 bg-gradient-to-r from-sky-50 via-white to-white px-6 py-5 shadow-sm dark:border-sky-900/40 dark:from-sky-950/30 dark:via-gray-900 dark:to-gray-900">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-sky-700 dark:text-sky-300">Chi tiết bệnh viện</p>
+            <h2 className="mt-1 text-2xl font-bold leading-tight text-slate-900 dark:text-white">{selectedHospital}</h2>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(() => {
+                const h = hospitalsWithTasks.find((x) => x.label === selectedHospital);
+                return (
+                  <>
+                    {h?.hospitalCode && (
+                      <span className="inline-flex items-center rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-600">
+                        Mã BV: {h.hospitalCode}
+                      </span>
+                    )}
+                    {h?.subLabel && (
+                      <span className="inline-flex items-center rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-600">
+                        Khu vực: {h.subLabel}
+                      </span>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+            <div className="mt-5 space-y-4 border-t border-sky-100/80 pt-4 dark:border-sky-900/40">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2 text-slate-800 dark:text-slate-100">
+                  <span className="font-semibold">Danh sách nhiệm vụ cụ thể</span>
+                </div>
+                <div className="flex flex-wrap gap-4 text-sm">
+                  <span className="inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                    Tổng:{" "}
+                    <strong className="text-slate-900 dark:text-slate-100">{loading ? "…" : totalCount ?? data.length}</strong>
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden />
+                    Hoàn thành: <strong>{typeof acceptedCount === "number" ? acceptedCount : "—"}</strong>
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
+                    <span className="h-2 w-2 rounded-full bg-amber-500" aria-hidden />
+                    Chưa hoàn thành:{" "}
+                    <strong>
+                      {typeof acceptedCount === "number"
+                        ? Math.max(0, (totalCount ?? data.length) - acceptedCount)
+                        : "—"}
+                    </strong>
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between lg:gap-4">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
                   <input
                     type="text"
-                    className="rounded-full border px-4 py-3 text-sm shadow-sm min-w-[220px] border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition"
-                    placeholder="Tìm theo tên bệnh viện / tỉnh"
-                    value={hospitalSearch}
-                    onChange={(e) => { setHospitalSearch(e.target.value); setHospitalPage(0); }}
+                    className="min-w-[200px] rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                    placeholder="Tìm theo tên công việc"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") fetchList();
+                    }}
                   />
-                  <input
-                    type="text"
-                    className="rounded-full border px-4 py-3 text-sm shadow-sm min-w-[180px] border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition"
-                    placeholder="Tìm theo mã bệnh viện"
-                    value={hospitalCodeSearch}
-                    onChange={(e) => { setHospitalCodeSearch(e.target.value); setHospitalPage(0); }}
-                  />
-                  <div className="flex items-center gap-2 w-[280px]">
+                  <div className="flex flex-wrap items-center gap-2">
                     <select
-                      className="w-[200px] rounded-full border px-4 py-3 text-sm shadow-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition"
-                      value={hospitalStatusFilter}
-                      onChange={(e) => { setHospitalStatusFilter(e.target.value); setHospitalPage(0); }}
+                      className="min-w-[200px] rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
                     >
-                      <option value="" disabled hidden>— Trạng thái —</option>
-                      <option value="accepted">Có nghiệm thu</option>
-                      <option value="incomplete">Chưa nghiệm thu hết</option>
-                      <option value="unaccepted">Chưa có nghiệm thu</option>
-                      <option value="fromDeployment">Từ triển khai</option>
-                      <option value="acceptedFromDeployment">Đã nhận từ triển khai</option>
-                      <option value="hasOpenTickets">Có tickets chưa hoàn thành</option>
+                      <option value="">— Trạng thái —</option>
+                      <option value="NOT_STARTED">Đã tiếp nhận</option>
+                      <option value="IN_PROGRESS">Chưa xử lý</option>
+                      <option value="API_TESTING">Đang xử lý</option>
+                      <option value="INTEGRATING">Gặp sự cố</option>
+                      <option value="WAITING_FOR_DEV">Hoàn thành</option>
                     </select>
                     <button
                       type="button"
-                      className={`px-3 py-1.5 text-xs text-blue-600 hover:underline focus:outline-none ${hospitalStatusFilter ? "visible" : "invisible pointer-events-none"}`}
-                      onClick={clearHospitalStatusFilter}
+                      className={`px-3 py-1.5 text-xs text-sky-700 hover:underline dark:text-sky-300 ${statusFilter ? "visible" : "invisible pointer-events-none"}`}
+                      onClick={clearTaskStatusFilter}
                     >
                       Bỏ lọc
                     </button>
                   </div>
                 </div>
-                <div ref={picFilterDropdownRef} className="flex flex-col gap-2 mt-3">
-                  <div className="relative w-full max-w-[200px]">
-                    <button
-                      type="button"
-                      className="w-full rounded-full border px-3 py-2 text-sm shadow-sm text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition"
-                      onClick={() => setPicFilterOpen((prev) => !prev)}
-                    >
-                      <span className="truncate">
-                        {hospitalPicFilter.length === 0
-                          ? "Lọc người phụ trách"
-                          : hospitalPicFilter.length === 1
-                            ? picOptions.find((opt) => opt.id === hospitalPicFilter[0])?.label ?? "Đã chọn 1"
-                            : `Đã chọn ${hospitalPicFilter.length} người phụ trách`}
-                      </span>
-                      <svg className={`w-4 h-4 transition-transform ${picFilterOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                    {picFilterOpen && (
-                      <div className="absolute z-30 mt-2 w-60 max-h-[360px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl p-3 space-y-3">
-                        <input
-                          type="text"
-                          value={picFilterQuery}
-                          onChange={(e) => setPicFilterQuery(e.target.value)}
-                          placeholder="Tìm người phụ trách"
-                          className="w-full rounded-lg border px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
-                        />
-                        <div className="max-h-[220px] overflow-y-auto space-y-2 pr-1">
-                          {filteredPicOptions.length === 0 ? (
-                            <div className="text-sm text-gray-500 text-center py-6">
-                              Không có dữ liệu người phụ trách
-                            </div>
-                          ) : (
-                            filteredPicOptions.map((opt) => {
-                              const value = opt.id;
-                              const checked = hospitalPicFilter.includes(value);
-                              return (
-                                <label key={value} className="flex items-center gap-2 text-sm text-gray-700 hover:bg-gray-50 px-2 py-1.5 rounded cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
-                                    onChange={(e) => togglePicFilterValue(value, e.target.checked)}
-                                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                  />
-                                  <span className="truncate">{opt.label}</span>
-                                </label>
-                              );
-                            })
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <button
-                            type="button"
-                            className="px-3 py-1.5 text-sm text-blue-600 hover:underline focus:outline-none"
-                            onClick={clearPicFilter}
-                            disabled={hospitalPicFilter.length === 0}
-                          >
-                            Bỏ lọc
-                          </button>
-                          <button
-                            type="button"
-                            className="px-3 py-1.5 text-sm rounded-full border border-gray-300 hover:bg-gray-50 text-gray-600 focus:outline-none"
-                            onClick={() => setPicFilterOpen(false)}
-                          >
-                            Đóng
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                <div className="flex shrink-0 flex-wrap justify-end">
                   <button
                     type="button"
-                    className={`self-start px-3 py-1.5 text-xs text-blue-600 hover:underline focus:outline-none ${hospitalPicFilter.length === 0 ? "invisible pointer-events-none" : ""}`}
-                    onClick={clearPicFilter}
+                    className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-blue-700"
+                    onClick={() => {
+                      void handleNewTaskClick();
+                    }}
                   >
-                    Bỏ lọc người phụ trách
+                    + Thêm công việc mới
                   </button>
                 </div>
-                <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
-                  <span className="font-semibold text-gray-800 dark:text-gray-200">
-                    Tổng bệnh viện:
-                    <span className="ml-1 font-bold text-gray-900 dark:text-gray-100">
-                      {loadingHospitals ? "..." : hospitalSummary.total}
-                    </span>
-                  </span>
-                  {/* <span className="font-semibold text-gray-800 dark:text-gray-200">
-                    Đang hiển thị:
-                    <span className="ml-1 font-bold text-gray-900 dark:text-gray-100">
-                      {loadingHospitals ? "..." : hospitalSummary.filteredCount}
-                    </span>
-                  </span> */}
-                  {/* <span className="font-semibold text-gray-800 dark:text-gray-200">
-                    Đã hoàn thành 100%:
-                    <span className="ml-1 font-bold text-gray-900 dark:text-gray-100">
-                      {loadingHospitals ? "..." : hospitalSummary.acceptedFull}
-                    </span>
-                  </span> */}
-                </div>
               </div>
-              <div className="flex items-center gap-2">
+            </div>
+          </div>
+          <div className="mb-2 hidden rounded-lg bg-slate-100 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:bg-slate-800/90 dark:text-slate-400 md:grid md:grid-cols-12 md:gap-4">
+            <div className="md:col-span-4">Tên nhiệm vụ</div>
+            <div className="md:col-span-2 text-center">Trạng thái</div>
+            <div className="md:col-span-2">Phụ trách chính</div>
+            <div className="md:col-span-2">Thời gian tạo</div>
+            <div className="md:col-span-2 text-right">Thao tác</div>
+          </div>
+        </>
+      )}
+
+      {/* Hospital List View */}
+      {showHospitalList && (
+        <div className="mb-6 space-y-4">
+          <div className="rounded-2xl border border-[#e4e7f2] bg-[#eef1f7] p-5 shadow-none">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                 <button
                   className="rounded-xl bg-blue-600 text-white px-5 py-2 shadow hover:bg-blue-700"
                   onClick={() => { void handleNewTaskClick(); }}
                   type="button"
                 >
-                  + Thêm task mới
+                  + Thêm công việc mới
                 </button>
                 <button
                   className="relative inline-flex items-center gap-2 rounded-full border border-gray-300 text-gray-800 px-4 py-2 text-sm bg-white hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:bg-gray-900"
@@ -1308,6 +1383,184 @@ const MaintenanceSuperTaskPage: React.FC = () => {
                   Tickets
                 </button>
               </div>
+              <div className="w-full">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  {/* <div>
+                    <h4 className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">Lọc theo trạng thái</h4>
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <button className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${hospitalStatusFilter === "" ? "bg-blue-600 text-white" : "bg-white text-gray-700 border border-[#dfe4f0] hover:bg-[#f8f9fc]"}`} onClick={() => { setHospitalStatusFilter(""); setHospitalPage(0); }}>Tất cả</button>
+                      <button className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${hospitalStatusFilter === "incomplete" ? "bg-blue-600 text-white" : "bg-white text-gray-700 border border-[#dfe4f0] hover:bg-[#f8f9fc]"}`} onClick={() => { setHospitalStatusFilter("incomplete"); setHospitalPage(0); }}>Đang thực hiện</button>
+                      <button className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${hospitalStatusFilter === "accepted" ? "bg-blue-600 text-white" : "bg-white text-gray-700 border border-[#dfe4f0] hover:bg-[#f8f9fc]"}`} onClick={() => { setHospitalStatusFilter("accepted"); setHospitalPage(0); }}>Đã hoàn thành</button>
+                    </div>
+                  </div> */}
+
+                  <div className="grid w-full max-w-[420px] grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">Phụ trách chính</label>
+                      <div className="relative">
+                        <div
+                          className={`flex min-h-10 w-full cursor-text flex-wrap items-center gap-1 rounded-lg border border-[#dfe4f0] bg-white py-1.5 pl-2 text-sm text-gray-700 ${
+                            hospitalPicFilters.length > 0 || hospitalPicInput.trim() ? "pr-10" : "pr-3"
+                          }`}
+                          onMouseDown={(e) => {
+                            const el = e.target as HTMLElement;
+                            if (el.closest("button")) return;
+                            hospitalPicInputRef.current?.focus();
+                          }}
+                        >
+                          {hospitalPicFilters.map((name) => (
+                            <span
+                              key={name}
+                              className="inline-flex max-w-full items-center gap-0.5 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-gray-800 dark:bg-slate-700 dark:text-slate-100"
+                            >
+                              <span className="max-w-[180px] truncate" title={name}>
+                                {name}
+                              </span>
+                              <button
+                                type="button"
+                                className="shrink-0 rounded p-0.5 text-gray-500 hover:bg-slate-200 hover:text-gray-800 dark:hover:bg-slate-600 dark:hover:text-white"
+                                aria-label={`Xóa ${name}`}
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                  setHospitalPicFilters((prev) => prev.filter((n) => n !== name));
+                                  setHospitalPage(0);
+                                }}
+                              >
+                                <FiX className="h-3.5 w-3.5" aria-hidden />
+                              </button>
+                            </span>
+                          ))}
+                          <input
+                            ref={hospitalPicInputRef}
+                            type="text"
+                            value={hospitalPicInput}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setHospitalPicInput(v);
+                              setHospitalPage(0);
+                              setIsPicSuggestOpen(v.trim().length > 0);
+                            }}
+                            onFocus={() => setIsPicSuggestOpen(hospitalPicInput.trim().length > 0)}
+                            onBlur={() => window.setTimeout(() => setIsPicSuggestOpen(false), 120)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Backspace" && !hospitalPicInput && hospitalPicFilters.length > 0) {
+                                setHospitalPicFilters((prev) => prev.slice(0, -1));
+                                setHospitalPage(0);
+                                return;
+                              }
+                              if (e.key === "Enter" && hospitalPicInput.trim()) {
+                                e.preventDefault();
+                                const raw = hospitalPicInput.trim();
+                                setHospitalPicFilters((prev) => (prev.includes(raw) ? prev : [...prev, raw]));
+                                setHospitalPicInput("");
+                                setHospitalPage(0);
+                                setIsPicSuggestOpen(false);
+                              }
+                            }}
+                            placeholder={
+                              hospitalPicFilters.length ? "Thêm người phụ trách..." : "Tìm theo tên phụ trách"
+                            }
+                            className="min-h-[1.5rem] min-w-[6rem] flex-1 border-0 bg-transparent px-1 py-0.5 text-sm text-gray-700 outline-none placeholder:text-gray-400"
+                          />
+                        </div>
+                        {(hospitalPicFilters.length > 0 || hospitalPicInput.trim()) && (
+                          <button
+                            type="button"
+                            className="absolute right-2 top-1/2 z-[5] -translate-y-1/2 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                            aria-label="Xóa lọc phụ trách"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setHospitalPicFilters([]);
+                              setHospitalPicInput("");
+                              setHospitalPage(0);
+                              setIsPicSuggestOpen(false);
+                            }}
+                          >
+                            <FiX className="h-4 w-4" aria-hidden />
+                          </button>
+                        )}
+                        {isPicSuggestOpen && filteredPicNameOptions.length > 0 && (
+                          <div className="absolute z-20 mt-1 max-h-80 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-900">
+                            {filteredPicNameOptions.map((name) => (
+                              <button
+                                key={name}
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setHospitalPicFilters((prev) => (prev.includes(name) ? prev : [...prev, name]));
+                                  setHospitalPicInput("");
+                                  setHospitalPage(0);
+                                  setIsPicSuggestOpen(false);
+                                }}
+                                className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                              >
+                                {name}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">Khu vực</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={hospitalRegionQuery}
+                          onChange={(e) => {
+                            setHospitalRegionQuery(e.target.value);
+                            setHospitalPage(0);
+                            setIsRegionSuggestOpen(true);
+                          }}
+                          onFocus={() => setIsRegionSuggestOpen(true)}
+                          onBlur={() => window.setTimeout(() => setIsRegionSuggestOpen(false), 120)}
+                          placeholder="Tìm tất cả tỉnh/thành"
+                          className="h-10 w-full rounded-lg border border-[#dfe4f0] bg-white px-3 text-sm text-gray-700 outline-none"
+                        />
+                        {isRegionSuggestOpen && filteredRegionOptions.length > 0 && (
+                          <div className="absolute z-20 mt-1 max-h-52 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+                            {filteredRegionOptions.map((region) => (
+                              <button
+                                key={region}
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setHospitalRegionQuery(region);
+                                  setHospitalPage(0);
+                                  setIsRegionSuggestOpen(false);
+                                }}
+                                className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+                              >
+                                {region}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                  <span className="font-semibold text-gray-800">
+                    Tổng bệnh viện:
+                    <span className="ml-1 font-bold text-gray-900">
+                      {loadingHospitals ? "..." : hospitalSummary.total}
+                    </span>
+                  </span>
+                  {/* <span className="font-semibold text-gray-800 dark:text-gray-200">
+                    Đang hiển thị:
+                    <span className="ml-1 font-bold text-gray-900 dark:text-gray-100">
+                      {loadingHospitals ? "..." : hospitalSummary.filteredCount}
+                    </span>
+                  </span> */}
+                  {/* <span className="font-semibold text-gray-800 dark:text-gray-200">
+                    Đã hoàn thành 100%:
+                    <span className="ml-1 font-bold text-gray-900 dark:text-gray-100">
+                      {loadingHospitals ? "..." : hospitalSummary.acceptedFull}
+                    </span>
+                  </span> */}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1321,147 +1574,62 @@ const MaintenanceSuperTaskPage: React.FC = () => {
             </div>
           ) : (
             <>
-              <div className="rounded-2xl border bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-50 border-b border-gray-200">
-                      <tr>
-                        <th className="px-6 w-10 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STT</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tên bệnh viện</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mã BV</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tỉnh/thành</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phụ trách chính</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phụ trách bảo trì</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Số lượng task</th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Thao tác</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {filteredHospitals
-                        .slice(hospitalPage * hospitalSize, (hospitalPage + 1) * hospitalSize)
-                        .map((hospital, index) => {
-                          const longName = (hospital.label || "").length > 32;
-                          return (
-                            <tr
-                              key={`${hospital.label}-${index}`}
-                              className="hover:bg-gray-50 transition-colors cursor-pointer"
-                              onClick={(e) => handleHospitalClick(hospital.label, e)}
-                            >
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {hospitalPage * hospitalSize + index + 1}
-                              </td>
-                              <td className="px-6 py-4">
-                                <div className={`flex gap-3 ${longName ? 'items-start' : 'items-center'}`}>
+              <div className="space-y-3">
+                {pagedHospitals.map((hospital, index) => (
+                  <div
+                    key={`${hospital.label}-${index}`} 
+                    className="group cursor-pointer rounded-2xl border border-[#e4e7f2] bg-[#f8f9fc] px-5 py-5 shadow-none transition hover:border-[#d4daea] hover:bg-white"
+                    onClick={(e) => handleHospitalClick(hospital.label, e)}
+                  >
+                    <div className="flex items-center justify-between gap-5">
+                      <div className="min-w-0 flex flex-[1.7] items-center gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#e8ecf8] text-blue-600">
+                          <FaHospital className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Mã BV: {hospital.hospitalCode || "—"}</div>
+                          <div className="mt-0.5 text-[20px] font-bold leading-tight text-gray-900">{hospital.label}</div>
+                          <div className="mt-0.5 text-[14px] leading-tight text-gray-600">{hospital.subLabel || "Chưa có thông tin khu vực"}</div>
+                        </div>
+                      </div>
 
-                                  <div className={`text-sm font-medium text-gray-900 break-words max-w-[260px] flex flex-wrap gap-2 ${longName ? 'leading-snug' : ''}`}>
-                                    <span>{hospital.label}</span>
-                                    {hospital.fromDeployment && !hospital.acceptedByMaintenance && (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700">
-                                        Từ triển khai
-                                      </span>
-                                    )}
-                                    {hospital.fromDeployment && hospital.acceptedByMaintenance && (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
-                                        Nhận từ triển khai
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {hospital.hospitalCode || "—"}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {hospital.subLabel || "—"}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {hospital.maintenancePersonInChargeName || "—"}
-                              </td>
-                              <td className="px-6 py-4 text-sm text-gray-500">
-                                {hospital.picDeploymentNames && hospital.picDeploymentNames.length > 0
-                                  ? (
-                                    <div className="flex flex-wrap gap-1">
-                                      {hospital.picDeploymentNames.map((name, i) => (
-                                        <span key={i} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
-                                          {name}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  )
-                                  : "—"}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm align-center">
-                                <div className="flex flex-col items-start gap-1">
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                    {(hospital.acceptedCount ?? 0)}/{hospital.taskCount ?? 0} task
-                                  </span>
-                                  {(hospital.nearDueCount ?? 0) > 0 && (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">Sắp đến hạn: {hospital.nearDueCount}</span>
-                                  )}
-                                  {(hospital.overdueCount ?? 0) > 0 && (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Quá hạn: {hospital.overdueCount}</span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                <div className="flex items-center justify-center gap-1">
-                                  <button
-                                    onClick={(e) => {
-                                      // pass the event so handler can prevent default/stop propagation
-                                      handleHospitalClick(hospital.label, e);
-                                    }}
-                                    className="p-1.5 rounded-lg text-blue-600 hover:text-blue-800 hover:bg-blue-50 transition"
-                                    title="Xem công việc"
-                                  >
-                                    <AiOutlineEye className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      // hospital.id từ summary API chính là hospitalId thực sự từ bảng hospitals
-                                      // Chỉ resolve lại nếu hospital.id không hợp lệ (số âm hoặc <= 0)
-                                      let finalHospitalId: number | null = null;
-                                      
-                                      if (hospital.id && hospital.id > 0) {
-                                        // Dùng trực tiếp hospital.id vì nó đã là hospitalId thực sự từ summary API
-                                        finalHospitalId = hospital.id;
-                                        console.log("Using hospital.id directly:", finalHospitalId, "for hospital:", hospital.label);
-                                      } else {
-                                        // Fallback: resolve từ tên nếu hospital.id không hợp lệ
-                                        console.log("hospital.id is invalid, resolving from name:", hospital.id);
-                                        const resolvedId = await resolveHospitalIdByName(hospital.label);
-                                        if (resolvedId) {
-                                          finalHospitalId = resolvedId;
-                                          console.log("Resolved hospitalId:", finalHospitalId, "for hospital:", hospital.label);
-                                        }
-                                      }
-                                      
-                                      if (finalHospitalId && finalHospitalId > 0) {
-                                        setSelectedHospitalIdForTickets(finalHospitalId);
-                                        setSelectedHospitalNameForTickets(hospital.label);
-                                        setShowTicketsModal(true);
-                                      } else {
-                                        toast.error("Không thể tìm thấy ID bệnh viện hợp lệ");
-                                      }
-                                    }}
-                                    className="relative rounded-lg p-1.5 text-gray-500 hover:text-purple-600 hover:bg-purple-50 transition"
-                                    title="Xem danh sách tickets"
-                                  >
-                                    <FiTag className="h-4 w-4" />
-                                    {(ticketOpenCounts[hospital.id] ?? 0) > 0 && (
-                                      <span className="absolute -right-1 -top-1 z-10 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">
-                                        {ticketOpenCounts[hospital.id]}
-                                      </span>
-                                    )}
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                    </tbody>
-                  </table>
-                </div>
+                      <div className="min-w-[180px] flex-[1.1]">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Phụ trách</div>
+                        <div className="mt-1 flex items-center gap-2 text-[14px] font-semibold text-gray-800">
+                          {/* <span className="h-5 w-5 rounded-full bg-gray-200" /> */}
+                          <span className="truncate">{hospital.maintenancePersonInChargeName || "—"}</span>
+                        </div>
+                      </div>
+
+                      <div className="min-w-[170px] flex-1">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Tiến độ công việc</div>
+                        <div className="mt-1 flex items-center gap-3">
+                          <span className="text-[14px] font-semibold text-gray-800">{hospital.acceptedCount ?? 0}/{hospital.taskCount ?? 0} Tasks</span>
+                          <span className="text-[14px] font-bold text-gray-700">
+                            {Math.round(((hospital.acceptedCount ?? 0) * 100) / Math.max(1, hospital.taskCount ?? 0))}%
+                          </span>
+                        </div>
+                        <div className="mt-1 h-1.5 w-full max-w-[120px] rounded-full bg-gray-200">
+                          <div className="h-1.5 rounded-full bg-blue-600" style={{ width: `${Math.round(((hospital.acceptedCount ?? 0) * 100) / Math.max(1, hospital.taskCount ?? 0))}%` }} />
+                        </div>
+                      </div>
+
+                      <div className="min-w-[130px] text-right">
+                        <div className="text-[10px] text-gray-600">
+                          {hospital.overdueCount ? `Quá hạn: ${hospital.overdueCount}` : hospital.nearDueCount ? `Sắp hạn: ${hospital.nearDueCount}` : "Cập nhật gần đây"}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={(e) => handleHospitalClick(hospital.label, e)}
+                        className="rounded-lg p-2 text-gray-500 transition hover:bg-blue-50 hover:text-blue-700"
+                        title="Xem công việc"
+                      >
+                        <span className="text-lg leading-none">›</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
 
               <div className="mt-4 flex items-center justify-between py-3">
@@ -1481,7 +1649,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
                     <label className="text-sm text-gray-600">Hiển thị:</label>
-                    <select value={String(hospitalSize)} onChange={(e) => { setHospitalSize(Number(e.target.value)); setHospitalPage(0); }} className="border rounded px-2 py-1 text-sm">
+                    <select value={String(hospitalSize)} onChange={(e) => { setHospitalSize(Number(e.target.value)); setHospitalPage(0); }} className="rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-700">
                       <option value="10">10</option>
                       <option value="20">20</option>
                       <option value="50">50</option>
@@ -1490,8 +1658,8 @@ const MaintenanceSuperTaskPage: React.FC = () => {
                   </div>
 
                   <div className="inline-flex items-center gap-1">
-                    <button onClick={() => setHospitalPage(0)} disabled={hospitalPage <= 0} className="px-2 py-1 border rounded text-sm disabled:opacity-50" title="Đầu">«</button>
-                    <button onClick={() => setHospitalPage((p) => Math.max(0, p - 1))} disabled={hospitalPage <= 0} className="px-2 py-1 border rounded text-sm disabled:opacity-50" title="Trước">‹</button>
+                    <button onClick={() => setHospitalPage(0)} disabled={hospitalPage <= 0} className="h-8 w-8 rounded-lg bg-[#e4e7f2] text-gray-700 disabled:opacity-50" title="Đầu">«</button>
+                    <button onClick={() => setHospitalPage((p) => Math.max(0, p - 1))} disabled={hospitalPage <= 0} className="h-8 w-8 rounded-lg bg-[#e4e7f2] text-gray-700 disabled:opacity-50" title="Trước">‹</button>
 
                     {(() => {
                       const total = Math.max(1, Math.ceil(filteredHospitals.length / hospitalSize));
@@ -1500,14 +1668,14 @@ const MaintenanceSuperTaskPage: React.FC = () => {
                       const end = Math.min(total, start + 4);
                       for (let i = start; i <= end; i++) pages.push(i);
                       return pages.map((p) => (
-                        <button key={p} onClick={() => setHospitalPage(p - 1)} className={`px-3 py-1 border rounded text-sm ${hospitalPage + 1 === p ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700'}`}>
+                        <button key={p} onClick={() => setHospitalPage(p - 1)} className={`h-8 min-w-8 rounded-lg px-2 text-sm ${hospitalPage + 1 === p ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-[#d4d9e8]'}`}>
                           {p}
                         </button>
                       ));
                     })()}
 
-                    <button onClick={() => setHospitalPage((p) => Math.min(Math.max(0, Math.ceil(filteredHospitals.length / hospitalSize) - 1), p + 1))} disabled={(hospitalPage + 1) * hospitalSize >= filteredHospitals.length} className="px-2 py-1 border rounded text-sm disabled:opacity-50" title="Tiếp">›</button>
-                    <button onClick={() => setHospitalPage(Math.max(0, Math.ceil(filteredHospitals.length / hospitalSize) - 1))} disabled={(hospitalPage + 1) * hospitalSize >= filteredHospitals.length} className="px-2 py-1 border rounded text-sm disabled:opacity-50" title="Cuối">»</button>
+                    <button onClick={() => setHospitalPage((p) => Math.min(Math.max(0, Math.ceil(filteredHospitals.length / hospitalSize) - 1), p + 1))} disabled={(hospitalPage + 1) * hospitalSize >= filteredHospitals.length} className="h-8 w-8 rounded-lg bg-[#e4e7f2] text-gray-700 disabled:opacity-50" title="Tiếp">›</button>
+                    <button onClick={() => setHospitalPage(Math.max(0, Math.ceil(filteredHospitals.length / hospitalSize) - 1))} disabled={(hospitalPage + 1) * hospitalSize >= filteredHospitals.length} className="h-8 w-8 rounded-lg bg-[#e4e7f2] text-gray-700 disabled:opacity-50" title="Cuối">»</button>
                   </div>
                 </div>
               </div>
@@ -1519,71 +1687,6 @@ const MaintenanceSuperTaskPage: React.FC = () => {
       {/* Task List View */}
       {!showHospitalList && (
         <>
-          {/* Search & Filter */}
-          <div className="mb-6 rounded-xl border bg-white p-5 shadow-sm">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-lg font-semibold mb-3">Tìm kiếm & Thao tác</h3>
-                <div className="flex flex-wrap items-center gap-3">
-                  <input
-                    type="text"
-                    className="rounded-full border px-4 py-3 text-sm shadow-sm min-w-[220px]"
-                    placeholder="Tìm theo tên"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") fetchList();
-                    }}
-                  />
-                  <div className="flex items-center gap-2 w-[260px]">
-                    <select
-                      className="w-[200px] rounded-full border px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition"
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                    >
-                      <option value="" disabled hidden>— Trạng thái —</option>
-                      <option value="NOT_STARTED">Đã tiếp nhận</option>
-                      <option value="IN_PROGRESS">Chưa xử lý</option>
-                      <option value="API_TESTING">Đang xử lý</option>
-                      <option value="INTEGRATING">Gặp sự cố</option>
-                      <option value="WAITING_FOR_DEV">Hoàn thành</option>
-                      {/* ACCEPTED intentionally omitted for maintenance UI */}
-                    </select>
-                    <button
-                      type="button"
-                      className={`px-3 py-1.5 text-xs text-blue-600 hover:underline focus:outline-none ${statusFilter ? "visible" : "invisible pointer-events-none"}`}
-                      onClick={clearTaskStatusFilter}
-                    >
-                      Bỏ lọc
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-3 text-sm text-gray-600 flex items-center gap-4">
-                  <span>Tổng:{" "}
-                    <span className="font-semibold text-gray-800">
-                      {loading ? "..." : totalCount ?? data.length}
-                    </span>
-                  </span>
-                  {typeof acceptedCount === 'number' && (
-                    <span>Đã hoàn thành: <span className="font-semibold text-gray-800">{acceptedCount}/{totalCount ?? data.length} task</span></span>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <button
-                  className="rounded-xl bg-blue-600 text-white px-5 py-2 shadow hover:bg-blue-700"
-                  onClick={() => {
-                    void handleNewTaskClick();
-                  }}
-                >
-                  + Thêm task mới
-                </button>
-
-              </div>
-            </div>
-          </div>
-
           {/* List */}
           <div className="space-y-3">
             {loading && isInitialLoad ? (
@@ -1604,6 +1707,10 @@ const MaintenanceSuperTaskPage: React.FC = () => {
                   task={row as any}
                   idx={idx}
                   animate={enableItemAnimation}
+                  clinicalTaskRow
+                  statusLabelOverride={statusLabel}
+                  statusClassOverride={statusBadgeClasses}
+                  allowEditCompleted
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   onOpen={(t: any) => {
                     // Open in view-only mode for SuperAdmin on maintenance list
@@ -1617,7 +1724,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
                     setViewOnly(false);
                     setModalOpen(true);
                   }}
-                  onDelete={(id: number) => handleDelete(id)}
+                  onDelete={(id: number) => requestDelete(id)}
                 />
               ))
             )}
@@ -1692,6 +1799,8 @@ const MaintenanceSuperTaskPage: React.FC = () => {
           excludeAccepted={true}
           onSubmit={handleSubmit}
           readOnly={false}
+          curatorLayout
+          pageHospitalOptions={pageHospitalOptionsForTaskModal}
         />
       )}
       <PendingTasksModal
@@ -1702,6 +1811,29 @@ const MaintenanceSuperTaskPage: React.FC = () => {
         onAccept={handleAcceptPendingGroup}
         onAcceptAll={handleAcceptAll}
       />
+      <ConfirmDialog
+        open={deleteDialogId != null}
+        title="Xóa công việc bảo trì?"
+        message={
+          deleteTargetName ? (
+            <>
+              Bạn sắp xóa <span className="font-semibold text-slate-800 dark:text-slate-100">{deleteTargetName}</span>. Hành động này không thể
+              hoàn tác.
+            </>
+          ) : (
+            "Bạn có chắc muốn xóa bản ghi này? Hành động này không thể hoàn tác."
+          )
+        }
+        variant="danger"
+        confirmLabel="Xóa"
+        cancelLabel="Huỷ"
+        confirmLoading={deleteSubmitting}
+        onClose={() => {
+          if (!deleteSubmitting) setDeleteDialogId(null);
+        }}
+        onConfirm={confirmDeleteTask}
+      />
+      {genericConfirmDialog}
 
       {/* Tickets Modal */}
       <AnimatePresence>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import toast from "react-hot-toast";
 import { AiOutlineEye, AiOutlineEdit, AiOutlineDelete } from "react-icons/ai";
 import { BoxCubeIcon } from "../../icons";
@@ -68,6 +69,7 @@ function formatDateTime(dateString: string | null | undefined): string {
 }
 
 export default function AgenciesPage() {
+  const { ask: askConfirm, dialog: genericConfirmDialog } = useConfirmDialog();
   const [items, setItems] = useState<Agency[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -252,7 +254,13 @@ export default function AgenciesPage() {
   }
 
   async function onDelete(id: number) {
-    if (!confirm("Xóa đại lý này?")) return;
+    const ok = await askConfirm({
+      title: "Xóa đại lý?",
+      message: "Bạn có chắc muốn xóa đại lý này? Hành động này không thể hoàn tác.",
+      variant: "danger",
+      confirmLabel: "Xóa",
+    });
+    if (!ok) return;
     setLoading(true);
     try {
       const res = await fetch(`${BASE}/${id}`, { method: "DELETE", headers: { ...authHeader() } });
@@ -513,6 +521,7 @@ export default function AgenciesPage() {
           </div>
         </div>
       )}
+      {genericConfirmDialog}
     </>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import toast from "react-hot-toast";
 import { AiOutlineEye, AiOutlineEdit, AiOutlineDelete } from "react-icons/ai";
 import { FaHospital } from "react-icons/fa";
@@ -87,6 +88,7 @@ function getStatusLabel(status?: string | null): string {
 }
 
 export default function HardwarePage() {
+  const { ask: askConfirm, dialog: genericConfirmDialog } = useConfirmDialog();
   const [items, setItems] = useState<Hardware[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -474,7 +476,13 @@ export default function HardwarePage() {
   }
 
   async function onDelete(id: number) {
-    if (!confirm("Xóa phần cứng này?")) return;
+    const ok = await askConfirm({
+      title: "Xóa phần cứng?",
+      message: "Bạn có chắc muốn xóa phần cứng này? Hành động này không thể hoàn tác.",
+      variant: "danger",
+      confirmLabel: "Xóa",
+    });
+    if (!ok) return;
     setLoading(true);
     try {
       await HardwareAPI.deleteHardware(id);
@@ -1012,6 +1020,7 @@ export default function HardwarePage() {
           </div>
         )}
       </AnimatePresence>
+      {genericConfirmDialog}
     </>
   );
 }

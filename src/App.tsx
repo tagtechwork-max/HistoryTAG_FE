@@ -29,6 +29,7 @@ import DevTasksPage from "./pages/PageClients/dev-tasks";
 import MaintenanceTasksPage from "./pages/PageClients/maintenance-tasks";
 import Hospitals from "./pages/Page/Hospitals";
 import HisSystemPage from "./pages/Page/HisSystem";
+import HccFacilitiesPage from "./pages/Page/HccFacilities";
 import SuperAdminHome from "./pages/SuperAdmin/Home";
 import SuperAdminUsers from "./pages/SuperAdmin/Users";
 import ListActivity from "./pages/UserAnalytics/ListActivity";
@@ -161,6 +162,7 @@ export default function App() {
             <Route path="/superadmin/user-analytics" element={<ListActivity />} />
             <Route path="/superadmin/hospitals" element={<Hospitals />} />
             <Route path="/superadmin/his-systems" element={<HisSystemPage />} />
+            <Route path="/superadmin/hcc-facilities" element={<HccFacilitiesPage />} />
             <Route path="/superadmin/agencies" element={<Agencies />} />
             <Route path="/superadmin/hardware" element={<Hardware />} />
             {/* SuperAdmin-specific task pages */}
@@ -221,6 +223,7 @@ export default function App() {
             {/* Tables */}
             <Route path="/hospitals" element={<Hospitals />} />
             <Route path="/his-sys" element={<HisSystemPage />} />
+            <Route path="/hcc-facilities" element={<HccFacilitiesPage />} />
 
             {/* Ui Elements */}
             <Route path="/alerts" element={<Alerts />} />

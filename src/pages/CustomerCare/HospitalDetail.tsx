@@ -4,6 +4,8 @@ import PageMeta from "../../components/common/PageMeta";
 import { CareActivityFormData, convertActivityFormDataToDTO, convertActivityFormDataToUpdateDTO } from "./Form/AddCareActivityForm";
 import { addCustomerCareActivity, getCustomerCareById, getAllCustomerCareActivities, updateCustomerCareActivity, deleteCustomerCareActivity, CustomerCareResponseDTO } from "../../api/customerCare.api";
 import api from "../../api/client";
+import toast from "react-hot-toast";
+import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 
 // Helper function để tính toán thời gian tương đối từ LocalDateTime string
 function calculateTimeAgo(dateString: string | undefined | null): string {
@@ -292,6 +294,7 @@ export default function HospitalDetailView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [careHistory, setCareHistory] = useState<CareActivity[]>([]);
+  const { ask: askConfirm, dialog: genericConfirmDialog } = useConfirmDialog();
 
   // Fetch hospital data từ API
   useEffect(() => {
@@ -677,7 +680,7 @@ export default function HospitalDetailView() {
 
   const handleSubmitActivity = async (data: CareActivityFormData) => {
     if (!id) {
-      alert("Không tìm thấy care ID");
+      toast.error("Không tìm thấy care ID");
       return;
     }
 
@@ -728,13 +731,13 @@ export default function HospitalDetailView() {
       setHospital(prev => prev ? { ...prev, careHistory: activities } : null);
     } catch (error: any) {
       console.error("Error submitting activity:", error);
-      alert(error?.response?.data?.message || error?.message || "Có lỗi xảy ra khi thêm hoạt động");
+      toast.error(error?.response?.data?.message || error?.message || "Có lỗi xảy ra khi thêm hoạt động");
     }
   };
 
   const handleUpdateActivity = async (activityId: number, data: CareActivityFormData) => {
     if (!id) {
-      alert("Không tìm thấy care ID");
+      toast.error("Không tìm thấy care ID");
       return;
     }
 
@@ -784,19 +787,23 @@ export default function HospitalDetailView() {
       setHospital(prev => prev ? { ...prev, careHistory: activities } : null);
     } catch (error: any) {
       console.error("Error updating activity:", error);
-      alert(error?.response?.data?.message || error?.message || "Có lỗi xảy ra khi cập nhật hoạt động");
+      toast.error(error?.response?.data?.message || error?.message || "Có lỗi xảy ra khi cập nhật hoạt động");
     }
   };
 
   const handleDeleteActivity = async (activityId: number) => {
     if (!id) {
-      alert("Không tìm thấy care ID");
+      toast.error("Không tìm thấy care ID");
       return;
     }
 
-    if (!confirm("Bạn có chắc chắn muốn xóa hoạt động này?")) {
-      return;
-    }
+    const ok = await askConfirm({
+      title: "Xóa hoạt động?",
+      message: "Bạn có chắc muốn xóa hoạt động này? Hành động này không thể hoàn tác.",
+      variant: "danger",
+      confirmLabel: "Xóa",
+    });
+    if (!ok) return;
 
     const careId = Number(id);
     try {
@@ -842,7 +849,7 @@ export default function HospitalDetailView() {
       setHospital(prev => prev ? { ...prev, careHistory: activities } : null);
     } catch (error: any) {
       console.error("Error deleting activity:", error);
-      alert(error?.response?.data?.message || error?.message || "Có lỗi xảy ra khi xóa hoạt động");
+      toast.error(error?.response?.data?.message || error?.message || "Có lỗi xảy ra khi xóa hoạt động");
     }
   };
 
@@ -1315,6 +1322,7 @@ export default function HospitalDetailView() {
           </div>
         </div>
       </div>
+      {genericConfirmDialog}
     </>
   );
 }

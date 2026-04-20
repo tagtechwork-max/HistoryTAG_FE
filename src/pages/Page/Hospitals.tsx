@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import flatpickr from "flatpickr";
+import { Vietnamese } from "flatpickr/dist/l10n/vn";
 import { motion, AnimatePresence } from "framer-motion";
 import ComponentCard from "../../components/common/ComponentCard";
 import PageMeta from "../../components/common/PageMeta";
@@ -9,6 +11,7 @@ import { FiMapPin, FiPhone, FiUser, FiClock, FiTag, FiImage, FiMap, FiDownload, 
 import { RiHistoryLine } from "react-icons/ri";
 import { FaHospitalAlt } from "react-icons/fa";
 import toast from "react-hot-toast";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 
 export type Hospital = {
   id: number;
@@ -41,6 +44,11 @@ export type Hospital = {
   maintenancePersonInChargeEmail?: string | null;
   maintenancePersonInChargePhone?: string | null;
   contractCount?: number; // Tổng số hợp đồng (business + warranty)
+  /** True when deployment handed off to maintenance (may differ from projectStatus until next sync). */
+  transferredToMaintenance?: boolean | null;
+  acceptedByMaintenance?: boolean | null;
+  /** ISO yyyy-MM-dd (last valid day of maintenance, inclusive). */
+  maintenanceExpiryDate?: string | null;
 };
 
 export type HospitalForm = {
@@ -63,6 +71,7 @@ export type HospitalForm = {
   personInChargeName?: string;
   maintenancePersonInChargeId?: number;
   maintenancePersonInChargeName?: string;
+  maintenanceExpiryDate?: string;
 };
 
 type ITUserOption = {
@@ -199,7 +208,19 @@ const STATUS_FALLBACK: EnumOption[] = [
   { name: "IN_PROGRESS", displayName: "Đang thực hiện" },
   { name: "COMPLETED", displayName: "Hoàn thành" },
   { name: "ISSUE", displayName: "Gặp sự cố" },
+  { name: "DEPLOYMENT_FINISHED", displayName: "Đã triển khai" },
+  { name: "TRANSFERRED_TO_MAINTENANCE", displayName: "Đang bảo trì" },
+  { name: "MAINTENANCE_EXPIRING_SOON", displayName: "Sắp hết hạn bảo trì" },
+  { name: "MAINTENANCE_EXPIRED", displayName: "Đã hết hạn bảo trì" },
 ];
+
+// Filter-only statuses: not offered in add/edit form select (only in page filter + display map)
+const STATUS_NAMES_EXCLUDED_FROM_FORM = new Set<string>([
+  "DEPLOYMENT_FINISHED",
+  "TRANSFERRED_TO_MAINTENANCE",
+  "MAINTENANCE_EXPIRING_SOON",
+  "MAINTENANCE_EXPIRED",
+]);
 
 // Danh sách 64 tỉnh thành Việt Nam
 const VIETNAM_PROVINCES = [
@@ -221,6 +242,195 @@ function disp(map: Record<string, string>, key?: string | null) {
   return map[key] ?? key;
 }
 
+function hasMaintenancePersonInCharge(
+  h: Pick<Hospital, "maintenancePersonInChargeId" | "maintenancePersonInChargeName"> | null | undefined,
+): boolean {
+  if (!h) return false;
+  const id = h.maintenancePersonInChargeId;
+  if (id != null && Number(id) > 0) return true;
+  const name = h.maintenancePersonInChargeName;
+  return typeof name === "string" && name.trim().length > 0;
+}
+
+/** Card/detail status key: show as in-maintenance when transferred or maintenance PIC is set. */
+function effectiveHospitalProjectStatusKey(
+  h: Pick<
+    Hospital,
+    | "projectStatus"
+    | "transferredToMaintenance"
+    | "maintenancePersonInChargeId"
+    | "maintenancePersonInChargeName"
+  > | null | undefined,
+): string | null | undefined {
+  if (!h) return null;
+  if (h.transferredToMaintenance === true || hasMaintenancePersonInCharge(h)) {
+    return "TRANSFERRED_TO_MAINTENANCE";
+  }
+  return h.projectStatus ?? null;
+}
+
+function isHospitalInMaintenanceContext(
+  h: Pick<Hospital, "transferredToMaintenance" | "maintenancePersonInChargeId" | "maintenancePersonInChargeName"> | null | undefined,
+): boolean {
+  if (!h) return false;
+  return h.transferredToMaintenance === true || hasMaintenancePersonInCharge(h);
+}
+
+type MaintenanceExpiryBadge = {
+  label: string;
+  pillTextClass: string;
+  pillBgClass: string;
+  dotBgClass: string;
+};
+
+function todayLocalStartTs(): number {
+  const n = new Date();
+  return new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
+}
+
+/** Parse yyyy-MM-dd from API to local midnight timestamp. */
+function maintenanceExpiryToStartTs(iso: string | null | undefined): number | null {
+  if (!iso || typeof iso !== "string") return null;
+  const slice = iso.trim().slice(0, 10);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(slice);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return null;
+  const t = new Date(y, mo - 1, d).getTime();
+  return Number.isNaN(t) ? null : t;
+}
+
+/** Expired: after last valid day. Soon: from (expiry − 3 months) through last valid day. */
+function getHospitalMaintenanceExpiryBadge(h: Hospital): MaintenanceExpiryBadge | null {
+  if (!isHospitalInMaintenanceContext(h)) return null;
+  const raw = h.maintenanceExpiryDate;
+  const expiryTs = maintenanceExpiryToStartTs(raw ?? undefined);
+  if (expiryTs == null) return null;
+  const slice = String(raw).trim().slice(0, 10);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(slice);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  const soonStartTs = new Date(y, mo - 1 - 3, d).getTime();
+  const today = todayLocalStartTs();
+  if (today > expiryTs) {
+    return {
+      label: "Hết hạn bảo trì",
+      pillTextClass: "text-red-700 dark:text-red-200",
+      pillBgClass: "bg-red-50 dark:bg-red-950/50",
+      dotBgClass: "bg-red-500",
+    };
+  }
+  if (today >= soonStartTs) {
+    return {
+      label: "Sắp hết hạn bảo trì",
+      pillTextClass: "text-amber-800 dark:text-amber-200",
+      pillBgClass: "bg-amber-50 dark:bg-amber-950/35",
+      dotBgClass: "bg-amber-500",
+    };
+  }
+  return null;
+}
+
+function formatMaintenanceExpiryVi(iso: string | null | undefined): string {
+  const ts = maintenanceExpiryToStartTs(iso ?? undefined);
+  if (ts == null) return "—";
+  return new Date(ts).toLocaleDateString("vi-VN");
+}
+
+/** Value for `<input type="date" />` (yyyy-MM-dd, local calendar day). */
+function maintenanceExpiryToInputValue(iso: string | null | undefined): string {
+  const s = String(iso ?? "").trim().slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : "";
+}
+
+const MAINTENANCE_EXPIRY_FP_INPUT_CLASS =
+  "w-full rounded-xl border-2 border-gray-300 px-5 py-3 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:bg-gray-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100";
+
+/**
+ * Calendar + keyboard input without native type="date" cursor jumps.
+ * Stores ISO yyyy-MM-dd; user sees/types dd/MM/yyyy (flatpickr altInput).
+ */
+function HospitalMaintenanceExpiryDateInput({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (isoYmd: string) => void;
+  disabled?: boolean;
+}) {
+  const baseInputRef = useRef<HTMLInputElement>(null);
+  const fpRef = useRef<flatpickr.Instance | null>(null);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  useEffect(() => {
+    const el = baseInputRef.current;
+    if (!el) return;
+
+    const fp = flatpickr(el, {
+      locale: Vietnamese,
+      dateFormat: "Y-m-d",
+      altInput: true,
+      altFormat: "d/m/Y",
+      altInputClass: MAINTENANCE_EXPIRY_FP_INPUT_CLASS,
+      allowInput: true,
+      clickOpens: true,
+      static: true,
+      monthSelectorType: "static",
+      disableMobile: true,
+      defaultDate: value || undefined,
+      onReady: (_d, _s, inst) => {
+        if (inst.altInput) inst.altInput.placeholder = "dd/MM/yyyy";
+      },
+      onChange: (_dates, dateStr) => {
+        onChangeRef.current(typeof dateStr === "string" ? dateStr : "");
+      },
+    });
+    fpRef.current = fp;
+
+    return () => {
+      fp.destroy();
+      fpRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const fp = fpRef.current;
+    if (!fp) return;
+    const alt = fp.altInput;
+    const active = document.activeElement;
+    if ((alt && active === alt) || active === fp.input) return;
+
+    if (!value) {
+      fp.clear();
+      return;
+    }
+
+    const sel = fp.selectedDates[0];
+    if (sel) {
+      const y = sel.getFullYear();
+      const m = String(sel.getMonth() + 1).padStart(2, "0");
+      const d = String(sel.getDate()).padStart(2, "0");
+      if (`${y}-${m}-${d}` === value) return;
+    }
+    fp.setDate(value, false);
+  }, [value]);
+
+  useEffect(() => {
+    const fp = fpRef.current;
+    if (!fp) return;
+    fp.input.disabled = !!disabled;
+    if (fp.altInput) fp.altInput.disabled = !!disabled;
+  }, [disabled]);
+
+  return <input ref={baseInputRef} type="text" className="hidden" readOnly={false} tabIndex={-1} aria-hidden />;
+}
+
 // Hàm lấy màu cho trạng thái
 function getStatusColor(status?: string | null): string {
   switch (status) {
@@ -232,6 +442,10 @@ function getStatusColor(status?: string | null): string {
       return "text-green-600";
     case "ISSUE":
       return "text-red-600";
+    case "TRANSFERRED_TO_MAINTENANCE":
+      return "text-sky-700 dark:text-sky-300";
+    case "DEPLOYMENT_FINISHED":
+      return "text-teal-700 dark:text-teal-300";
     default:
       return "text-gray-600";
   }
@@ -266,6 +480,10 @@ function getStatusBg(status?: string | null): string {
       return "bg-green-500";
     case "ISSUE":
       return "bg-red-500";
+    case "TRANSFERRED_TO_MAINTENANCE":
+      return "bg-sky-500";
+    case "DEPLOYMENT_FINISHED":
+      return "bg-teal-500";
     default:
       return "bg-gray-300";
   }
@@ -357,6 +575,9 @@ function DetailModal({
 }) {
   if (!open || !item) return null;
 
+  const detailMaintBadge = getHospitalMaintenanceExpiryBadge(item);
+  const detailEffKey = effectiveHospitalProjectStatusKey(item);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
@@ -396,11 +617,23 @@ function DetailModal({
               label="Trạng thái"
               icon={<FiClock />}
               value={
-                <span className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${getStatusBg(item.projectStatus)} text-white`}>
-                  {disp(statusMap, item.projectStatus)}
-                </span>
+                detailMaintBadge ? (
+                  <span
+                    className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${detailMaintBadge.pillBgClass} ${detailMaintBadge.pillTextClass}`}
+                  >
+                    {detailMaintBadge.label}
+                  </span>
+                ) : (
+                  <span
+                    className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${getStatusBg(detailEffKey)} text-white`}
+                  >
+                    {disp(statusMap, detailEffKey)}
+                  </span>
+                )
               }
             />
+
+            <Info label="Hạn bảo trì" icon={<FiClock />} value={formatMaintenanceExpiryVi(item.maintenanceExpiryDate)} />
 
             <Info
               label="Độ ưu tiên"
@@ -507,50 +740,33 @@ export default function HospitalsPage() {
   const [totalPages, setTotalPages] = useState(0);
 
   // Filters (server-side)
-  const [qName, setQName] = useState("");
-  const [debouncedQName, setDebouncedQName] = useState(""); // Debounced version for API calls
-  const [qCode, setQCode] = useState("");
-  const [debouncedQCode, setDebouncedQCode] = useState(""); // Debounced version for API calls
+  /** Single search: matches hospital name OR hospital code (API `keyword`). */
+  const [qSearch, setQSearch] = useState("");
+  const [debouncedQSearch, setDebouncedQSearch] = useState("");
   const [qProvince, setQProvince] = useState("");
   const [qStatus, setQStatus] = useState("");
   const [qPriority, setQPriority] = useState("");
   const [qPersonInCharge, setQPersonInCharge] = useState("");
-  const nameSearchDebounceRef = useRef<number | null>(null);
-  const codeSearchDebounceRef = useRef<number | null>(null);
-  
-  // Debounce name search input: update debouncedQName after 300ms of no typing
-  useEffect(() => {
-    if (nameSearchDebounceRef.current) {
-      window.clearTimeout(nameSearchDebounceRef.current);
-    }
-    nameSearchDebounceRef.current = window.setTimeout(() => {
-      setDebouncedQName(qName);
-    }, 300);
-    return () => {
-      if (nameSearchDebounceRef.current) {
-        window.clearTimeout(nameSearchDebounceRef.current);
-      }
-    };
-  }, [qName]);
+  const hospitalSearchDebounceRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (codeSearchDebounceRef.current) {
-      window.clearTimeout(codeSearchDebounceRef.current);
+    if (hospitalSearchDebounceRef.current) {
+      window.clearTimeout(hospitalSearchDebounceRef.current);
     }
-    codeSearchDebounceRef.current = window.setTimeout(() => {
-      setDebouncedQCode(qCode);
+    hospitalSearchDebounceRef.current = window.setTimeout(() => {
+      setDebouncedQSearch(qSearch);
     }, 300);
     return () => {
-      if (codeSearchDebounceRef.current) {
-        window.clearTimeout(codeSearchDebounceRef.current);
+      if (hospitalSearchDebounceRef.current) {
+        window.clearTimeout(hospitalSearchDebounceRef.current);
       }
     };
-  }, [qCode]);
-  
+  }, [qSearch]);
+
   // Reset về trang đầu khi filter thay đổi
   useEffect(() => {
     setPage(0);
-  }, [debouncedQName, debouncedQCode, qProvince, qStatus, qPriority, qPersonInCharge]);
+  }, [debouncedQSearch, qProvince, qStatus, qPriority, qPersonInCharge]);
 
   const [priorityOptions] = useState<EnumOption[]>(PRIORITY_FALLBACK);
   const [statusOptions] = useState<EnumOption[]>(STATUS_FALLBACK);
@@ -582,6 +798,8 @@ export default function HospitalsPage() {
 
   // Delete confirmation modal state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [maintenanceSwitchConfirmOpen, setMaintenanceSwitchConfirmOpen] = useState(false);
+  const [hospitalSaveConfirmOpen, setHospitalSaveConfirmOpen] = useState(false);
   const [hospitalToDelete, setHospitalToDelete] = useState<Hospital | null>(null);
   const [hasContracts, setHasContracts] = useState(false);
   const [checkingContracts, setCheckingContracts] = useState(false);
@@ -615,7 +833,18 @@ export default function HospitalsPage() {
     personInChargeName: "",
     maintenancePersonInChargeId: undefined,
     maintenancePersonInChargeName: "",
+    maintenanceExpiryDate: "",
   });
+
+  const statusFormSelectOptions = useMemo(() => {
+    const base = STATUS_FALLBACK.filter((o) => !STATUS_NAMES_EXCLUDED_FROM_FORM.has(o.name));
+    const cur = form.projectStatus;
+    if (cur && STATUS_NAMES_EXCLUDED_FROM_FORM.has(cur)) {
+      const extra = STATUS_FALLBACK.find((o) => o.name === cur);
+      return extra ? [...base, extra] : base;
+    }
+    return base;
+  }, [form.projectStatus]);
 
   const isEditing = !!editing?.id;
   const isViewing = !!viewing?.id;
@@ -627,6 +856,7 @@ export default function HospitalsPage() {
     setViewing(null);
     setError(null);
     setIsModalLoading(false);
+    setMaintenanceLeadEnabled(false);
   }
 
   // Hàm điền dữ liệu vào form từ object Hospital
@@ -652,7 +882,12 @@ export default function HospitalsPage() {
       personInChargeName: h.personInChargeName ?? "",
       maintenancePersonInChargeId: h.maintenancePersonInChargeId ?? undefined,
       maintenancePersonInChargeName: h.maintenancePersonInChargeName ?? "",
+      maintenanceExpiryDate: maintenanceExpiryToInputValue(h.maintenanceExpiryDate),
     });
+    const hasMaintenanceLead =
+      (h.maintenancePersonInChargeId != null && Number(h.maintenancePersonInChargeId) > 0) ||
+      (typeof h.maintenancePersonInChargeName === "string" && h.maintenancePersonInChargeName.trim().length > 0);
+    setMaintenanceLeadEnabled(hasMaintenanceLead);
   }
 
   // Hardware search for RemoteSelect
@@ -976,6 +1211,8 @@ export default function HospitalsPage() {
   const [hardwareOpt, setHardwareOpt] = useState<{ id: number; name: string } | null>(null);
   const [personInChargeOpt, setPersonInChargeOpt] = useState<ITUserOption | null>(null);
   const [maintenancePersonInChargeOpt, setMaintenancePersonInChargeOpt] = useState<ITUserOption | null>(null);
+  /** When false, maintenance PIC field is hidden and cleared; PUT sends 0 to clear on server. */
+  const [maintenanceLeadEnabled, setMaintenanceLeadEnabled] = useState(false);
 
   const [hisOptions, setHisOptions] = useState<Array<{ id: number; name: string }>>([]);
   const [itUserOptions, setItUserOptions] = useState<ITUserOption[]>([]);
@@ -1035,7 +1272,7 @@ export default function HospitalsPage() {
     } else {
       setPersonInChargeOpt(null);
     }
-    if (form.maintenancePersonInChargeId) {
+    if (maintenanceLeadEnabled && form.maintenancePersonInChargeId) {
       const name =
         viewing?.maintenancePersonInChargeName ??
         editing?.maintenancePersonInChargeName ??
@@ -1049,10 +1286,32 @@ export default function HospitalsPage() {
         email: email ?? null,
         phone: phone ?? null,
       });
+    } else if (
+      maintenanceLeadEnabled &&
+      !form.maintenancePersonInChargeId &&
+      typeof form.maintenancePersonInChargeName === "string" &&
+      form.maintenancePersonInChargeName.trim().length > 0
+    ) {
+      // Hiển thị tên khi API chỉ có tên (dữ liệu cũ); lưu lại cần chọn lại user hợp lệ nếu sửa
+      setMaintenancePersonInChargeOpt({
+        id: -1,
+        name: form.maintenancePersonInChargeName.trim(),
+        email: null,
+        phone: null,
+      });
     } else {
       setMaintenancePersonInChargeOpt(null);
     }
-  }, [open, form.personInChargeId, form.personInChargeName, form.maintenancePersonInChargeId, form.maintenancePersonInChargeName, viewing, editing]);
+  }, [
+    open,
+    maintenanceLeadEnabled,
+    form.personInChargeId,
+    form.personInChargeName,
+    form.maintenancePersonInChargeId,
+    form.maintenancePersonInChargeName,
+    viewing,
+    editing,
+  ]);
 
   // Load danh sách IT users cho dropdown filter
   useEffect(() => {
@@ -1118,8 +1377,7 @@ export default function HospitalsPage() {
       url.searchParams.set("size", String(size));
       
       // Thêm filter params
-      if (debouncedQName.trim()) url.searchParams.set("name", debouncedQName.trim());
-      if (debouncedQCode.trim()) url.searchParams.set("hospitalCode", debouncedQCode.trim());
+      if (debouncedQSearch.trim()) url.searchParams.set("keyword", debouncedQSearch.trim());
       if (qProvince.trim()) url.searchParams.set("province", qProvince.trim());
       if (qStatus.trim()) url.searchParams.set("status", qStatus.trim());
       if (qPriority.trim()) url.searchParams.set("priority", qPriority.trim());
@@ -1172,7 +1430,7 @@ export default function HospitalsPage() {
 
   useEffect(() => {
     fetchList();
-  }, [page, size, debouncedQName, debouncedQCode, qProvince, qStatus, qPriority, qPersonInCharge]);
+  }, [page, size, debouncedQSearch, qProvince, qStatus, qPriority, qPersonInCharge]);
 
   // Server đã filter rồi, dùng trực tiếp items
   const filtered = items;
@@ -1201,7 +1459,9 @@ export default function HospitalsPage() {
       personInChargeName: "",
       maintenancePersonInChargeId: undefined,
       maintenancePersonInChargeName: "",
+      maintenanceExpiryDate: "",
     });
+    setMaintenanceLeadEnabled(false);
     setOpen(true);
   }
 
@@ -1404,43 +1664,40 @@ export default function HospitalsPage() {
     }
   }
 
-  // ✅ onSubmit() - Dùng PUT khi isEditing là true
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!form.name.trim()) {
-      setError("Tên bệnh viện không được để trống");
-      return;
-    }
-    if (isViewing) return;
-    if (!canEdit) {
-      setError("Bạn không có quyền thực hiện thao tác này");
-      return;
-    }
-
+  /** Persist hospital (POST/PUT). Called after validations; closes save confirm in finally. */
+  async function performHospitalSave() {
     setLoading(true);
     setError(null);
 
     try {
       const nameValue = form.name.trim();
-      
-  const payload: any = {
-    hospitalCode: form.hospitalCode?.trim() || undefined,
-    name: nameValue,
-    address: form.address?.trim() || undefined,
-    contactEmail: form.contactEmail?.trim() || undefined,
-    contactNumber: form.contactNumber?.trim() || undefined,
-    province: form.province?.trim() || undefined,
-    hisSystemId: form.hisSystemId ?? undefined,
-    // hardwareId removed: Phần cứng sẽ được lấy từ hợp đồng (BusinessProject) khi tạo hợp đồng
-    projectStatus: form.projectStatus,
-  // project dates are handled by BusinessProject; do not send from Hospital
-    notes: form.notes?.trim() || undefined,
-    apiFile: form.apiFile || undefined,
-    priority: form.priority,
-    personInChargeId: form.personInChargeId ?? undefined,
-    maintenancePersonInChargeId: form.maintenancePersonInChargeId ?? undefined,
-    // assignedUserIds intentionally not sent from Hospital form
-  };
+
+      const payload: any = {
+        hospitalCode: form.hospitalCode?.trim() || undefined,
+        name: nameValue,
+        address: form.address?.trim() || undefined,
+        contactEmail: form.contactEmail?.trim() || undefined,
+        contactNumber: form.contactNumber?.trim() || undefined,
+        province: form.province?.trim() || undefined,
+        hisSystemId: form.hisSystemId ?? undefined,
+        projectStatus: form.projectStatus,
+        notes: form.notes?.trim() || undefined,
+        apiFile: form.apiFile || undefined,
+        priority: form.priority,
+        personInChargeId: form.personInChargeId ?? undefined,
+        maintenancePersonInChargeId: maintenanceLeadEnabled
+          ? typeof form.maintenancePersonInChargeId === "number" && form.maintenancePersonInChargeId > 0
+            ? form.maintenancePersonInChargeId
+            : undefined
+          : isEditing
+            ? 0
+            : undefined,
+        ...(isEditing
+          ? { maintenanceExpiryDate: (form.maintenanceExpiryDate ?? "").trim() }
+          : (form.maintenanceExpiryDate ?? "").trim()
+            ? { maintenanceExpiryDate: (form.maintenanceExpiryDate ?? "").trim() }
+            : {}),
+      };
 
       const method = isEditing ? "PUT" : "POST";
       const url = isEditing ? `${SUPERADMIN_BASE}/${editing!.id}` : SUPERADMIN_BASE;
@@ -1459,9 +1716,8 @@ export default function HospitalsPage() {
       }
 
       closeModal();
-      // Chỉ reset về trang 1 khi tạo mới, giữ nguyên trang hiện tại khi sửa
       if (!isEditing) {
-        setPage(0); // Reset trang 1 chỉ khi tạo mới
+        setPage(0);
       }
       await fetchList();
       toast.success(isEditing ? "Cập nhật thành công" : "Tạo thành công");
@@ -1470,7 +1726,45 @@ export default function HospitalsPage() {
       toast.error(e?.message || "Lưu thất bại");
     } finally {
       setLoading(false);
+      setHospitalSaveConfirmOpen(false);
     }
+  }
+
+  // ✅ onSubmit — with in-app confirm when "Chuyển sang bảo trì" is enabled
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.name.trim()) {
+      setError("Tên bệnh viện không được để trống");
+      return;
+    }
+    const hasMaintenancePicData =
+      (form.maintenancePersonInChargeId != null && Number(form.maintenancePersonInChargeId) > 0) ||
+      (typeof form.maintenancePersonInChargeName === "string" && form.maintenancePersonInChargeName.trim().length > 0);
+    if (maintenanceLeadEnabled && !hasMaintenancePicData) {
+      const msg = "Vui lòng chọn người phụ trách bảo trì hoặc bỏ tích \"Chuyển sang bảo trì\".";
+      setError(msg);
+      toast.error(msg);
+      return;
+    }
+    if (maintenanceLeadEnabled && form.projectStatus !== "COMPLETED") {
+      const msg =
+        "Chỉ khi trạng thái dự án là «Hoàn thành» mới được chuyển sang bảo trì. Vui lòng cập nhật trạng thái dự án hoặc bỏ tích.";
+      setError(msg);
+      toast.error(msg);
+      return;
+    }
+    if (isViewing) return;
+    if (!canEdit) {
+      setError("Bạn không có quyền thực hiện thao tác này");
+      return;
+    }
+
+    if (maintenanceLeadEnabled) {
+      setHospitalSaveConfirmOpen(true);
+      return;
+    }
+
+    await performHospitalSave();
   }
 
   // ✅ Pagination logic
@@ -1862,17 +2156,10 @@ export default function HospitalsPage() {
           <div className="flex flex-wrap items-center gap-3">
             <input
               type="text"
-              className="rounded-full border px-4 py-3 text-sm shadow-sm min-w-[220px] border-gray-300 bg-white"
-              placeholder="Tìm theo tên"
-              value={qName}
-              onChange={(e) => setQName(e.target.value)}
-            />
-            <input
-              type="text"
-              className="rounded-full border px-4 py-3 text-sm shadow-sm min-w-[220px] border-gray-300 bg-white"
-              placeholder="Tìm theo mã BV"
-              value={qCode}
-              onChange={(e) => setQCode(e.target.value)}
+              className="min-w-[260px] rounded-full border border-gray-300 bg-white px-4 py-3 text-sm shadow-sm"
+              placeholder="Tìm theo tên hoặc mã bệnh viện"
+              value={qSearch}
+              onChange={(e) => setQSearch(e.target.value)}
             />
             <FilterProvinceSelect
               value={qProvince}
@@ -1907,8 +2194,7 @@ export default function HospitalsPage() {
             <button
               type="button"
               onClick={() => {
-                setQName("");
-                setQCode("");
+                setQSearch("");
                 setQProvince("");
                 setQStatus("");
                 setQPriority("");
@@ -1946,6 +2232,8 @@ export default function HospitalsPage() {
               const apiMatch = h.notes ? (h.notes.match(/https?:\/\/[^\s)]+/i) ?? null) : null;
               const apiUrl = apiMatch ? apiMatch[0] : null;
               const showApiPill = !!apiUrl || (h.notes && /API/i.test(h.notes));
+              const maintBadge = getHospitalMaintenanceExpiryBadge(h);
+              const effKey = effectiveHospitalProjectStatusKey(h);
 
               return (
                 <div key={h.id} className="flex items-start gap-4" style={{ animation: `fadeInUp 600ms ease ${delayMs}ms both` }}>
@@ -1992,7 +2280,7 @@ export default function HospitalsPage() {
                         <div className="w-14 h-14 rounded-md bg-white border border-gray-100 flex flex-col items-center justify-center text-sm font-semibold text-gray-700 shadow-sm relative">
                           <span className="text-[10px] font-bold">{leftIndex}</span>
                           <div className="absolute -top-1 -right-1 flex space-x-1">
-                            <span className={`${getStatusBg(h.projectStatus)} w-3 h-3 rounded-full border-2 border-white`} />
+                            <span className={`${maintBadge ? maintBadge.dotBgClass : getStatusBg(effKey)} w-3 h-3 rounded-full border-2 border-white`} />
                             <span className={`${getPriorityBg(h.priority)} w-3 h-3 rounded-full border-2 border-white`} />
                           </div>
                         </div>
@@ -2019,10 +2307,20 @@ export default function HospitalsPage() {
                               Kiểm tra API
                             </a>
                           )}
-                          <span className="ml-2 text-xs text-gray-400">•</span>
-                          <span className="text-xs text-gray-500">{h.province || "—"}</span>
                           <span className="ml-2 inline-flex items-center">
-                            <span className={`inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(h.projectStatus)} bg-gray-50`}>{disp(statusMap, h.projectStatus)}</span>
+                            {maintBadge ? (
+                              <span
+                                className={`inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium ${maintBadge.pillTextClass} ${maintBadge.pillBgClass}`}
+                              >
+                                {maintBadge.label}
+                              </span>
+                            ) : (
+                              <span
+                                className={`inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(effKey)} bg-gray-50`}
+                              >
+                                {disp(statusMap, effKey)}
+                              </span>
+                            )}
                             <span className={`inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium ${getPriorityColor(h.priority)} bg-gray-50 ml-2`}>{disp(priorityMap, h.priority)}</span>
                           </span>
                         </div>
@@ -2298,23 +2596,73 @@ export default function HospitalsPage() {
                       </select>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <RemoteSelectPersonInCharge
-                      label="Phụ trách bảo trì"
-                      placeholder="Chọn người phụ trách bảo trì..."
-                      fetchOptions={searchMaintenanceUsers}
-                      value={maintenancePersonInChargeOpt}
-                      onChange={(v) => {
-                        setMaintenancePersonInChargeOpt(v);
-                        setForm((s) => ({
-                          ...s,
-                          maintenancePersonInChargeId: v ? v.id : undefined,
-                          maintenancePersonInChargeName: v ? v.name : "",
-                        }));
-                      }}
-                      disabled={isViewing || !canEdit}
-                    />
-                    <div className="hidden md:block" />
+                  <div className="space-y-3">
+                    <label className="flex cursor-pointer items-start gap-2.5 text-sm font-medium text-gray-800 dark:text-gray-100">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
+                        checked={maintenanceLeadEnabled}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          if (checked) {
+                            if (form.projectStatus !== "COMPLETED") {
+                              toast.error(
+                                "Yêu cầu chuyển 'Trạng thái dự án' thành HOÀN THÀNH trước khi bật chuyển sang bảo trì.",
+                              );
+                              return;
+                            }
+                            setMaintenanceSwitchConfirmOpen(true);
+                            return;
+                          }
+                          setMaintenanceLeadEnabled(false);
+                          setMaintenancePersonInChargeOpt(null);
+                          setForm((s) => ({
+                            ...s,
+                            maintenancePersonInChargeId: undefined,
+                            maintenancePersonInChargeName: "",
+                          }));
+                        }}
+                        disabled={isViewing || !canEdit}
+                      />
+                      <span>Chuyển sang bảo trì</span>
+                    </label>
+                    {!isViewing && form.projectStatus !== "COMPLETED" && (
+                      <p className="text-xs text-amber-800 dark:text-amber-200/90">
+                        Yêu cầu chuyển "Trạng thái dự án" thành HOÀN THÀNH trước khi bật chuyển sang bảo trì.
+                      </p>
+                    )}
+                    {maintenanceLeadEnabled && (
+                      <>
+                        <RemoteSelectPersonInCharge
+                          label="Phụ trách bảo trì"
+                          placeholder="Chọn người phụ trách bảo trì..."
+                          fetchOptions={searchMaintenanceUsers}
+                          value={maintenancePersonInChargeOpt}
+                          onChange={(v) => {
+                            setMaintenancePersonInChargeOpt(v);
+                            setForm((s) => ({
+                              ...s,
+                              maintenancePersonInChargeId: v ? v.id : undefined,
+                              maintenancePersonInChargeName: v ? v.name : "",
+                            }));
+                          }}
+                          disabled={isViewing || !canEdit}
+                        />
+                        <div>
+                          <label className="mb-2 block text-sm font-semibold text-gray-700">
+                            Hạn bảo trì{" "}
+                            <span className="font-normal text-gray-500 dark:text-gray-400">(không bắt buộc)</span>
+                          </label>
+                          <HospitalMaintenanceExpiryDateInput
+                            value={form.maintenanceExpiryDate ?? ""}
+                            onChange={(isoYmd) =>
+                              setForm((s) => ({ ...s, maintenanceExpiryDate: isoYmd }))
+                            }
+                            disabled={isViewing || !canEdit}
+                          />
+                        </div>
+                      </>
+                    )}
                   </div>
                   {/* Hardware selector - Đã bỏ: Phần cứng sẽ được lấy từ hợp đồng (BusinessProject) */}
                   {/* <div className="mt-2">
@@ -2477,10 +2825,27 @@ export default function HospitalsPage() {
                       required
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#4693FF] disabled:bg-gray-50"
                       value={form.projectStatus}
-                      onChange={(e) => setForm((s) => ({ ...s, projectStatus: e.target.value }))}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v !== "COMPLETED" && maintenanceLeadEnabled) {
+                          setMaintenanceLeadEnabled(false);
+                          setMaintenancePersonInChargeOpt(null);
+                          setForm((s) => ({
+                            ...s,
+                            projectStatus: v,
+                            maintenancePersonInChargeId: undefined,
+                            maintenancePersonInChargeName: "",
+                          }));
+                          toast("Đã tắt «Chuyển sang bảo trì» vì trạng thái dự án không còn Hoàn thành.", {
+                            duration: 4500,
+                          });
+                          return;
+                        }
+                        setForm((s) => ({ ...s, projectStatus: v }));
+                      }}
                       disabled={isViewing || !canEdit}
                     >
-                      {statusOptions.map((s) => (
+                      {statusFormSelectOptions.map((s) => (
                         <option key={s.name} value={s.name}>{s.displayName}</option>
                       ))}
                     </select>
@@ -2985,6 +3350,48 @@ export default function HospitalsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={maintenanceSwitchConfirmOpen}
+        title="Chuyển sang bảo trì"
+        message={
+          <div className="space-y-2">
+            <p>Công việc triển khai tại viện đã hoàn thành chưa?</p>
+            <p>Bạn có muốn chuyển sang giai đoạn bảo trì và gán phụ trách bảo trì không?</p>
+          </div>
+        }
+        confirmLabel="Có, tiếp tục"
+        cancelLabel="Huỷ"
+        onClose={() => setMaintenanceSwitchConfirmOpen(false)}
+        onConfirm={() => {
+          if (form.projectStatus !== "COMPLETED") {
+            toast.error("Trạng thái dự án phải là Hoàn thành mới có thể chuyển sang bảo trì.");
+            setMaintenanceSwitchConfirmOpen(false);
+            return;
+          }
+          setMaintenanceLeadEnabled(true);
+          setMaintenanceSwitchConfirmOpen(false);
+        }}
+      />
+
+      <ConfirmDialog
+        open={hospitalSaveConfirmOpen}
+        title={isEditing ? "Xác nhận cập nhật" : "Xác nhận lưu"}
+        message={
+          isEditing
+            ? "Bạn có chắc muốn cập nhật thông tin bệnh viện (kèm phụ trách bảo trì) không?"
+            : "Bạn có chắc muốn lưu bệnh viện mới (kèm phụ trách bảo trì) không?"
+        }
+        confirmLabel={isEditing ? "Cập nhật" : "Lưu"}
+        cancelLabel="Huỷ"
+        confirmLoading={loading}
+        onClose={() => {
+          if (!loading) setHospitalSaveConfirmOpen(false);
+        }}
+        onConfirm={async () => {
+          await performHospitalSave();
+        }}
+      />
 
       {/* Delete Confirmation Modal */}
       <AnimatePresence>

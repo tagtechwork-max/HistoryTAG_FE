@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import flatpickr from "flatpickr";
+import { Vietnamese } from "flatpickr/dist/l10n/vn";
 import "flatpickr/dist/flatpickr.css";
 import Label from "./Label";
 import { CalenderIcon } from "../../icons";
@@ -25,6 +26,7 @@ export default function DatePicker({
 }: PropsType) {
   useEffect(() => {
     const flatPickr = flatpickr(`#${id}`, {
+      locale: Vietnamese,
       mode: mode || "single",
       static: true,
       monthSelectorType: "static",

@@ -1,0 +1,382 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FiShare2 } from "react-icons/fi";
+import toast from "react-hot-toast";
+import flatpickr from "flatpickr";
+import { Vietnamese } from "flatpickr/dist/l10n/vn";
+
+type UserOpt = { id: number; label: string };
+type PreviewItem = { dateLabel: string; taskName: string; status: string; note: string };
+type PreviewData = {
+  fullName: string;
+  department: string;
+  title: string;
+  fromDateLabel: string;
+  toDateLabel: string;
+  allTasks: PreviewItem[];
+  incompleteTasks: PreviewItem[];
+};
+
+const API_BASE = import.meta.env.VITE_API_URL ?? "";
+
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+export default function WorkReportExportButton({ role }: { role: "admin" | "superadmin" }) {
+  const [open, setOpen] = useState(false);
+  const [users, setUsers] = useState<UserOpt[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<number | "">("");
+  const today = useMemo(() => new Date(), []);
+  const [fromDate, setFromDate] = useState<string>(
+    `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`,
+  );
+  const [toDate, setToDate] = useState<string>(
+    `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`,
+  );
+  const [loading, setLoading] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewData, setPreviewData] = useState<PreviewData | null>(null);
+  const fromDateRef = useRef<HTMLInputElement | null>(null);
+  const toDateRef = useRef<HTMLInputElement | null>(null);
+
+  const currentUser = useMemo(() => {
+    try {
+      const raw = localStorage.getItem("user") || sessionStorage.getItem("user");
+      const parsed = raw ? JSON.parse(raw) : null;
+      const id = Number(parsed?.id ?? parsed?.userId ?? localStorage.getItem("userId") ?? sessionStorage.getItem("userId"));
+      const label = String(
+        parsed?.fullname ?? parsed?.fullName ?? parsed?.name ?? parsed?.username ?? localStorage.getItem("username") ?? "Tài khoản hiện tại",
+      );
+      return Number.isFinite(id) && id > 0 ? { id, label } : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    if (role === "admin") {
+      if (currentUser) {
+        setUsers([{ id: currentUser.id, label: currentUser.label }]);
+        setSelectedUserId(currentUser.id);
+      } else {
+        setUsers([]);
+        setSelectedUserId("");
+      }
+      return;
+    }
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/${role}/users/search?name=&limit=200`, {
+          headers: { ...authHeaders() },
+          credentials: "include",
+        });
+        if (!res.ok || !alive) return;
+        const list = await res.json();
+        const mapped: UserOpt[] = Array.isArray(list)
+          ? list
+              .map((u: any) => ({
+                id: Number(u.id),
+                label: String(u.label ?? u.name ?? u.fullName ?? u.fullname ?? u.id),
+              }))
+              .filter((u: UserOpt) => Number.isFinite(u.id) && u.label)
+          : [];
+        if (alive) setUsers(mapped);
+      } catch {
+        if (alive) setUsers([]);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [open, role, currentUser]);
+
+  useEffect(() => {
+    if (!open) return;
+    const fromEl = fromDateRef.current;
+    const toEl = toDateRef.current;
+    if (!fromEl || !toEl) return;
+
+    const fromFp = flatpickr(fromEl, {
+      locale: Vietnamese,
+      dateFormat: "Y-m-d",
+      defaultDate: fromDate || undefined,
+      static: true,
+      monthSelectorType: "static",
+      onChange: (selectedDates) => {
+        const d = selectedDates?.[0];
+        if (!d) return;
+        const v = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        setFromDate(v);
+      },
+    });
+
+    const toFp = flatpickr(toEl, {
+      locale: Vietnamese,
+      dateFormat: "Y-m-d",
+      defaultDate: toDate || undefined,
+      static: true,
+      monthSelectorType: "static",
+      onChange: (selectedDates) => {
+        const d = selectedDates?.[0];
+        if (!d) return;
+        const v = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        setToDate(v);
+      },
+    });
+
+    return () => {
+      fromFp.destroy();
+      toFp.destroy();
+    };
+  }, [open]);
+
+  const onExport = async () => {
+    if (!selectedUserId) {
+      toast.error("Chọn nhân sự cần xuất báo cáo");
+      return;
+    }
+    if (!fromDate || !toDate) {
+      toast.error("Vui lòng chọn từ ngày và đến ngày");
+      return;
+    }
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        userId: String(selectedUserId),
+        fromDate,
+        toDate,
+      });
+      const res = await fetch(`${API_BASE}/api/v1/${role}/reports/work-report/export?${params.toString()}`, {
+        headers: { ...authHeaders() },
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      const userName = users.find((u) => u.id === selectedUserId)?.label || "nhan-su";
+      a.href = url;
+      a.download = `bao-cao-cong-viec-${userName.replace(/\s+/g, "-")}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success("Xuất báo cáo thành công");
+      setOpen(false);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Xuất báo cáo thất bại");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onPreview = async () => {
+    if (!selectedUserId) {
+      toast.error("Chọn nhân sự cần xem báo cáo");
+      return;
+    }
+    if (!fromDate || !toDate) {
+      toast.error("Vui lòng chọn từ ngày và đến ngày");
+      return;
+    }
+    setPreviewLoading(true);
+    try {
+      const params = new URLSearchParams({
+        userId: String(selectedUserId),
+        fromDate,
+        toDate,
+      });
+      const res = await fetch(`${API_BASE}/api/v1/${role}/reports/work-report/preview?${params.toString()}`, {
+        headers: { ...authHeaders() },
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || `HTTP ${res.status}`);
+      }
+      const data = (await res.json()) as PreviewData;
+      setPreviewData(data);
+      setPreviewOpen(true);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Xem trước báo cáo thất bại");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-2 rounded-lg border border-blue-500 bg-white px-3 py-2 text-sm font-semibold text-blue-700 shadow-sm hover:bg-blue-50 dark:border-blue-400 dark:bg-slate-800 dark:text-blue-200 dark:hover:bg-slate-700"
+      >
+        <FiShare2 className="h-4 w-4" />
+        Xuất báo cáo
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-xl bg-white p-5 dark:bg-slate-900">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Xuất báo cáo công việc</h3>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium">Nhân sự</label>
+                <select
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value ? Number(e.target.value) : "")}
+                  disabled={role === "admin"}
+                >
+                  <option value="">{role === "admin" ? "-- Tài khoản hiện tại --" : "-- Chọn nhân sự --"}</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Từ ngày</label>
+                  <input
+                    ref={fromDateRef}
+                    type="text"
+                    readOnly
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
+                    value={fromDate}
+                    onChange={() => {}}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Đến ngày</label>
+                  <input
+                    ref={toDateRef}
+                    type="text"
+                    readOnly
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
+                    value={toDate}
+                    onChange={() => {}}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={onPreview}
+                disabled={previewLoading}
+                className="rounded-lg border border-blue-500 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-60 dark:border-blue-400 dark:text-blue-300 dark:hover:bg-slate-800"
+              >
+                {previewLoading ? "Đang tải..." : "Xem trước"}
+              </button>
+              <button
+                type="button"
+                onClick={onExport}
+                disabled={loading}
+                className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+              >
+                {loading ? "Đang xuất..." : "Xuất file"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {previewOpen && previewData && (
+        <div className="fixed inset-0 z-[110] overflow-y-auto bg-black/50 p-4">
+          <div className="mx-auto flex max-h-[90vh] w-full max-w-5xl flex-col rounded-xl bg-white text-slate-900 shadow-xl dark:bg-slate-900 dark:text-slate-100">
+            <div className="overflow-y-auto p-6">
+              <div className="font-['Times_New_Roman'] text-[18px] leading-8">
+              <p className="text-center font-bold">CÔNG TY CỔ PHẦN GIẢI PHÁP CÔNG NGHỆ TAG VIỆT NAM</p>
+              <h3 className="mt-3 text-center text-[38px] font-bold leading-tight">Báo cáo công việc</h3>
+              <p className="text-center font-bold">
+                (Từ ngày {previewData.fromDateLabel} đến ngày {previewData.toDateLabel})
+              </p>
+              <p className="mt-2 text-center font-bold">Kính gửi: Trưởng bộ phận kỹ thuật kiosk</p>
+              <div className="mt-3 space-y-1">
+                <p>
+                  <span className="font-bold underline">Họ và tên:</span> {previewData.fullName}
+                </p>
+                <p>
+                  <span className="font-bold underline">Bộ phận:</span> {previewData.department}
+                </p>
+                <p>
+                  <span className="font-bold underline">Chức danh:</span> {previewData.title}
+                </p>
+              </div>
+              <p className="mt-3 font-bold underline">1. Chi tiết công việc</p>
+              <table className="mt-2 w-full border-collapse border border-slate-400 text-[16px]">
+                <thead>
+                  <tr>
+                    <th className="border border-slate-400 px-2 py-1 text-left font-bold">Ngày</th>
+                    <th className="border border-slate-400 px-2 py-1 text-left font-bold">Nội dung công việc</th>
+                    <th className="border border-slate-400 px-2 py-1 text-left font-bold">Trạng thái</th>
+                    <th className="border border-slate-400 px-2 py-1 text-left font-bold">Ghi chú</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewData.allTasks.map((r, idx) => (
+                    <tr key={`all-${idx}`}>
+                      <td className="border border-slate-400 px-2 py-1">{r.dateLabel}</td>
+                      <td className="border border-slate-400 px-2 py-1">{r.taskName}</td>
+                      <td className="border border-slate-400 px-2 py-1">{r.status}</td>
+                      <td className="border border-slate-400 px-2 py-1">{r.note}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="mt-3 font-bold underline">2. Công việc chưa hoàn thành</p>
+              <table className="mt-2 w-full border-collapse border border-slate-400 text-[16px]">
+                <thead>
+                  <tr>
+                    <th className="border border-slate-400 px-2 py-1 text-left font-bold">Ngày</th>
+                    <th className="border border-slate-400 px-2 py-1 text-left font-bold">Nội dung công việc</th>
+                    <th className="border border-slate-400 px-2 py-1 text-left font-bold">Trạng thái</th>
+                    <th className="border border-slate-400 px-2 py-1 text-left font-bold">Ghi chú</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewData.incompleteTasks.map((r, idx) => (
+                    <tr key={`in-${idx}`}>
+                      <td className="border border-slate-400 px-2 py-1">{r.dateLabel}</td>
+                      <td className="border border-slate-400 px-2 py-1">{r.taskName}</td>
+                      <td className="border border-slate-400 px-2 py-1">{r.status}</td>
+                      <td className="border border-slate-400 px-2 py-1">{r.note}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            </div>
+            <div className="flex justify-end border-t border-slate-200 p-4 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => setPreviewOpen(false)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm dark:border-slate-600"
+              >
+                Đóng xem trước
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+

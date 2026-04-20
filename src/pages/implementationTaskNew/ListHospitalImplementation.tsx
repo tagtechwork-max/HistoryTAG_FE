@@ -19,6 +19,8 @@ import {
 import api from "../../api/client";
 import { useWebSocket } from "../../contexts/WebSocketContext";
 import toast from "react-hot-toast";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import { IMPL_TASKS_LIST_SEARCH_KEY, type ImplTasksLocationState } from "./SubImplementationTask/implListNav";
 
 type PendingImplementationTask = {
@@ -185,10 +187,10 @@ function getStatusDisplay(row: ImplementationTaskListItem, health: string, healt
     }
 
     return {
-      bg: "bg-yellow-50 dark:bg-yellow-900/20",
-      text: "text-yellow-700 dark:text-yellow-300",
-      dot: "bg-yellow-500",
-      label: "Chờ tiếp nhận",
+      bg: "bg-sky-50 dark:bg-sky-900/25",
+      text: "text-sky-800 dark:text-sky-200",
+      dot: "bg-sky-500",
+      label: "Đang bảo trì — chờ bảo trì tiếp nhận",
     };
   }
 
@@ -275,6 +277,7 @@ export default function ListHospitalImplementation() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { subscribe } = useWebSocket();
+  const { ask: askConfirm, dialog: confirmAskDialog } = useConfirmDialog();
   const isSuperAdmin = location.pathname.startsWith("/superadmin");
   const [search, setSearch] = useState("");
   const [ownerFilterIds, setOwnerFilterIds] = useState<string[]>([]);
@@ -331,6 +334,10 @@ export default function ListHospitalImplementation() {
   const [pendingOpen, setPendingOpen] = useState(false);
   const [pendingGroups, setPendingGroups] = useState<PendingGroup[]>([]);
   const [loadingPending, setLoadingPending] = useState(false);
+  const [transferToMaintenanceOpen, setTransferToMaintenanceOpen] = useState(false);
+  const [transferToMaintenanceTaskId, setTransferToMaintenanceTaskId] = useState<string | null>(null);
+  const [transferToMaintenanceHospitalName, setTransferToMaintenanceHospitalName] = useState("");
+  const [transferToMaintenanceLoading, setTransferToMaintenanceLoading] = useState(false);
   /** Summary of hospitals/kiosks in "chăm sóc" status from business (phòng kinh doanh). Filled by API when available. */
   const [careStatusSummary, setCareStatusSummary] = useState<{ hospitalCount: number; kioskCount: number }>({
     hospitalCount: 0,
@@ -761,7 +768,13 @@ export default function ListHospitalImplementation() {
       return;
     }
     if (action === "delete") {
-      if (!window.confirm("Bạn có chắc muốn xóa bệnh viện này khỏi danh sách triển khai?")) return;
+      const ok = await askConfirm({
+        title: "Xóa khỏi danh sách triển khai?",
+        message: "Bạn có chắc muốn xóa bệnh viện này khỏi danh sách triển khai? Hành động này không thể hoàn tác.",
+        variant: "danger",
+        confirmLabel: "Xóa",
+      });
+      if (!ok) return;
       try {
         await deleteImplementationTask(id);
         loadData();
@@ -776,6 +789,10 @@ export default function ListHospitalImplementation() {
         toast.error("Không tìm thấy dữ liệu bệnh viện để chuyển bảo trì");
         return;
       }
+      if (row.transferredToMaintenance === true) {
+        toast.error("Bệnh viện này đã được chuyển sang bảo trì.");
+        return;
+      }
 
       const display = getRowDisplay(row, milestonesByTaskId[String(row.id)]);
       if (display.health !== "completed") {
@@ -783,21 +800,9 @@ export default function ListHospitalImplementation() {
         return;
       }
 
-      if (!window.confirm("Bạn có chắc muốn chuyển bệnh viện này sang bảo trì?")) return;
-      try {
-        const detail = await fetchImplementationTaskDetail(id);
-        const hospitalId = detail?.hospitalId;
-        if (!hospitalId) {
-          toast.error("Không xác định được bệnh viện để chuyển bảo trì");
-          return;
-        }
-
-        await api.post(`/api/v1/admin/hospitals/${hospitalId}/transfer-to-maintenance`);
-        toast.success("Đã chuyển bảo trì thành công");
-        loadData();
-      } catch (e) {
-        toast.error(getApiErrorMessage(e, "Lỗi chuyển bảo trì"));
-      }
+      setTransferToMaintenanceTaskId(String(id));
+      setTransferToMaintenanceHospitalName((row.hospitalName || "").trim() || "bệnh viện này");
+      setTransferToMaintenanceOpen(true);
     }
   };
 
@@ -1393,6 +1398,58 @@ export default function ListHospitalImplementation() {
         forceDeadlineEdit={isSuperAdmin}
       />
 
+      <ConfirmDialog
+        open={transferToMaintenanceOpen}
+        title="Chuyển sang bảo trì"
+        message={
+          <div className="space-y-2">
+            <p>
+              Bạn có chắc muốn chuyển{" "}
+              <span className="font-semibold text-slate-800 dark:text-slate-100">
+                {transferToMaintenanceHospitalName}
+              </span>{" "}
+              sang bảo trì?
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Viện sẽ ở trạng thái đang bảo trì (chờ bộ phận bảo trì tiếp nhận). Không cần chọn người phụ trách bảo trì ở bước này; luồng tiếp nhận từ triển khai giữ nguyên.
+            </p>
+          </div>
+        }
+        confirmLabel="Chuyển bảo trì"
+        cancelLabel="Huỷ"
+        confirmLoading={transferToMaintenanceLoading}
+        onClose={() => {
+          if (!transferToMaintenanceLoading) {
+            setTransferToMaintenanceOpen(false);
+            setTransferToMaintenanceTaskId(null);
+            setTransferToMaintenanceHospitalName("");
+          }
+        }}
+        onConfirm={async () => {
+          const taskId = transferToMaintenanceTaskId;
+          if (!taskId) return;
+          setTransferToMaintenanceLoading(true);
+          try {
+            const detail = await fetchImplementationTaskDetail(taskId);
+            const hospitalId = detail?.hospitalId;
+            if (!hospitalId) {
+              toast.error("Không xác định được bệnh viện để chuyển sang bảo trì");
+              return;
+            }
+            await api.post(`/api/v1/admin/hospitals/${hospitalId}/transfer-to-maintenance`);
+            toast.success("Đã chuyển bảo trì thành công");
+            loadData();
+            setTransferToMaintenanceOpen(false);
+            setTransferToMaintenanceTaskId(null);
+            setTransferToMaintenanceHospitalName("");
+          } catch (e) {
+            toast.error(getApiErrorMessage(e, "Lỗi chuyển bảo trì"));
+          } finally {
+            setTransferToMaintenanceLoading(false);
+          }
+        }}
+      />
+
       {/* Action menu portal - fixed position so it overlays and stays visible */}
       {openMenuId &&
         menuAnchor &&
@@ -1445,16 +1502,18 @@ export default function ListHospitalImplementation() {
                   <TrashBinIcon className="size-4 shrink-0" />
                   Xóa
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleAction(String(row.id), "transfer")}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-                >
-                  <svg className="size-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                  </svg>
-                  Chuyển bảo trì
-                </button>
+                {!row.transferredToMaintenance && (
+                  <button
+                    type="button"
+                    onClick={() => handleAction(String(row.id), "transfer")}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                  >
+                    <svg className="size-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                    Chuyển bảo trì
+                  </button>
+                )}
               </div>
             );
           })(),
@@ -1543,6 +1602,7 @@ export default function ListHospitalImplementation() {
           </div>
         </div>
       )}
+      {confirmAskDialog}
     </>
   );
 }
