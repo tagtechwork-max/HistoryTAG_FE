@@ -15,8 +15,8 @@ export function TaskFormModalCuratorView(props: {
     isTransferred: boolean;
     model: Partial<ImplementationTaskRequestDTO>;
     setModel: React.Dispatch<React.SetStateAction<Partial<ImplementationTaskRequestDTO>>>;
-    hospitalOpt: { id: number; name: string } | null;
-    setHospitalOpt: (v: { id: number; name: string } | null) => void;
+    hospitalOpt: { id: number; name: string; facilityType?: "HOSPITAL" | "HCC" } | null;
+    setHospitalOpt: (v: { id: number; name: string; facilityType?: "HOSPITAL" | "HCC" } | null) => void;
     picOpts: Array<{ id: number; name: string; _uid: string }>;
     removePic: (uid: string) => void;
     /** Move PIC with this uid to index 0 (primary). */
@@ -24,9 +24,11 @@ export function TaskFormModalCuratorView(props: {
     currentPicInput: { id: number; name: string } | null;
     setCurrentPicInput: (v: { id: number; name: string } | null) => void;
     setPicOpts: React.Dispatch<React.SetStateAction<Array<{ id: number; name: string; _uid: string }>>>;
-    searchHospitals: (term: string) => Promise<Array<{ id: number; name: string }>>;
+    searchHospitals: (term: string) => Promise<Array<{ id: number; name: string; facilityType?: "HOSPITAL" | "HCC" }>>;
     /** When set, hospital dropdown uses this list (same as hospital page) instead of API search. */
     hospitalStaticOptions?: Array<{ id: number; name: string }>;
+    /** Merged into static-filtered options (superadmin HCC search). */
+    hospitalRemoteSupplement?: (term: string) => Promise<Array<{ id: number; name: string }>>;
     searchPICs: (term: string) => Promise<Array<{ id: number; name: string }>>;
     excludeAccepted: boolean;
     STATUS_OPTIONS: Array<{ value: string; label: string }>;
@@ -68,6 +70,7 @@ export function TaskFormModalCuratorView(props: {
         setPicOpts,
         searchHospitals,
         hospitalStaticOptions,
+        hospitalRemoteSupplement,
         searchPICs,
         excludeAccepted,
         STATUS_OPTIONS,
@@ -162,25 +165,26 @@ export function TaskFormModalCuratorView(props: {
 
                             <div className="grid min-w-0 max-w-full grid-cols-1 items-start gap-4 sm:grid-cols-2">
                                 {lockHospital ? (
-                                    <Field label="Bệnh viện" required variant="curator">
+                                    <Field label="Bệnh viện / HCC" required variant="curator">
                                         <div className="flex min-h-[2.75rem] min-w-0 max-w-full items-start rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-normal leading-snug text-slate-900 whitespace-normal break-words dark:border-slate-600 dark:bg-slate-900/80 dark:text-slate-100">
                                             {hospitalOpt?.name || "-"}
                                         </div>
                                     </Field>
                                 ) : (
                                     <RemoteSelect
-                                        label="Bệnh viện"
+                                        label="Bệnh viện / HCC"
                                         fieldVariant="curator"
                                         curator
                                         trailing="chevron"
                                         required
-                                        placeholder="Chọn bệnh viện"
+                                        placeholder="Tìm bệnh viện hoặc HCC…"
                                         fetchOptions={searchHospitals}
                                         staticOptions={
                                             hospitalStaticOptions && hospitalStaticOptions.length > 0
                                                 ? hospitalStaticOptions
                                                 : undefined
                                         }
+                                        remoteSupplement={hospitalRemoteSupplement}
                                         value={hospitalOpt}
                                         onChange={setHospitalOpt}
                                         disabled={readOnly || lockHospital}
