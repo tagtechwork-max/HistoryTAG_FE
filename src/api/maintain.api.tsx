@@ -52,6 +52,7 @@ export type MaintainContractResponseDTO = {
   updatedAt?: string | null;
   paymentStatus: "CHUA_THANH_TOAN" | "DA_THANH_TOAN" | "THANH_TOAN_HET";
   paidAmount?: number | null; // Số tiền đã thanh toán
+  paymentDate?: string | null; // Ngày thanh toán
 };
 
 export type MaintainContractRequestDTO = {
@@ -69,6 +70,7 @@ export type MaintainContractRequestDTO = {
   linkedContractId?: number | null; // ID hợp đồng liên kết (nếu có)
   paymentStatus: "CHUA_THANH_TOAN" | "DA_THANH_TOAN" | "THANH_TOAN_HET";
   paidAmount?: number | null; // Số tiền đã thanh toán
+  paymentDate?: string | null; // Ngày thanh toán
 };
 
 export async function createMaintainContract(payload: MaintainContractRequestDTO, canManage: boolean = false) {

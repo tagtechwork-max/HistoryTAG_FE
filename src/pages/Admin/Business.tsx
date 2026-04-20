@@ -88,6 +88,7 @@ const BusinessPage: React.FC = () => {
   const [paymentStatusValue, setPaymentStatusValue] = useState<'CHUA_THANH_TOAN' | 'DA_THANH_TOAN' | 'THANH_TOAN_HET'>('CHUA_THANH_TOAN');
   const [paidAmount, setPaidAmount] = useState<number | ''>('');
   const [paidAmountDisplay, setPaidAmountDisplay] = useState<string>('');
+  const [paymentDateValue, setPaymentDateValue] = useState<string>('');
   const [exporting, setExporting] = useState(false);
   const [notes, setNotes] = useState<string>('');
   const [attachments, setAttachments] = useState<Array<{ url: string; fileName: string }>>([]);
@@ -117,6 +118,7 @@ const BusinessPage: React.FC = () => {
     implementationCompleted?: boolean | null;
     paymentStatus?: string | null;
     paidAmount?: number | null;
+    paymentDate?: string | null;
   };
 
   function formatDateShort(value?: string | null) {
@@ -369,6 +371,7 @@ const BusinessPage: React.FC = () => {
           implementationCompleted: Boolean(c['implementationCompleted']),
           paymentStatus: (c['paymentStatus'] ?? c['payment_status'] ?? null) as string | null,
           paidAmount: c['paidAmount'] != null ? Number(String(c['paidAmount'])) : null,
+          paymentDate: (c['paymentDate'] ?? c['payment_date'] ?? null) as string | null,
         } as BusinessItem;
       });
       const locallyFiltered = applyLocalDateFilter(normalized);
@@ -802,6 +805,11 @@ const BusinessPage: React.FC = () => {
         }
       }
     }
+    if (paymentStatusValue === 'DA_THANH_TOAN' || paymentStatusValue === 'THANH_TOAN_HET') {
+      if (!paymentDateValue || paymentDateValue.trim() === '') {
+        errors.paymentDateValue = 'Vui lòng nhập ngày thanh toán';
+      }
+    }
 
     // Ensure startDate is set (default to now) so backend always receives a start date
     const finalStart = startDateValue && startDateValue.trim() !== '' ? startDateValue : nowDateTimeLocal();
@@ -874,6 +882,10 @@ const BusinessPage: React.FC = () => {
         paymentStatusValue === 'THANH_TOAN_HET'
           ? (finalUnitPrice != null && quantity ? finalUnitPrice * (typeof quantity === 'number' ? quantity : 0) : null)
           : (paymentStatusValue === 'DA_THANH_TOAN' && typeof paidAmount === 'number' ? paidAmount : null),
+      paymentDate:
+        (paymentStatusValue === 'DA_THANH_TOAN' || paymentStatusValue === 'THANH_TOAN_HET')
+          ? toLocalDateTimeStr(paymentDateValue ? `${paymentDateValue}T00:00` : null)
+          : null,
       notes: notes?.trim() || null,
       attachmentUrls: attachments.map(a => a.url),
     };
@@ -1094,6 +1106,7 @@ const BusinessPage: React.FC = () => {
           bankContactPerson: (c['bankContactPerson'] ?? c['bank_contact_person'] ?? '') as string,
           paymentStatus: (c['paymentStatus'] ?? c['payment_status'] ?? 'CHUA_THANH_TOAN') as string,
           paidAmount: c['paidAmount'] != null ? Number(String(c['paidAmount'])) : null,
+          paymentDate: (c['paymentDate'] ?? c['payment_date'] ?? null) as string | null,
           implementationCompleted: Boolean(c['implementationCompleted']),
         };
       });
@@ -1624,6 +1637,12 @@ const BusinessPage: React.FC = () => {
         setPaidAmount('');
         setPaidAmountDisplay('');
       }
+      const paymentDateRaw = (res as any).paymentDate ?? (res as any).payment_date ?? null;
+      if (paymentDateRaw && typeof paymentDateRaw === 'string') {
+        setPaymentDateValue(paymentDateRaw.slice(0, 10));
+      } else {
+        setPaymentDateValue('');
+      }
       setNotes(res.notes ?? '');
       setAttachments(Array.isArray(res.attachments) ? res.attachments : []);
       setFieldErrors({});
@@ -2049,6 +2068,7 @@ const BusinessPage: React.FC = () => {
               setPaymentStatusValue('CHUA_THANH_TOAN');
               setPaidAmount('');
               setPaidAmountDisplay('');
+              setPaymentDateValue('');
               setNotes('');
               setAttachments([]);
               setShowModal(true);
@@ -2670,6 +2690,7 @@ const BusinessPage: React.FC = () => {
                           } else {
                             setPaidAmount('');
                             setPaidAmountDisplay('');
+                            setPaymentDateValue('');
                           }
                         }}
                         className="w-full rounded border px-3 py-2"
@@ -2682,44 +2703,62 @@ const BusinessPage: React.FC = () => {
 
                     {/* Số tiền thanh toán - chỉ hiện khi DA_THANH_TOAN hoặc THANH_TOAN_HET */}
                     {(paymentStatusValue === 'DA_THANH_TOAN' || paymentStatusValue === 'THANH_TOAN_HET') && (
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          {paymentStatusValue === 'THANH_TOAN_HET' ? 'Số tiền thanh toán (= Thành tiền)' : 'Số tiền thanh toán*'}
-                        </label>
-                        <input
-                          type="text"
-                          required={paymentStatusValue === 'DA_THANH_TOAN'}
-                          disabled={paymentStatusValue === 'THANH_TOAN_HET'}
-                          value={paidAmountDisplay || (paidAmount !== '' ? formatNumber(paidAmount) : '')}
-                          onChange={(e) => {
-                            const parsed = parseFormattedNumber(e.target.value);
-                            setPaidAmount(parsed);
-                            if (parsed !== '') {
-                              setPaidAmountDisplay(formatNumber(parsed));
-                            } else {
-                              setPaidAmountDisplay('');
-                            }
-                            clearFieldError('paidAmount');
-                          }}
-                          onBlur={() => {
-                            if (paidAmount !== '') {
-                              setPaidAmountDisplay(formatNumber(paidAmount));
-                            } else {
-                              setPaidAmountDisplay('');
-                            }
-                          }}
-                          onFocus={() => {
-                            if (paidAmount !== '') {
-                              setPaidAmountDisplay(formatNumber(paidAmount));
-                            }
-                          }}
-                          placeholder="Nhập số tiền đã thanh toán"
-                          className={`w-full rounded border px-3 py-2 ${
-                            fieldErrors.paidAmount ? 'border-red-500' : paymentStatusValue === 'THANH_TOAN_HET' ? 'border-green-400 bg-green-50' : ''
-                          }`}
-                        />
-                        {fieldErrors.paidAmount && <div className="mt-1 text-sm text-red-600">{fieldErrors.paidAmount}</div>}
-                      </div>
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">
+                            {paymentStatusValue === 'THANH_TOAN_HET' ? 'Số tiền thanh toán (= Thành tiền)' : 'Số tiền thanh toán*'}
+                          </label>
+                          <input
+                            type="text"
+                            required={paymentStatusValue === 'DA_THANH_TOAN'}
+                            disabled={paymentStatusValue === 'THANH_TOAN_HET'}
+                            value={paidAmountDisplay || (paidAmount !== '' ? formatNumber(paidAmount) : '')}
+                            onChange={(e) => {
+                              const parsed = parseFormattedNumber(e.target.value);
+                              setPaidAmount(parsed);
+                              if (parsed !== '') {
+                                setPaidAmountDisplay(formatNumber(parsed));
+                              } else {
+                                setPaidAmountDisplay('');
+                              }
+                              clearFieldError('paidAmount');
+                            }}
+                            onBlur={() => {
+                              if (paidAmount !== '') {
+                                setPaidAmountDisplay(formatNumber(paidAmount));
+                              } else {
+                                setPaidAmountDisplay('');
+                              }
+                            }}
+                            onFocus={() => {
+                              if (paidAmount !== '') {
+                                setPaidAmountDisplay(formatNumber(paidAmount));
+                              }
+                            }}
+                            placeholder="Nhập số tiền đã thanh toán"
+                            className={`w-full rounded border px-3 py-2 ${
+                              fieldErrors.paidAmount ? 'border-red-500' : paymentStatusValue === 'THANH_TOAN_HET' ? 'border-green-400 bg-green-50' : ''
+                            }`}
+                          />
+                          {fieldErrors.paidAmount && <div className="mt-1 text-sm text-red-600">{fieldErrors.paidAmount}</div>}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Ngày thanh toán*</label>
+                          <input
+                            type="date"
+                            required
+                            value={paymentDateValue}
+                            onChange={(e) => {
+                              setPaymentDateValue(e.target.value);
+                              clearFieldError('paymentDateValue');
+                            }}
+                            className={`w-full rounded border px-3 py-2 ${
+                              fieldErrors.paymentDateValue ? 'border-red-500' : ''
+                            }`}
+                          />
+                          {fieldErrors.paymentDateValue && <div className="mt-1 text-sm text-red-600">{fieldErrors.paymentDateValue}</div>}
+                        </div>
+                      </>
                     )}
 
                     <div className="col-span-2 grid grid-cols-2 gap-4">
@@ -2935,15 +2974,16 @@ const BusinessPage: React.FC = () => {
                       <tr>
                         <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">STT</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Bệnh viện</th>
+                        <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Đơn giá</th>
+                        <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Thành tiền</th>
+                        <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Còn lại</th>
+                        <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Ngày thanh toán</th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Mã hợp đồng</th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Người phụ trách</th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Phần cứng</th>
                         <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">SL</th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Thanh toán</th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Trạng thái</th>
-                        <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Đơn giá</th>
-                        <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Thành tiền</th>
-                        <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Còn lại</th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Bảo hành</th>
                         <th className="sticky right-0 z-10 whitespace-nowrap border-l border-gray-200 bg-gray-50 px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400 dark:shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.3)]">
                           Thao tác
@@ -2953,7 +2993,7 @@ const BusinessPage: React.FC = () => {
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
                       {items.length === 0 ? (
                         <tr>
-                          <td colSpan={13} className="px-3 py-12 text-center text-gray-500 dark:text-gray-400">
+                          <td colSpan={14} className="px-3 py-12 text-center text-gray-500 dark:text-gray-400">
                             <div className="flex flex-col items-center">
                               <svg className="mb-3 h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
@@ -2984,6 +3024,32 @@ const BusinessPage: React.FC = () => {
                                 {it.hospitalPhone && (
                                   <div className="text-xs text-gray-500 mt-0.5">{it.hospitalPhone}</div>
                                 )}
+                              </td>
+                              {/* Đơn giá */}
+                              <td className="whitespace-nowrap px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300">
+                                {it.unitPrice != null ? it.unitPrice.toLocaleString('vi-VN') + ' ₫' : '—'}
+                              </td>
+                              {/* Thành tiền */}
+                              <td className="whitespace-nowrap px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                                {it.totalPrice != null ? it.totalPrice.toLocaleString('vi-VN') + ' ₫' : '—'}
+                              </td>
+                              {/* Còn lại */}
+                              <td className="whitespace-nowrap px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300">
+                                {(() => {
+                                  const total = it.totalPrice ?? 0;
+                                  const paid = (typeof it.paidAmount === 'number' ? it.paidAmount : 0);
+                                  const remaining = total - paid;
+                                  if (total === 0 && paid === 0) return '—';
+                                  return (
+                                    <span className={remaining <= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
+                                      {remaining <= 0 ? '0 ₫' : remaining.toLocaleString('vi-VN') + ' ₫'}
+                                    </span>
+                                  );
+                                })()}
+                              </td>
+                              {/* Ngày thanh toán */}
+                              <td className="whitespace-nowrap px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300">
+                                {it.paymentDate ? formatDateShort(it.paymentDate) : '—'}
                               </td>
                               {/* Mã hợp đồng */}
                               <td className="whitespace-nowrap px-4 py-3">
@@ -3049,28 +3115,7 @@ const BusinessPage: React.FC = () => {
                                   )}
                                 </div>
                               </td>
-                              {/* Đơn giá */}
-                              <td className="whitespace-nowrap px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300">
-                                {it.unitPrice != null ? it.unitPrice.toLocaleString('vi-VN') + ' ₫' : '—'}
-                              </td>
-                              {/* Thành tiền */}
-                              <td className="whitespace-nowrap px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                                {it.totalPrice != null ? it.totalPrice.toLocaleString('vi-VN') + ' ₫' : '—'}
-                              </td>
-                              {/* Còn lại */}
-                              <td className="whitespace-nowrap px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300">
-                                {(() => {
-                                  const total = it.totalPrice ?? 0;
-                                  const paid = (typeof it.paidAmount === 'number' ? it.paidAmount : 0);
-                                  const remaining = total - paid;
-                                  if (total === 0 && paid === 0) return '—';
-                                  return (
-                                    <span className={remaining <= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
-                                      {remaining <= 0 ? '0 ₫' : remaining.toLocaleString('vi-VN') + ' ₫'}
-                                    </span>
-                                  );
-                                })()}
-                              </td>
+                              
                               {/* Bảo hành */}
                               <td className="whitespace-nowrap px-4 py-3">
                                 <div className="flex flex-col gap-1">
@@ -3237,6 +3282,12 @@ const BusinessPage: React.FC = () => {
                       <DetailField 
                         label="Đã thanh toán" 
                         value={<span className="font-semibold text-gray-900">{viewItem.paidAmount.toLocaleString('vi-VN')} ₫</span>}
+                      />
+                    )}
+                    {viewItem.paymentDate && (
+                      <DetailField
+                        label="Ngày thanh toán"
+                        value={<span className="font-semibold text-gray-900">{formatDateShort(viewItem.paymentDate)}</span>}
                       />
                     )}
                     {(() => {

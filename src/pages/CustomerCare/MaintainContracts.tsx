@@ -275,6 +275,7 @@ export default function MaintainContractsPage() {
     totalPrice: "",
     paymentStatus: "CHUA_THANH_TOAN",
     paidAmount: "",
+    paymentDate: null,
     startDate: null,
     endDate: null,
   });
@@ -358,6 +359,10 @@ export default function MaintainContractsPage() {
     const paidAmount = typeof (item as any).paidAmount === 'number'
       ? (item as any).paidAmount
       : ((item as any).paidAmount ? Number((item as any).paidAmount) : "");
+    const paymentDateRaw = (item as any)?.paymentDate ?? (item as any)?.payment_date ?? null;
+    const paymentDateForInput = typeof paymentDateRaw === "string" && paymentDateRaw.length >= 10
+      ? paymentDateRaw.slice(0, 10)
+      : null;
 
     setForm({
       contractCode: item.contractCode || "",
@@ -369,6 +374,7 @@ export default function MaintainContractsPage() {
       kioskQuantity: item.kioskQuantity || "",
       paymentStatus: (paymentStatus === "DA_THANH_TOAN" ? "DA_THANH_TOAN" : paymentStatus === "THANH_TOAN_HET" ? "THANH_TOAN_HET" : "CHUA_THANH_TOAN") as "CHUA_THANH_TOAN" | "DA_THANH_TOAN" | "THANH_TOAN_HET",
       paidAmount: (paymentStatus === "DA_THANH_TOAN" || paymentStatus === "THANH_TOAN_HET" ? paidAmount : ""),
+      paymentDate: (paymentStatus === "DA_THANH_TOAN" || paymentStatus === "THANH_TOAN_HET") ? paymentDateForInput : null,
       startDate: startDateForInput,
       endDate: endDateForInput,
     });
@@ -570,9 +576,9 @@ export default function MaintainContractsPage() {
 
       // ── Header row ──
       const headers = [
-        "STT", "Bệnh viện", "Mã hợp đồng", "Người phụ trách",
+        "STT", "Bệnh viện", "Đơn giá", "Thành tiền", "Còn lại", "Mã hợp đồng", "Người phụ trách",
         "Thời hạn", "Số Kiosk BT", "Ngày ký HĐ", "Ngày hết hạn HĐ",
-        "Trạng thái", "Thanh toán", "Tổng tiền", "Đã thanh toán", "Còn lại",
+        "Trạng thái", "Thanh toán",
       ];
       const headerRow = worksheet.addRow(headers);
       headerRow.height = 28;
@@ -774,6 +780,7 @@ export default function MaintainContractsPage() {
       totalPrice: "",
       paymentStatus: "CHUA_THANH_TOAN",
       paidAmount: "",
+      paymentDate: null,
       startDate: null,
       endDate: null,
     });
@@ -881,6 +888,12 @@ export default function MaintainContractsPage() {
         return;
       }
     }
+    if ((form.paymentStatus || "CHUA_THANH_TOAN") === "DA_THANH_TOAN" || form.paymentStatus === "THANH_TOAN_HET") {
+      if (!form.paymentDate || !form.paymentDate.trim()) {
+        setError("Vui lòng nhập ngày thanh toán");
+        return;
+      }
+    }
     if (isViewing) return;
     if (!canEdit) {
       setError("Bạn không có quyền thực hiện thao tác này");
@@ -937,6 +950,10 @@ export default function MaintainContractsPage() {
         endDateForPayload = null;
       }
     }
+    const paymentDateForPayload =
+      (form.paymentStatus === "DA_THANH_TOAN" || form.paymentStatus === "THANH_TOAN_HET") && form.paymentDate
+        ? `${form.paymentDate}T00:00:00`
+        : null;
 
     const payload: MaintainContractRequestDTO = {
       contractCode: form.contractCode.trim(),
@@ -956,6 +973,7 @@ export default function MaintainContractsPage() {
           : (form.paymentStatus === "DA_THANH_TOAN" && typeof form.paidAmount === "number")
             ? form.paidAmount
             : null,
+      paymentDate: paymentDateForPayload,
 
       // careId không có trong trang này, backend sẽ tự tìm từ hospitalId
     };
@@ -1649,6 +1667,33 @@ export default function MaintainContractsPage() {
                     </th>
                     <th
                       className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                      onClick={() => handleSort("paymentStatus")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Thanh toán
+                        {renderSortIcon("paymentStatus")}
+                      </div>
+                    </th>
+                    {/* <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                      Giá (1 năm)
+                    </th> */}
+                    <th
+                      className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                      onClick={() => handleSort("totalPrice")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Tổng tiền
+                        {renderSortIcon("totalPrice")}
+                      </div>
+                    </th>
+                    <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                      Còn lại
+                    </th>
+                    <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                      Ngày thanh toán
+                    </th>
+                    <th
+                      className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition"
                       onClick={() => handleSort("contractCode")}
                     >
                       <div className="flex items-center gap-1">
@@ -1706,30 +1751,7 @@ export default function MaintainContractsPage() {
                         {renderSortIcon("status")}
                       </div>
                     </th>
-                    <th
-                      className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition"
-                      onClick={() => handleSort("paymentStatus")}
-                    >
-                      <div className="flex items-center gap-1">
-                        Thanh toán
-                        {renderSortIcon("paymentStatus")}
-                      </div>
-                    </th>
-                    {/* <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
-                      Giá (1 năm)
-                    </th> */}
-                    <th
-                      className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition"
-                      onClick={() => handleSort("totalPrice")}
-                    >
-                      <div className="flex items-center gap-1">
-                        Tổng tiền
-                        {renderSortIcon("totalPrice")}
-                      </div>
-                    </th>
-                    <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
-                      Còn lại
-                    </th>
+                    
                     <th className="sticky right-0 z-10 whitespace-nowrap border-l border-gray-200 bg-gray-50 px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400 dark:shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.3)]">
                       Thao tác
                     </th>
@@ -1738,7 +1760,7 @@ export default function MaintainContractsPage() {
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
                   {loading ? (
                     <tr>
-                      <td colSpan={14} className="px-3 py-12 text-center text-gray-500 dark:text-gray-400">
+                      <td colSpan={15} className="px-3 py-12 text-center text-gray-500 dark:text-gray-400">
                         <div className="flex items-center justify-center gap-2">
                           <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
                           <span>Đang tải dữ liệu...</span>
@@ -1747,13 +1769,13 @@ export default function MaintainContractsPage() {
                     </tr>
                   ) : error ? (
                     <tr>
-                      <td colSpan={14} className="px-3 py-12 text-center text-red-500 dark:text-red-400">
+                      <td colSpan={15} className="px-3 py-12 text-center text-red-500 dark:text-red-400">
                         {error}
                       </td>
                     </tr>
                   ) : items.length === 0 ? (
                     <tr>
-                      <td colSpan={14} className="px-3 py-12 text-center text-gray-500 dark:text-gray-400">
+                      <td colSpan={15} className="px-3 py-12 text-center text-gray-500 dark:text-gray-400">
                         <div className="flex flex-col items-center">
                           <svg
                             className="mb-3 h-12 w-12 text-gray-300"
@@ -1791,6 +1813,57 @@ export default function MaintainContractsPage() {
                             <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                               {item.hospital?.label ?? '—'}
                             </div>
+                          </td>
+                          {/* Thanh toán */}
+                          <td className="whitespace-nowrap px-4 py-3">
+                            {item.paymentStatus === "THANH_TOAN_HET" ? (
+                              <div className="flex flex-col gap-1">
+                                <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800">
+                                  Thanh toán hết
+                                </span>
+                                {typeof item.paidAmount === "number" && (
+                                  <span className="text-xs text-center text-gray-600">
+                                    {formatCurrency(item.paidAmount)}
+                                  </span>
+                                )}
+                              </div>
+                            ) : item.paymentStatus === "DA_THANH_TOAN" ? (
+                              <div className="flex flex-col gap-1">
+                                <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-700">
+                                  Đã thanh toán
+                                </span>
+                                {typeof item.paidAmount === "number" && (
+                                  <span className="text-xs text-center text-gray-600">
+                                    {formatCurrency(item.paidAmount)}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-700">
+                                Chưa thanh toán
+                              </span>
+                            )}
+                          </td>
+                          {/* Giá (1 năm) */}
+                          {/* <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                            {formatCurrency(item.yearlyPrice)}
+                          </td> */}
+                          {/* Tổng tiền */}
+                          <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white">
+                            {formatCurrency(item.totalPrice)}
+                          </td>
+                          {/* Còn lại */}
+                          <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white">
+                            {(() => {
+                              const totalPrice = item.totalPrice || 0;
+                              const paidAmount = (typeof item.paidAmount === "number" ? item.paidAmount : 0) || 0;
+                              const remaining = totalPrice - paidAmount;
+                              return formatCurrency(remaining);
+                            })()}
+                          </td>
+                          {/* Ngày thanh toán */}
+                          <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                            {item.paymentDate ? fmtDate(item.paymentDate) : "—"}
                           </td>
                           {/* Mã hợp đồng */}
                           <td className="whitespace-nowrap px-4 py-3">
@@ -1852,53 +1925,7 @@ export default function MaintainContractsPage() {
                               <span className="text-sm text-gray-400">—</span>
                             )}
                           </td>
-                          {/* Thanh toán */}
-                          <td className="whitespace-nowrap px-4 py-3">
-                            {item.paymentStatus === "THANH_TOAN_HET" ? (
-                              <div className="flex flex-col gap-1">
-                                <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800">
-                                  Thanh toán hết
-                                </span>
-                                {typeof item.paidAmount === "number" && (
-                                  <span className="text-xs text-center text-gray-600">
-                                    {formatCurrency(item.paidAmount)}
-                                  </span>
-                                )}
-                              </div>
-                            ) : item.paymentStatus === "DA_THANH_TOAN" ? (
-                              <div className="flex flex-col gap-1">
-                                <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-700">
-                                  Đã thanh toán
-                                </span>
-                                {typeof item.paidAmount === "number" && (
-                                  <span className="text-xs text-center text-gray-600">
-                                    {formatCurrency(item.paidAmount)}
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-700">
-                                Chưa thanh toán
-                              </span>
-                            )}
-                          </td>
-                          {/* Giá (1 năm) */}
-                          {/* <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
-                            {formatCurrency(item.yearlyPrice)}
-                          </td> */}
-                          {/* Tổng tiền */}
-                          <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white">
-                            {formatCurrency(item.totalPrice)}
-                          </td>
-                          {/* Còn lại */}
-                          <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white">
-                            {(() => {
-                              const totalPrice = item.totalPrice || 0;
-                              const paidAmount = (typeof item.paidAmount === "number" ? item.paidAmount : 0) || 0;
-                              const remaining = totalPrice - paidAmount;
-                              return formatCurrency(remaining);
-                            })()}
-                          </td>
+                          
                           {/* Thao tác */}
                           <td className="sticky right-0 z-10 whitespace-nowrap border-l border-gray-200 bg-white px-4 py-3 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] transition-colors group-hover:bg-gray-50 dark:border-gray-700 dark:bg-white/[0.03] dark:shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.3)] dark:group-hover:bg-gray-800/50">
                             <div className="flex items-center justify-center gap-1">
@@ -2075,6 +2102,12 @@ export default function MaintainContractsPage() {
                             <DetailField
                               label="Đã thanh toán"
                               value={<span className="font-semibold text-gray-900">{formatCurrency((viewing as any).paidAmount)}</span>}
+                            />
+                          )}
+                          {(viewing as any).paymentDate && (
+                            <DetailField
+                              label="Ngày thanh toán"
+                              value={<span className="font-semibold text-gray-900">{fmtDate((viewing as any).paymentDate)}</span>}
                             />
                           )}
                           {(() => {

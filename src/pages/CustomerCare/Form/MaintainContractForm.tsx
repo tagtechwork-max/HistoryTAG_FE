@@ -61,6 +61,7 @@ export type WarrantyContractForm = {
   kioskQuantity?: number | "";
   paymentStatus: "CHUA_THANH_TOAN" | "DA_THANH_TOAN" | "THANH_TOAN_HET";
   paidAmount?: number | "";
+  paymentDate?: string | null;
 };
 
 // Component RemoteSelect cho Pic User
@@ -874,6 +875,7 @@ export default function MaintainContractForm({
                           ...s,
                           paymentStatus: next,
                           paidAmount: total > 0 ? total : "",
+                          paymentDate: s.paymentDate || "",
                         }));
                         setPaidAmountDisplay(total > 0 ? formatNumber(total) : "");
                       } else if (next === "DA_THANH_TOAN") {
@@ -881,12 +883,14 @@ export default function MaintainContractForm({
                           ...s,
                           paymentStatus: next,
                           paidAmount: s.paidAmount,
+                          paymentDate: s.paymentDate || "",
                         }));
                       } else {
                         setForm((s) => ({
                           ...s,
                           paymentStatus: next,
                           paidAmount: "",
+                          paymentDate: null,
                         }));
                         setPaidAmountDisplay("");
                       }
@@ -900,31 +904,46 @@ export default function MaintainContractForm({
                 </div>
 
                 {((form.paymentStatus || "CHUA_THANH_TOAN") === "DA_THANH_TOAN" || form.paymentStatus === "THANH_TOAN_HET") && (
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-gray-700">
-                      {form.paymentStatus === "THANH_TOAN_HET" ? "Số tiền thanh toán (= Tổng tiền HĐ)" : "Số tiền thanh toán*"}
-                    </label>
-                    <input
-                      required={form.paymentStatus === "DA_THANH_TOAN"}
-                      type="text"
-                      className={`w-full rounded-xl border-2 px-5 py-3 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:bg-gray-50 ${
-                        paidAmountError ? "border-red-500" : form.paymentStatus === "THANH_TOAN_HET" ? "border-green-400 bg-green-50" : "border-gray-300"
-                      }`}
-                      value={paidAmountDisplay ?? (form.paidAmount ? formatNumber(form.paidAmount as any) : '')}
-                      onChange={(e) => handlePaidAmountChange(e.target.value)}
-                      onBlur={handlePaidAmountBlur}
-                      onFocus={handlePaidAmountFocus}
-                      placeholder="Nhập số tiền đã thanh toán..."
-                      disabled={form.paymentStatus === "THANH_TOAN_HET" || isViewing || !canEdit}
-                    />
-                    {form.paymentStatus === "THANH_TOAN_HET" ? (
-                      <p className="mt-1 text-xs text-green-600"></p>
-                    ) : paidAmountError ? (
-                      <p className="mt-1 text-xs text-red-500">{paidAmountError}</p>
-                    ) : (
-                      <p className="mt-1 text-xs text-gray-500">Ví dụ: 1.000.000</p>
-                    )}
-                  </div>
+                  <>
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-gray-700">
+                        {form.paymentStatus === "THANH_TOAN_HET" ? "Số tiền thanh toán (= Tổng tiền HĐ)" : "Số tiền thanh toán*"}
+                      </label>
+                      <input
+                        required={form.paymentStatus === "DA_THANH_TOAN"}
+                        type="text"
+                        className={`w-full rounded-xl border-2 px-5 py-3 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:bg-gray-50 ${
+                          paidAmountError ? "border-red-500" : form.paymentStatus === "THANH_TOAN_HET" ? "border-green-400 bg-green-50" : "border-gray-300"
+                        }`}
+                        value={paidAmountDisplay ?? (form.paidAmount ? formatNumber(form.paidAmount as any) : '')}
+                        onChange={(e) => handlePaidAmountChange(e.target.value)}
+                        onBlur={handlePaidAmountBlur}
+                        onFocus={handlePaidAmountFocus}
+                        placeholder="Nhập số tiền đã thanh toán..."
+                        disabled={form.paymentStatus === "THANH_TOAN_HET" || isViewing || !canEdit}
+                      />
+                      {form.paymentStatus === "THANH_TOAN_HET" ? (
+                        <p className="mt-1 text-xs text-green-600"></p>
+                      ) : paidAmountError ? (
+                        <p className="mt-1 text-xs text-red-500">{paidAmountError}</p>
+                      ) : (
+                        <p className="mt-1 text-xs text-gray-500">Ví dụ: 1.000.000</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-gray-700">Ngày thanh toán*</label>
+                      <input
+                        required
+                        type="date"
+                        className="w-full rounded-xl border-2 border-gray-300 px-5 py-3 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:bg-gray-50"
+                        value={form.paymentDate || ""}
+                        onChange={(e) => {
+                          setForm((s) => ({ ...s, paymentDate: e.target.value || null }));
+                        }}
+                        disabled={isViewing || !canEdit}
+                      />
+                    </div>
+                  </>
                 )}
 
                 <div>
