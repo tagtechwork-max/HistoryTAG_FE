@@ -390,7 +390,7 @@ export default function ListHospitalImplementation() {
     const fetchProjectOwnerOptions = async () => {
       try {
         const { data } = await api.get<unknown[]>("/api/v1/admin/users/search", {
-          params: { department: "IT" },
+          params: { department: "IT", includeSuperAdmin: true },
         });
         const list = Array.isArray(data) ? data : [];
         const options = list

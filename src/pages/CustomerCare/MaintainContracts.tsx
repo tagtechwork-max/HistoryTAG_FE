@@ -1694,6 +1694,24 @@ export default function MaintainContractsPage() {
                     </th>
                     <th
                       className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                      onClick={() => handleSort("startDate")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Ngày ký HD
+                        {renderSortIcon("startDate")}
+                      </div>
+                    </th>
+                    <th
+                      className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                      onClick={() => handleSort("endDate")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Ngày hết hạn HD
+                        {renderSortIcon("endDate")}
+                      </div>
+                    </th>
+                    <th
+                      className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition"
                       onClick={() => handleSort("contractCode")}
                     >
                       <div className="flex items-center gap-1">
@@ -1724,24 +1742,7 @@ export default function MaintainContractsPage() {
                     >
                       Số Kiosk BT
                     </th>
-                    <th
-                      className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition"
-                      onClick={() => handleSort("startDate")}
-                    >
-                      <div className="flex items-center gap-1">
-                        Ngày ký HD
-                        {renderSortIcon("startDate")}
-                      </div>
-                    </th>
-                    <th
-                      className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition"
-                      onClick={() => handleSort("endDate")}
-                    >
-                      <div className="flex items-center gap-1">
-                        Ngày hết hạn HD
-                        {renderSortIcon("endDate")}
-                      </div>
-                    </th>
+                    
                     <th
                       className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition"
                       onClick={() => handleSort("status")}
@@ -1865,6 +1866,28 @@ export default function MaintainContractsPage() {
                           <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
                             {item.paymentDate ? fmtDate(item.paymentDate) : "—"}
                           </td>
+                          {/* Ngày ký HD */}
+                          <td className="whitespace-nowrap px-4 py-3">
+                            {item.startDate ? (
+                              <div className="flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-300">
+                                <FiCalendar className="h-4 w-4 text-gray-400" />
+                                <span>{fmtDate(item.startDate)}</span>
+                              </div>
+                            ) : (
+                              <span className="text-sm text-gray-400">—</span>
+                            )}
+                          </td>
+                          {/* Ngày kết thúc */}
+                          <td className="whitespace-nowrap px-4 py-3">
+                            {item.endDate ? (
+                              <div className="flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-300">
+                                <FiCalendar className="h-4 w-4 text-gray-400" />
+                                <span>{fmtDate(item.endDate)}</span>
+                              </div>
+                            ) : (
+                              <span className="text-sm text-gray-400">—</span>
+                            )}
+                          </td>
                           {/* Mã hợp đồng */}
                           <td className="whitespace-nowrap px-4 py-3">
                             <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
@@ -1888,28 +1911,7 @@ export default function MaintainContractsPage() {
                           <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
                             {typeof item.kioskQuantity === "number" ? item.kioskQuantity : (item.kioskQuantity ?? "—")}
                           </td>
-                          {/* Ngày ký HD */}
-                          <td className="whitespace-nowrap px-4 py-3">
-                            {item.startDate ? (
-                              <div className="flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-300">
-                                <FiCalendar className="h-4 w-4 text-gray-400" />
-                                <span>{fmtDate(item.startDate)}</span>
-                              </div>
-                            ) : (
-                              <span className="text-sm text-gray-400">—</span>
-                            )}
-                          </td>
-                          {/* Ngày kết thúc */}
-                          <td className="whitespace-nowrap px-4 py-3">
-                            {item.endDate ? (
-                              <div className="flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-300">
-                                <FiCalendar className="h-4 w-4 text-gray-400" />
-                                <span>{fmtDate(item.endDate)}</span>
-                              </div>
-                            ) : (
-                              <span className="text-sm text-gray-400">—</span>
-                            )}
-                          </td>
+                          
                           {/* Trạng thái */}
                           <td className="whitespace-nowrap px-4 py-3">
                             {item.status ? (

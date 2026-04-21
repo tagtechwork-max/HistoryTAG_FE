@@ -308,6 +308,7 @@ export default function HccFacilitiesPage() {
         const url = buildUrl(`${API_BASE}/api/v1/admin/users/search`);
         url.searchParams.set("name", "");
         url.searchParams.set("department", "IT");
+        url.searchParams.set("includeSuperAdmin", "true");
         const res = await fetch(url.toString(), { headers: { ...authHeader() } });
         if (!res.ok || !alive) return;
         const data = (await res.json()) as EntitySelect[];
