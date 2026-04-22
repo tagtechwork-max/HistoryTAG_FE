@@ -16,6 +16,7 @@ import {
   fetchImplementationTaskDetail,
   fetchMilestones,
   fetchWorkItems,
+  fetchWorkItemDetail,
   type ImplementationTaskDetail,
   type MilestoneDto,
   type WorkItemListDto,
@@ -196,6 +197,7 @@ export default function PhaseImplementation() {
   const [task, setTask] = useState<ImplementationTaskDetail | null>(null);
   const [phases, setPhases] = useState<(MilestoneDto & { status: PhaseStatus })[]>([]);
   const [recentWorkItems, setRecentWorkItems] = useState<WorkItemListDto[]>([]);
+  const [currentPhaseCommentCount, setCurrentPhaseCommentCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -251,6 +253,7 @@ export default function PhaseImplementation() {
   useEffect(() => {
     if (!hospitalId || phases.length === 0 || !task) {
       setRecentWorkItems([]);
+      setCurrentPhaseCommentCount(0);
       return;
     }
     const completedCount = phases.filter((p) => p.status === "completed").length;
@@ -263,7 +266,7 @@ export default function PhaseImplementation() {
     }
     let cancelled = false;
     fetchWorkItems({ implementationTaskId: hospitalId, milestoneId: String(currentPhase.id) })
-      .then((items) => {
+      .then(async (items) => {
         if (cancelled) return;
         // Sort by createdAt desc (newest first), then take 3
         const sorted = [...items].sort((a, b) => {
@@ -273,9 +276,27 @@ export default function PhaseImplementation() {
           return (b.id ?? 0) - (a.id ?? 0);
         });
         setRecentWorkItems(sorted.slice(0, 3));
+        if (!items.length) {
+          setCurrentPhaseCommentCount(0);
+          return;
+        }
+        const details = await Promise.all(
+          items.map((item) =>
+            fetchWorkItemDetail(item.id).catch(() => null)
+          )
+        );
+        if (cancelled) return;
+        const totalComments = details.reduce((sum, detail) => {
+          if (!detail || !Array.isArray(detail.comments)) return sum;
+          return sum + detail.comments.length;
+        }, 0);
+        setCurrentPhaseCommentCount(totalComments);
       })
       .catch(() => {
-        if (!cancelled) setRecentWorkItems([]);
+        if (!cancelled) {
+          setRecentWorkItems([]);
+          setCurrentPhaseCommentCount(0);
+        }
       });
     return () => {
       cancelled = true;
@@ -295,7 +316,7 @@ export default function PhaseImplementation() {
           name: task.hospitalName ?? task.name ?? "—",
           operationDate: formatDate(task.operationDate ?? task.startDate ?? null),
           pmName: task.pmName ?? "—",
-          engineerName: task.engineerName ?? "—",
+          supportEngineerNames: task.supportEngineerNames ?? (task.engineerName ? [task.engineerName] : []),
           health,
           healthLabel: healthDisplay.label,
           healthPillClass: healthDisplay.pillClass,
@@ -312,7 +333,7 @@ export default function PhaseImplementation() {
           name: task.hospitalName ?? task.name ?? "—",
           operationDate: formatDate(task.operationDate ?? task.startDate ?? null),
           pmName: task.pmName ?? "—",
-          engineerName: task.engineerName ?? "—",
+          supportEngineerNames: task.supportEngineerNames ?? (task.engineerName ? [task.engineerName] : []),
           health: task.health ?? "in_progress",
           healthLabel: (HEALTH_DISPLAY[task.health ?? "in_progress"] ?? HEALTH_DISPLAY.in_progress).label,
           healthPillClass: (HEALTH_DISPLAY[task.health ?? "in_progress"] ?? HEALTH_DISPLAY.in_progress).pillClass,
@@ -384,11 +405,18 @@ export default function PhaseImplementation() {
                   </div>
                   <div className="flex items-center gap-2">
                     <UserIcon className="size-3.5 shrink-0" />
-                    <span>PTC: {hospital.pmName}</span>
+                    <span className="font-medium text-amber-600 dark:text-amber-400">
+                      PTC: {hospital.pmName}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <PlugInIcon className="size-3.5 shrink-0" />
-                    <span>Người thực hiện: {hospital.engineerName}</span>
+                    <span className="font-medium text-blue-600 dark:text-blue-400">
+                      Kỹ thuật hỗ trợ:{" "}
+                      {hospital.supportEngineerNames.length > 0
+                        ? hospital.supportEngineerNames.join(", ")
+                        : "—"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -405,6 +433,11 @@ export default function PhaseImplementation() {
                 <p className="mt-0.5 text-base font-bold text-slate-900 dark:text-slate-100">
                   {hospital.currentPhaseLabel}
                 </p>
+                {currentPhaseCommentCount > 0 && (
+                  <p className="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">
+                    {currentPhaseCommentCount} bình luận mới
+                  </p>
+                )}
                 <div className="mt-2 flex items-center gap-2">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-blue-500 bg-white text-xs font-bold text-blue-600 dark:bg-slate-900 dark:text-blue-400">
                     {hospital.progress}%

@@ -55,6 +55,9 @@ type ViewTaskPhaseImplementationProps = {
   task: TaskDetail | null;
   activityLog?: ActivityLogItem[];
   comments?: CommentItem[];
+  canLikeComments?: boolean;
+  likedCommentIds?: number[];
+  onToggleLikeComment?: (commentId: number) => void;
   /** If provided, parent handles send (return CommentItem for realtime). If not provided and task.id exists, component calls addWorkItemComment itself. */
   onSendComment?: (content: string) => void | Promise<void | CommentItem>;
   isOpen: boolean;
@@ -153,6 +156,9 @@ export default function ViewTaskPhaseImplementation({
   task,
   activityLog = [],
   comments = [],
+  canLikeComments = false,
+  likedCommentIds = [],
+  onToggleLikeComment,
   onSendComment,
   isOpen,
   onClose,
@@ -163,6 +169,7 @@ export default function ViewTaskPhaseImplementation({
   const [sending, setSending] = useState(false);
   /** Comments added this session or received via WebSocket so they show immediately (realtime) */
   const [localComments, setLocalComments] = useState<CommentItem[]>([]);
+  const [activityPage, setActivityPage] = useState(1);
   const commentsEndRef = useRef<HTMLDivElement>(null);
   const prevLocalCommentCountRef = useRef(0);
   /** Typing indicator: show when someone else is typing (from WebSocket) */
@@ -193,7 +200,13 @@ export default function ViewTaskPhaseImplementation({
       setLocalComments([]);
       prevLocalCommentCountRef.current = 0;
       setTypingFrom(null);
+      setActivityPage(1);
     }
+  }, [isOpen, task?.id]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setActivityPage(1);
   }, [isOpen, task?.id]);
 
   // WebSocket: subscribe to work-item comments topic for realtime (backend/Rabbit can publish to this topic when a comment is created)
@@ -258,6 +271,8 @@ export default function ViewTaskPhaseImplementation({
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     );
   }, [comments, localComments]);
+
+  const likedIdSet = useMemo(() => new Set(likedCommentIds), [likedCommentIds]);
 
   // Scroll to the latest comment when a new one is added (send or WebSocket), not when opening with existing comments
   useEffect(() => {
@@ -577,10 +592,16 @@ export default function ViewTaskPhaseImplementation({
             <div className="space-y-3">
               {(() => {
                 const filteredLog = activityLog.filter((a) => a.eventType !== "COMMENT_ADDED");
+                const pageSize = 3;
+                const totalPages = Math.max(1, Math.ceil(filteredLog.length / pageSize));
+                const page = Math.min(activityPage, totalPages);
+                const start = (page - 1) * pageSize;
+                const pagedLog = filteredLog.slice(start, start + pageSize);
                 return filteredLog.length === 0 ? (
                   <p className="text-xs text-slate-500 dark:text-slate-400">Chưa có hoạt động</p>
                 ) : (
-                  filteredLog.map((activity) => {
+                  <>
+                  {pagedLog.map((activity) => {
                   const msg = formatActivityMessage(activity);
                   return (
                     <div
@@ -603,7 +624,31 @@ export default function ViewTaskPhaseImplementation({
                       </div>
                     </div>
                   );
-                })
+                })}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        disabled={page <= 1}
+                        onClick={() => setActivityPage((prev) => Math.max(1, prev - 1))}
+                        className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:text-slate-300"
+                      >
+                        Trước
+                      </button>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                        {page}/{totalPages}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={page >= totalPages}
+                        onClick={() => setActivityPage((prev) => Math.min(totalPages, prev + 1))}
+                        className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:text-slate-300"
+                      >
+                        Sau
+                      </button>
+                    </div>
+                  )}
+                  </>
                 );
               })()}
             </div>
@@ -629,9 +674,26 @@ export default function ViewTaskPhaseImplementation({
                         <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
                           {comment.user}
                         </span>
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                          {formatDateDMY(comment.createdAt)}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          {onToggleLikeComment && (
+                            <button
+                              type="button"
+                              onClick={() => onToggleLikeComment(comment.id)}
+                              disabled={!canLikeComments}
+                              title={!canLikeComments ? "Chỉ phụ trách chính mới có thể đánh dấu đã đọc." : undefined}
+                              className={`rounded px-2 py-0.5 text-[10px] font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
+                                likedIdSet.has(comment.id)
+                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                                  : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                              }`}
+                            >
+                              {likedIdSet.has(comment.id) ? "Đã đọc" : "Like"}
+                            </button>
+                          )}
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                            {formatDateDMY(comment.createdAt)}
+                          </span>
+                        </div>
                       </div>
                       <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
                         {comment.content}

@@ -279,6 +279,7 @@ export default function TicketsTab({
         // Use ADMIN API endpoint instead of SUPERADMIN API
         const params = new URLSearchParams({
           department: "IT",
+          includeSuperAdmin: "true",
         });
         const res = await fetch(`${API_ROOT}/api/v1/admin/users/search?${params.toString()}`, {
           method: 'GET',

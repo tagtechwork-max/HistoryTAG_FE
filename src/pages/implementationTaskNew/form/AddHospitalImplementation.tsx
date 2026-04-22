@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CloseIcon,
   PlusIcon,
@@ -7,6 +7,7 @@ import {
   PencilIcon,
 } from "../../../icons";
 import {
+  fetchHospitalImplementationDefaults,
   searchHospitalsWithCode,
   searchUsersForDeployment,
 } from "../../../api/api";
@@ -52,6 +53,7 @@ export type HospitalFormValues = {
   goLiveDeadline: string;
   pmUserId: number | null;
   engineerUserId: number | null;
+  engineerUserIds: number[];
 };
 
 /** Payload sent to parent on submit - maps to create/update API */
@@ -63,6 +65,7 @@ export type HospitalFormSubmitPayload = {
   goLiveDeadline?: string;
   pmUserId?: number;
   engineerUserId?: number;
+  engineerUserIds?: number[];
   version?: number;
 };
 
@@ -72,6 +75,7 @@ export type EditHospitalInitial = HospitalFormValues & {
   hospitalName?: string;
   pmName?: string;
   engineerName?: string;
+  supportEngineerNames?: string[];
 };
 
 type AddHospitalImplementationProps = {
@@ -92,6 +96,7 @@ const initialValues: HospitalFormValues = {
   goLiveDeadline: "",
   pmUserId: null,
   engineerUserId: null,
+  engineerUserIds: [],
 };
 
 /** Searchable select - type to search, min 2 chars (like implementation-tasks RemoteSelect) */
@@ -236,6 +241,138 @@ function SearchableSelect({
   );
 }
 
+function MultiSearchableSelect({
+  label,
+  placeholder,
+  fetchOptions,
+  values,
+  onAdd,
+  onRemove,
+}: {
+  label: string;
+  placeholder?: string;
+  fetchOptions: (q: string) => Promise<Array<{ id: number; name: string }>>;
+  values: Array<{ id: number; name: string }>;
+  onAdd: (v: { id: number; name: string }) => void;
+  onRemove: (id: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [options, setOptions] = useState<Array<{ id: number; name: string }>>([]);
+  const [loading, setLoading] = useState(false);
+  const [highlight, setHighlight] = useState(-1);
+
+  useEffect(() => {
+    if (!q.trim() || q.trim().length < 2) {
+      setOptions([]);
+      return;
+    }
+    let alive = true;
+    const t = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await fetchOptions(q.trim());
+        if (!alive) return;
+        const picked = new Set(values.map((v) => v.id));
+        setOptions(res.filter((item) => !picked.has(item.id)));
+      } finally {
+        if (alive) setLoading(false);
+      }
+    }, 300);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [q, fetchOptions, values]);
+
+  return (
+    <div>
+      <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        {label}
+      </label>
+      {values.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {values.map((item) => (
+            <span
+              key={item.id}
+              className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+            >
+              {item.name}
+              <button
+                type="button"
+                className="text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-100"
+                onClick={() => onRemove(item.id)}
+                aria-label={`Remove ${item.name}`}
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="relative">
+        <input
+          type="text"
+          placeholder={placeholder ?? "Nhập để tìm..."}
+          value={q}
+          onChange={(e) => {
+            setQ(e.target.value);
+            if (!open) setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onKeyDown={(e) => {
+            if (!open) return;
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setHighlight((h) => Math.min(h + 1, options.length - 1));
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setHighlight((h) => Math.max(h - 1, 0));
+            } else if (e.key === "Enter") {
+              e.preventDefault();
+              if (highlight >= 0 && options[highlight]) {
+                onAdd(options[highlight]);
+                setQ("");
+                setOpen(false);
+              }
+            } else if (e.key === "Escape") {
+              setOpen(false);
+            }
+          }}
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+        />
+        {open && (
+          <div className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800">
+            {loading && <div className="px-3 py-2 text-sm text-slate-500">Đang tìm...</div>}
+            {!loading && options.length === 0 && (
+              <div className="px-3 py-2 text-sm text-slate-500">
+                {q.trim().length < 2 ? "Nhập ít nhất 2 ký tự để tìm kiếm" : "Không tìm thấy"}
+              </div>
+            )}
+            {!loading &&
+              options.map((opt, idx) => (
+                <div
+                  key={opt.id}
+                  className={`cursor-pointer px-3 py-2 text-sm ${idx === highlight ? "bg-slate-100 dark:bg-slate-700" : ""}`}
+                  onMouseEnter={() => setHighlight(idx)}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    onAdd(opt);
+                    setQ("");
+                    setOpen(false);
+                  }}
+                >
+                  {opt.name}
+                </div>
+              ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Add/Edit hospital form - right-side panel for "Thêm bệnh viện" and "Sửa" on deployment list.
  * Per spec §9: sends hospitalId, pmUserId, engineerUserId; backend computes phase, progress, health.
@@ -251,9 +388,10 @@ export default function AddHospitalImplementation({
   const [isEntered, setIsEntered] = useState(false);
   const [hospitalOpt, setHospitalOpt] = useState<{ id: number; name: string } | null>(null);
   const [pmOpt, setPmOpt] = useState<{ id: number; name: string } | null>(null);
-  const [engineerOpt, setEngineerOpt] = useState<{ id: number; name: string } | null>(null);
+  const [engineerOpts, setEngineerOpts] = useState<Array<{ id: number; name: string }>>([]);
   /** Only team lead (LEADER in teamRoles) can edit report deadline and go-live deadline */
   const [canEditDeadlines, setCanEditDeadlines] = useState(false);
+  const hospitalDefaultsRequestRef = useRef(0);
   const isEditMode = Boolean(editHospital?.id);
   const canEditDeadlineFields = forceDeadlineEdit || canEditDeadlines;
 
@@ -273,11 +411,12 @@ export default function AddHospitalImplementation({
 
   useEffect(() => {
     if (!isOpen) {
+      hospitalDefaultsRequestRef.current += 1;
       setIsEntered(false);
       setForm(initialValues);
       setHospitalOpt(null);
       setPmOpt(null);
-      setEngineerOpt(null);
+      setEngineerOpts([]);
       setCanEditDeadlines(false);
     } else if (editHospital) {
       setForm({
@@ -288,6 +427,7 @@ export default function AddHospitalImplementation({
         goLiveDeadline: editHospital.goLiveDeadline ?? "",
         pmUserId: editHospital.pmUserId ?? null,
         engineerUserId: editHospital.engineerUserId ?? null,
+        engineerUserIds: editHospital.engineerUserIds ?? (editHospital.engineerUserId ? [editHospital.engineerUserId] : []),
       });
       setHospitalOpt(null);
       setPmOpt(
@@ -295,10 +435,14 @@ export default function AddHospitalImplementation({
           ? { id: editHospital.pmUserId, name: editHospital.pmName ?? `User #${editHospital.pmUserId}` }
           : null
       );
-      setEngineerOpt(
-        editHospital.engineerUserId
-          ? { id: editHospital.engineerUserId, name: editHospital.engineerName ?? `User #${editHospital.engineerUserId}` }
-          : null
+      setEngineerOpts(
+        (editHospital.engineerUserIds ?? (editHospital.engineerUserId ? [editHospital.engineerUserId] : []))
+          .map((id, idx) => ({
+            id,
+            name: editHospital.supportEngineerNames?.[idx] ?? (id === editHospital.engineerUserId
+              ? (editHospital.engineerName ?? `User #${id}`)
+              : `User #${id}`),
+          }))
       );
       // Edit mode: fetch current user to know if team lead; Super Admin from JWT token
       const userId = getCurrentUserIdFromStorage();
@@ -322,7 +466,7 @@ export default function AddHospitalImplementation({
       });
       setHospitalOpt(null);
       setPmOpt(null);
-      setEngineerOpt(null);
+      setEngineerOpts([]);
       if (userId != null) {
         getUserAccount(userId)
           .then((user) => {
@@ -366,6 +510,7 @@ export default function AddHospitalImplementation({
         goLiveDeadline: form.goLiveDeadline || undefined,
         pmUserId: form.pmUserId ?? undefined,
         engineerUserId: form.engineerUserId ?? undefined,
+        engineerUserIds: form.engineerUserIds,
         version: editHospital?._version,
       };
       setSubmitting(true);
@@ -385,6 +530,7 @@ export default function AddHospitalImplementation({
         goLiveDeadline: form.goLiveDeadline || undefined,
         pmUserId: form.pmUserId ?? undefined,
         engineerUserId: form.engineerUserId ?? undefined,
+        engineerUserIds: form.engineerUserIds.length > 0 ? form.engineerUserIds : undefined,
       };
       setSubmitting(true);
       try {
@@ -463,13 +609,29 @@ export default function AddHospitalImplementation({
                   required
                   fetchOptions={searchHospitalsWithCode}
                   value={hospitalOpt}
-                  onChange={(v) => {
+                  onChange={async (v) => {
                     setHospitalOpt(v);
                     const code = v && "code" in v ? (v as { id: number; name: string; code?: string }).code : undefined;
                     update({
                       hospitalId: v?.id ?? null,
                       ...(code ? { projectCode: code } : {}),
                     });
+                    if (!v?.id) return;
+                    const requestId = ++hospitalDefaultsRequestRef.current;
+                    const defaults = await fetchHospitalImplementationDefaults(v.id);
+                    if (requestId !== hospitalDefaultsRequestRef.current || !defaults) return;
+                    const nextPmId = defaults.personInChargeId ?? null;
+                    update({ pmUserId: nextPmId });
+                    if (nextPmId) {
+                      setPmOpt({
+                        id: nextPmId,
+                        name:
+                          (defaults.personInChargeName && defaults.personInChargeName.trim()) ||
+                          `User #${nextPmId}`,
+                      });
+                    } else {
+                      setPmOpt(null);
+                    }
                   }}
                 />
               )}
@@ -557,14 +719,27 @@ export default function AddHospitalImplementation({
                 }}
               />
 
-              <SearchableSelect
+              <MultiSearchableSelect
                 label="Người hỗ trợ"
-                placeholder="Nhập tên kỹ sư để tìm…"
+                placeholder="Nhập tên kỹ thuật hỗ trợ để thêm…"
                 fetchOptions={searchUsersForDeployment}
-                value={engineerOpt}
-                onChange={(v) => {
-                  setEngineerOpt(v);
-                  update({ engineerUserId: v?.id ?? null });
+                values={engineerOpts}
+                onAdd={(v) => {
+                  if (engineerOpts.some((item) => item.id === v.id)) return;
+                  const next = [...engineerOpts, v];
+                  setEngineerOpts(next);
+                  update({
+                    engineerUserIds: next.map((item) => item.id),
+                    engineerUserId: next[0]?.id ?? null,
+                  });
+                }}
+                onRemove={(id) => {
+                  const next = engineerOpts.filter((item) => item.id !== id);
+                  setEngineerOpts(next);
+                  update({
+                    engineerUserIds: next.map((item) => item.id),
+                    engineerUserId: next[0]?.id ?? null,
+                  });
                 }}
               />
             </div>

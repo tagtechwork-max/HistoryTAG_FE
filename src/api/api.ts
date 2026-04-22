@@ -18,6 +18,7 @@ export type ImplementationTaskListItem = {
   progress: number; // 0-100
   pmName: string | null;
   engineerName: string | null;
+  supportEngineerNames?: string[] | null;
   health: "in_progress" | "at_risk" | "blocked" | "completed";
   healthLabel: string;
   transferredToMaintenance?: boolean;
@@ -42,6 +43,8 @@ export type ImplementationTaskDetail = {
   pmUserId: number | null;
   engineerName: string | null;
   engineerUserId: number | null;
+  supportEngineerNames?: string[] | null;
+  supportEngineerUserIds?: number[] | null;
   health: "in_progress" | "at_risk" | "blocked" | "completed";
   healthLabel: string;
   currentPhase: number;
@@ -61,6 +64,12 @@ export type ImplementationTaskDetail = {
 export type HospitalOption = { id: number; name: string; code?: string };
 
 export type UserDeploymentOption = { id: number; name: string };
+export type HospitalImplementationDefaults = {
+  id: number;
+  hospitalCode?: string | null;
+  personInChargeId?: number | null;
+  personInChargeName?: string | null;
+};
 
 export type ImplementationTaskCreateRequest = {
   hospitalId: number;
@@ -70,6 +79,7 @@ export type ImplementationTaskCreateRequest = {
   goLiveDeadline?: string;
   pmUserId?: number;
   engineerUserId?: number;
+  engineerUserIds?: number[];
 };
 
 export type ImplementationTaskUpdateRequest = {
@@ -79,6 +89,7 @@ export type ImplementationTaskUpdateRequest = {
   goLiveDeadline?: string;
   pmUserId?: number;
   engineerUserId?: number;
+  engineerUserIds?: number[];
   version?: number;
 };
 
@@ -197,6 +208,18 @@ export async function fetchUserDeploymentOptions(): Promise<UserDeploymentOption
     return data;
   } catch {
     return [];
+  }
+}
+
+export async function fetchHospitalImplementationDefaults(
+  hospitalId: number
+): Promise<HospitalImplementationDefaults | null> {
+  if (!Number.isFinite(hospitalId) || hospitalId <= 0) return null;
+  try {
+    const { data } = await api.get<HospitalImplementationDefaults>(`/api/v1/auth/hospitals/${hospitalId}`);
+    return data;
+  } catch {
+    return null;
   }
 }
 
@@ -412,7 +435,7 @@ export async function searchUsersForDeployment(term: string): Promise<UserDeploy
   const q = term.trim().toLowerCase();
   try {
     const { data } = await api.get<unknown[] | UserDeploymentOption[]>("/api/v1/admin/users/search", {
-      params: { name: term.trim(), team: "DEPLOYMENT" },
+      params: { name: term.trim(), team: "DEPLOYMENT", includeSuperAdmin: true },
     });
     const list = Array.isArray(data) ? data : [];
     return list
@@ -445,6 +468,7 @@ export async function createImplementationTask(
     goLiveDeadline: toLocalDateTime(body.goLiveDeadline) ?? null,
     pmUserId: body.pmUserId || null,
     engineerUserId: body.engineerUserId || null,
+    engineerUserIds: body.engineerUserIds ?? null,
   };
   try {
     const { data } = await api.post<ImplementationTaskDetail>("/api/v1/implementation-tasks", payload);
@@ -470,6 +494,7 @@ export async function updateImplementationTask(
     goLiveDeadline: toLocalDateTime(body.goLiveDeadline) ?? null,
     pmUserId: body.pmUserId,
     engineerUserId: body.engineerUserId,
+    engineerUserIds: body.engineerUserIds,
     version: body.version,
   };
   try {

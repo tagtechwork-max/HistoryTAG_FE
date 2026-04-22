@@ -929,6 +929,7 @@ function TaskFormModal({
     const searchPICs = useMemo(
         () => async (term: string) => {
             const params = new URLSearchParams({ name: term });
+            params.set("includeSuperAdmin", "true");
             // Lọc theo team dựa trên user đăng nhập
             if (userTeam === "MAINTENANCE") {
                 params.set("team", "MAINTENANCE");

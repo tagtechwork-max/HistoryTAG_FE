@@ -5,7 +5,13 @@ import flatpickr from "flatpickr";
 import { Vietnamese } from "flatpickr/dist/l10n/vn";
 
 type UserOpt = { id: number; label: string };
-type PreviewItem = { dateLabel: string; taskName: string; status: string; note: string };
+type PreviewItem = {
+  dateLabel: string;
+  taskName: string;
+  status: string;
+  note: string;
+  additionalRequest?: string;
+};
 type PreviewData = {
   fullName: string;
   department: string;
@@ -314,50 +320,51 @@ export default function WorkReportExportButton({ role }: { role: "admin" | "supe
                   <span className="font-bold underline">Họ và tên:</span> {previewData.fullName}
                 </p>
                 <p>
-                  <span className="font-bold underline">Bộ phận:</span> {previewData.department}
-                </p>
-                <p>
-                  <span className="font-bold underline">Chức danh:</span> {previewData.title}
+                  <span className="font-bold underline">Phòng/Ban:</span> {previewData.department}
                 </p>
               </div>
               <p className="mt-3 font-bold underline">1. Chi tiết công việc</p>
-              <table className="mt-2 w-full border-collapse border border-slate-400 text-[16px]">
+              <table className="mt-2 w-full table-fixed border-collapse border border-slate-400 text-[16px]">
                 <thead>
                   <tr>
-                    <th className="border border-slate-400 px-2 py-1 text-left font-bold">Ngày</th>
-                    <th className="border border-slate-400 px-2 py-1 text-left font-bold">Nội dung công việc</th>
-                    <th className="border border-slate-400 px-2 py-1 text-left font-bold">Trạng thái</th>
-                    <th className="border border-slate-400 px-2 py-1 text-left font-bold">Ghi chú</th>
+                    <th className="w-[12%] border border-slate-400 px-2 py-1 text-left font-bold">Ngày</th>
+                    <th className="w-[20%] border border-slate-400 px-2 py-1 text-left font-bold">Cơ sở</th>
+                    <th className="w-[10%] border border-slate-400 px-2 py-1 text-left font-bold">Trạng thái</th>
+                    <th className="w-[24%] border border-slate-400 px-2 py-1 text-left font-bold">Nội dung công việc</th>
+                    <th className="w-[34%] border border-slate-400 px-2 py-1 text-left font-bold">Ghi chú</th>
                   </tr>
                 </thead>
                 <tbody>
                   {previewData.allTasks.map((r, idx) => (
                     <tr key={`all-${idx}`}>
-                      <td className="border border-slate-400 px-2 py-1">{r.dateLabel}</td>
-                      <td className="border border-slate-400 px-2 py-1">{r.taskName}</td>
-                      <td className="border border-slate-400 px-2 py-1">{r.status}</td>
-                      <td className="border border-slate-400 px-2 py-1">{r.note}</td>
+                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{r.dateLabel}</td>
+                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{r.note}</td>
+                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{r.status}</td>
+                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{r.taskName}</td>
+                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{r.additionalRequest || ""}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               <p className="mt-3 font-bold underline">2. Công việc chưa hoàn thành</p>
-              <table className="mt-2 w-full border-collapse border border-slate-400 text-[16px]">
+              <table className="mt-2 w-full table-fixed border-collapse border border-slate-400 text-[16px]">
                 <thead>
                   <tr>
-                    <th className="border border-slate-400 px-2 py-1 text-left font-bold">Ngày</th>
-                    <th className="border border-slate-400 px-2 py-1 text-left font-bold">Nội dung công việc</th>
-                    <th className="border border-slate-400 px-2 py-1 text-left font-bold">Trạng thái</th>
-                    <th className="border border-slate-400 px-2 py-1 text-left font-bold">Ghi chú</th>
+                    <th className="w-[12%] border border-slate-400 px-2 py-1 text-left font-bold">Ngày</th>
+                    <th className="w-[20%] border border-slate-400 px-2 py-1 text-left font-bold">Cơ sở</th>
+                    <th className="w-[10%] border border-slate-400 px-2 py-1 text-left font-bold">Trạng thái</th>
+                    <th className="w-[24%] border border-slate-400 px-2 py-1 text-left font-bold">Nội dung công việc</th>
+                    <th className="w-[34%] border border-slate-400 px-2 py-1 text-left font-bold">Ghi chú</th>
                   </tr>
                 </thead>
                 <tbody>
                   {previewData.incompleteTasks.map((r, idx) => (
                     <tr key={`in-${idx}`}>
-                      <td className="border border-slate-400 px-2 py-1">{r.dateLabel}</td>
-                      <td className="border border-slate-400 px-2 py-1">{r.taskName}</td>
-                      <td className="border border-slate-400 px-2 py-1">{r.status}</td>
-                      <td className="border border-slate-400 px-2 py-1">{r.note}</td>
+                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{r.dateLabel}</td>
+                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{r.note}</td>
+                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{r.status}</td>
+                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{r.taskName}</td>
+                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{r.additionalRequest || ""}</td>
                     </tr>
                   ))}
                 </tbody>

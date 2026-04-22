@@ -299,7 +299,6 @@ const ImplementSuperTaskPage: React.FC = () => {
     (async () => {
       try {
         const params = new URLSearchParams({
-          department: "IT",
           status: "true",
         });
         const res = await fetch(`${API_ROOT}/api/v1/superadmin/users/filter?${params.toString()}`, {
@@ -313,6 +312,15 @@ const ImplementSuperTaskPage: React.FC = () => {
         const data = await res.json();
         const list = Array.isArray(data) ? data : [];
         const options = list
+          .filter((u: any) => {
+            const department = String(u?.department ?? "").toUpperCase();
+            const roles = Array.isArray(u?.roles) ? u.roles : [];
+            const isSuperAdmin = roles.some((r: any) => {
+              const roleType = String(r?.roleType ?? r?.roleName ?? r ?? "").toUpperCase();
+              return roleType === "SUPERADMIN" || roleType === "SUPER_ADMIN";
+            });
+            return department === "IT" || isSuperAdmin;
+          })
           .map((u: any) => {
             const id = u?.id;
             const labelRaw = u?.fullname ?? u?.fullName ?? u?.username ?? u?.email ?? u?.id;

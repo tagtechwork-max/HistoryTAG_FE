@@ -914,6 +914,7 @@ export default function HospitalsPage() {
         // ✅ Dùng /api/v1/admin thay vì /api/v1/superadmin để admin thường cũng có thể dùng
         const params = new URLSearchParams({
           department: "IT",
+          includeSuperAdmin: "true",
         });
         if (term && term.trim()) {
           params.set("name", term.trim()); // admin API dùng "name" thay vì "fullName"
@@ -948,6 +949,7 @@ export default function HospitalsPage() {
         // ✅ Dùng /api/v1/admin/users/search với filter department: "IT" giống như "Phụ trách triển khai"
         const params = new URLSearchParams({
           department: "IT",
+          includeSuperAdmin: "true",
         });
         if (term && term.trim()) {
           params.set("name", term.trim()); // admin API dùng "name" thay vì "fullName"
@@ -1321,6 +1323,7 @@ export default function HospitalsPage() {
         // ✅ Dùng /api/v1/admin thay vì /api/v1/superadmin để admin thường cũng có thể dùng
         const params = new URLSearchParams({
           department: "IT",
+          includeSuperAdmin: "true",
         });
         const res = await fetch(`${API_BASE}/api/v1/admin/users/search?${params.toString()}`, {
           headers: { ...authHeader() },
