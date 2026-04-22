@@ -1017,15 +1017,6 @@ const MaintenanceSuperTaskPage: React.FC = () => {
     return list;
   }, [hospitalsWithTasks, hospitalSearch, hospitalCodeSearch, hospitalRegionQuery, hospitalStatusFilter, hospitalPicFilters, ticketOpenCounts, ticketCountLoading]);
 
-  /** Full hospital list from this page (summary) for task form dropdown — same data as the hospital grid, not search API. */
-  const pageHospitalOptionsForTaskModal = useMemo(
-    () =>
-      hospitalsWithTasks
-        .filter((h) => typeof h.id === "number" && Number.isFinite(h.id) && h.id > 0)
-        .map((h) => ({ id: Number(h.id), name: String(h.label ?? "").trim() || String(h.id) })),
-    [hospitalsWithTasks],
-  );
-
   const regionOptions = useMemo(() => VIETNAM_PROVINCE_LABELS, []);
 
   const picNameOptions = useMemo(() => {
@@ -1810,7 +1801,6 @@ const MaintenanceSuperTaskPage: React.FC = () => {
           onSubmit={handleSubmit}
           readOnly={false}
           curatorLayout
-          pageHospitalOptions={pageHospitalOptionsForTaskModal}
         />
           );
         })()
