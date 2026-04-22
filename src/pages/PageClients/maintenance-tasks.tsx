@@ -1444,8 +1444,6 @@ function TaskFormModal({
 
     const [submitting, setSubmitting] = useState(false);
 
-    if (!open) return null;
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!model.name?.trim()) { toast.error("Tên dự án không được để trống"); return; }
@@ -1488,20 +1486,36 @@ function TaskFormModal({
     const lockHospital = !initial?.id && (Boolean(initial?.hospitalId) || Boolean((initial as any)?.hccFacilityId) || Boolean(initial?.hospitalName));
 
     return (
-        <div className="fixed inset-0 z-50 flex">
-            <div className="min-w-0 flex-1 bg-slate-900/25 backdrop-blur-md" onMouseDown={onClose} aria-hidden />
-            <AnimatePresence initial={false}>
+        <AnimatePresence>
+            {open ? (
                 <motion.div
-                    key="maintenance-task-drawer"
-                    initial={{ x: 56, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    exit={{ x: 56, opacity: 0 }}
-                    transition={{ type: "spring", stiffness: 320, damping: 30 }}
-                    className="relative flex h-full min-w-0 w-full max-w-lg flex-col overflow-hidden border-l border-slate-200/90 bg-white shadow-2xl dark:border-slate-700 dark:bg-gray-900"
-                    onMouseDown={(e) => e.stopPropagation()}
-                    role="dialog"
-                    aria-modal="true"
+                    key="maintenance-task-form-layer"
+                    className="fixed inset-0 z-50 flex"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.18, ease: "easeOut" }}
                 >
+                    <motion.div
+                        className="min-w-0 flex-1 bg-slate-900/25 backdrop-blur-md"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        onMouseDown={onClose}
+                        aria-hidden
+                    />
+                    <motion.div
+                        key="maintenance-task-drawer"
+                        initial={{ x: "100%", opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        exit={{ x: "100%", opacity: 0 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 32 }}
+                        className="relative flex h-full min-w-0 w-full max-w-lg flex-col overflow-hidden border-l border-slate-200/90 bg-white shadow-2xl dark:border-slate-700 dark:bg-gray-900"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        role="dialog"
+                        aria-modal="true"
+                    >
                     <header className="relative flex min-w-0 shrink-0 items-start justify-between gap-4 overflow-x-hidden border-b border-slate-100 px-6 pb-4 pt-6 dark:border-slate-800">
                         <div
                             className={clsx(
@@ -1791,9 +1805,10 @@ function TaskFormModal({
                             )}
                         </footer>
                     </form>
+                    </motion.div>
                 </motion.div>
-            </AnimatePresence>
-        </div>
+            ) : null}
+        </AnimatePresence>
     );
 }
 
@@ -3204,14 +3219,14 @@ const ImplementationTasksPage: React.FC = () => {
                                     </div>
                                     <div className="w-full">
                                         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                                            <div>
+                                            {/* <div>
                                                 <h4 className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">Lọc theo trạng thái</h4>
                                                 <div className="mt-2 flex flex-wrap items-center gap-3">
                                                     <button className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${hospitalStatusFilter === "" ? "bg-blue-600 text-white" : "bg-white text-gray-700 border border-[#dfe4f0] hover:bg-[#f8f9fc]"}`} onClick={() => { setHospitalStatusFilter(""); setHospitalPage(0); }}>Tất cả</button>
                                                     <button className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${hospitalStatusFilter === "incomplete" ? "bg-blue-600 text-white" : "bg-white text-gray-700 border border-[#dfe4f0] hover:bg-[#f8f9fc]"}`} onClick={() => { setHospitalStatusFilter("incomplete"); setHospitalPage(0); }}>Đang thực hiện</button>
                                                     <button className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${hospitalStatusFilter === "accepted" ? "bg-blue-600 text-white" : "bg-white text-gray-700 border border-[#dfe4f0] hover:bg-[#f8f9fc]"}`} onClick={() => { setHospitalStatusFilter("accepted"); setHospitalPage(0); }}>Đã hoàn thành</button>
                                                 </div>
-                                            </div>
+                                            </div> */}
 
                                             <div className="grid w-full max-w-[420px] grid-cols-1 gap-3 sm:grid-cols-2">
                                                 <div>
@@ -3405,7 +3420,7 @@ const ImplementationTasksPage: React.FC = () => {
                                                     <div className="min-w-[180px] flex-[1.1]">
                                                         <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Phụ trách</div>
                                                         <div className="mt-1 flex items-center gap-2 text-[14px] font-semibold text-gray-800">
-                                                            <span className="h-5 w-5 rounded-full bg-gray-200" />
+                                                            {/* <span className="h-5 w-5 rounded-full bg-gray-200" /> */}
                                                             <span className="truncate">{hospital.maintenancePersonInChargeName || "—"}</span>
                                                         </div>
                                                     </div>

@@ -183,6 +183,26 @@ const STATUS_OPTIONS: Array<{ value: keyof typeof STATUS_LABELS; label: string }
 // Note: normalizeStatus is defined in other shared modules; avoid duplicate definition here to prevent unused symbol
 
 // Extracted RemoteSelect component to top-level to avoid remounting on parent renders.
+/** Curator maintenance: hospital (positive id) or HCC (negative id, label includes "(HCC)"). */
+type FacilityPickerOption = { id: number; name: string; facilityType?: "HOSPITAL" | "HCC" };
+
+async function fetchSuperadminHccFacilityOptions(term: string): Promise<FacilityPickerOption[]> {
+    const res = await fetch(
+        `${API_ROOT}/api/v1/superadmin/hcc-facilities?search=${encodeURIComponent(term)}&page=0&size=20`,
+        { headers: authHeaders(), credentials: "include" }
+    );
+    if (!res.ok) return [];
+    const payload = await res.json();
+    const list = Array.isArray(payload?.content) ? payload.content : [];
+    return list
+        .map((f: { id?: number; name?: string }) => ({
+            id: -Math.abs(Number(f.id)),
+            name: `${String(f.name ?? f.id)} (HCC)`,
+            facilityType: "HCC" as const,
+        }))
+        .filter((x: FacilityPickerOption) => Number.isFinite(x.id) && x.id !== 0 && x.name);
+}
+
 function filterStaticOptions(
     list: Array<{ id: number; name: string }>,
     query: string
@@ -213,6 +233,8 @@ function RemoteSelect({
     fieldVariant,
     staticOptions,
     wrapSelectedLabel,
+    /** With staticOptions: merge these results (e.g. HCC search) into the filtered static list. */
+    remoteSupplement,
 }: {
     label: string;
     placeholder?: string;
@@ -230,6 +252,7 @@ function RemoteSelect({
     staticOptions?: Array<{ id: number; name: string }>;
     /** When true, closed state shows the full selected label with wrapping (single-line inputs cannot wrap). */
     wrapSelectedLabel?: boolean;
+    remoteSupplement?: (q: string) => Promise<Array<{ id: number; name: string }>>;
 }) {
     const [open, setOpen] = useState(false);
     const [focused, setFocused] = useState(false);
@@ -263,9 +286,28 @@ function RemoteSelect({
                 setLoading(false);
                 return;
             }
-            setOptions(filterStaticOptions(staticOptions, q));
-            setLoading(false);
-            return;
+            const filtered = filterStaticOptions(staticOptions, q);
+            if (!remoteSupplement) {
+                setOptions(filtered);
+                setLoading(false);
+                return;
+            }
+            let alive = true;
+            setLoading(true);
+            void (async () => {
+                try {
+                    const extra = await remoteSupplement(q.trim());
+                    if (!alive) return;
+                    setOptions([...filtered, ...(Array.isArray(extra) ? extra : [])]);
+                } catch {
+                    if (alive) setOptions(filtered);
+                } finally {
+                    if (alive) setLoading(false);
+                }
+            })();
+            return () => {
+                alive = false;
+            };
         }
         if (!q.trim() || q.trim().length < 2) {
             setOptions([]);
@@ -286,7 +328,7 @@ function RemoteSelect({
             alive = false;
             clearTimeout(t);
         };
-    }, [q, fetchOptions, staticOptions, useStaticHospitalList]);
+    }, [q, fetchOptions, staticOptions, useStaticHospitalList, remoteSupplement]);
 
     // KHÔNG load initial options khi mở - chỉ load khi user nhập ít nhất 2 ký tự
     // useEffect(() => {
@@ -516,7 +558,13 @@ export default function TaskFormModal({
 }: {
     open: boolean;
     onClose: () => void;
-    initial?: Partial<ImplementationTaskRequestDTO> & { id?: number; hospitalName?: string | null; picDeploymentName?: string | null };
+    initial?: Partial<ImplementationTaskRequestDTO> & {
+        id?: number;
+        hospitalName?: string | null;
+        picDeploymentName?: string | null;
+        hccFacilityId?: number | null;
+        hccFacilityName?: string | null;
+    };
     onSubmit: (payload: ImplementationTaskRequestDTO, id?: number) => Promise<void>;
     readOnly?: boolean;
     excludeAccepted?: boolean;
@@ -530,15 +578,23 @@ export default function TaskFormModal({
     const searchHospitals = useMemo(
         () => async (term: string) => {
             const url = `${API_ROOT}/api/v1/superadmin/hospitals/search?name=${encodeURIComponent(term)}`;
-            const res = await fetch(url, { headers: authHeaders(), credentials: "include" });
-            if (!res.ok) return [];
-            const list = await res.json();
-            const mapped = Array.isArray(list)
-                ? list.map((h: { id?: number; label?: string }) => ({ id: Number(h.id), name: String(h.label ?? h.id) }))
+            const hospitalRes = await fetch(url, { headers: authHeaders(), credentials: "include" });
+            const hospitals: FacilityPickerOption[] = hospitalRes.ok
+                ? ((await hospitalRes.json()) as Array<{ id?: number; label?: string }>)
+                      .map((h) => ({
+                          id: Number(h.id),
+                          name: String(h.label ?? h.id),
+                          facilityType: "HOSPITAL" as const,
+                      }))
+                      .filter((x) => Number.isFinite(x.id) && x.id > 0 && x.name)
                 : [];
-            return mapped.filter((x: { id: number; name: string }) => Number.isFinite(x.id) && x.name) as Array<{ id: number; name: string }>;
+            if (!curatorLayout) {
+                return hospitals;
+            }
+            const hccs = await fetchSuperadminHccFacilityOptions(term);
+            return [...hospitals, ...hccs];
         },
-        []
+        [curatorLayout]
     );
 
     const searchPICs = useMemo(
@@ -587,10 +643,17 @@ export default function TaskFormModal({
         startDate: initial?.startDate ?? "",
     }));
 
-    const [hospitalOpt, setHospitalOpt] = useState<{ id: number; name: string } | null>(() => {
+    const [hospitalOpt, setHospitalOpt] = useState<FacilityPickerOption | null>(() => {
+        const hccId = Number((initial as { hccFacilityId?: number | null } | undefined)?.hccFacilityId || 0);
+        if (hccId > 0) {
+            const nm =
+                String((initial as { hccFacilityName?: string | null } | undefined)?.hccFacilityName || "").trim() ||
+                String(initial?.hospitalName || "").trim();
+            return { id: -hccId, name: nm ? `${nm} (HCC)` : `HCC #${hccId}`, facilityType: "HCC" };
+        }
         const id = initial?.hospitalId || 0;
         const nm = initial?.hospitalName || "";
-        return id ? { id, name: nm || String(id) } : null;
+        return id ? { id, name: nm || String(id), facilityType: "HOSPITAL" } : null;
     });
     const [picOpts, setPicOpts] = useState<Array<{ id: number; name: string; _uid: string }>>(() => {
         const id = initial?.picDeploymentId || 0;
@@ -643,9 +706,21 @@ export default function TaskFormModal({
             startDate: defaultStart,
         });
 
-        const hid = initial?.hospitalId || 0;
-        const hnm = initial?.hospitalName || "";
-        setHospitalOpt(hid ? { id: hid, name: hnm || String(hid) } : null);
+        const hccInit = Number((initial as { hccFacilityId?: number | null } | undefined)?.hccFacilityId || 0);
+        if (hccInit > 0) {
+            const hccNm =
+                String((initial as { hccFacilityName?: string | null } | undefined)?.hccFacilityName || "").trim() ||
+                String(initial?.hospitalName || "").trim();
+            setHospitalOpt({
+                id: -hccInit,
+                name: hccNm ? `${hccNm} (HCC)` : `HCC #${hccInit}`,
+                facilityType: "HCC",
+            });
+        } else {
+            const hid = initial?.hospitalId || 0;
+            const hnm = initial?.hospitalName || "";
+            setHospitalOpt(hid ? { id: hid, name: hnm || String(hid), facilityType: "HOSPITAL" } : null);
+        }
 
         const pid = initial?.picDeploymentId || 0;
         const pnm = initial?.picDeploymentName || "";
@@ -831,7 +906,12 @@ export default function TaskFormModal({
     const fromBusinessContract =
         Boolean((initial as any)?.fromBusinessContract) || Boolean((initial as any)?.businessProjectId);
 
-    const lockHospital = fromBusinessContract || (!initial?.id && (Boolean(initial?.hospitalId) || Boolean(initial?.hospitalName)));
+    const lockHospital =
+        fromBusinessContract ||
+        (!initial?.id &&
+            (Boolean(initial?.hospitalId) ||
+                Boolean(initial?.hospitalName) ||
+                Boolean((initial as { hccFacilityId?: number | null } | undefined)?.hccFacilityId)));
 
     // Determine if this task has been transferred to maintenance.
     // Sources: explicit prop, initial payload flag, or status === 'TRANSFERRED'
@@ -847,7 +927,7 @@ export default function TaskFormModal({
             return;
         }
         if (!hospitalOpt?.id) {
-            toast.error("Bệnh viện không được để trống");
+            toast.error(curatorLayout ? "Vui lòng chọn bệnh viện hoặc cơ sở HCC" : "Bệnh viện không được để trống");
             return;
         }
         if (picOpts.length === 0) {
@@ -879,32 +959,54 @@ export default function TaskFormModal({
         // Tạo danh sách tất cả PIC IDs (bao gồm PIC chính + các PIC bổ sung)
         const allPicIds = picOpts.map(p => p.id);
 
-        const payload: ImplementationTaskRequestDTO = {
-            name: model.name!.trim(),
-            hospitalId: hospitalOpt.id,
-            picDeploymentId: picOpts[0].id, // Gửi PIC đầu tiên làm chính
-            // Gửi danh sách tất cả PICs (bao gồm cả PIC chính) để backend xử lý
-            picDeploymentIds: allPicIds,
-            agencyId: null,
-            hisSystemId: null,
-            hardwareId: null,
-            quantity: null,
-            apiTestStatus: model.apiTestStatus ?? null,
-            bhytPortCheckInfo: null,
-            // Không lưu PIC IDs vào additionalRequest nữa, chỉ giữ yêu cầu bổ sung
-            additionalRequest: cleanedAdditionalRequest || null,
-            apiUrl: null,
-            deadline: toISOOrNull(model.deadline) ?? null,
-            completionDate: derivedCompletion,
-            status: model.status ?? null,
-            startDate: finalStartDate,
-        };
+        const isHccFacility =
+            curatorLayout &&
+            (hospitalOpt.facilityType === "HCC" || hospitalOpt.id < 0);
+        const payload: ImplementationTaskRequestDTO & { hospitalId?: number | null; hccFacilityId?: number | null } =
+            curatorLayout
+                ? {
+                      name: model.name!.trim(),
+                      hospitalId: isHccFacility ? null : hospitalOpt.id,
+                      hccFacilityId: isHccFacility ? Math.abs(hospitalOpt.id) : null,
+                      picDeploymentId: picOpts[0].id,
+                      picDeploymentIds: allPicIds,
+                      agencyId: null,
+                      hisSystemId: null,
+                      hardwareId: null,
+                      quantity: null,
+                      apiTestStatus: model.apiTestStatus ?? null,
+                      bhytPortCheckInfo: null,
+                      additionalRequest: cleanedAdditionalRequest || null,
+                      apiUrl: null,
+                      deadline: toISOOrNull(model.deadline) ?? null,
+                      completionDate: derivedCompletion,
+                      status: model.status ?? null,
+                      startDate: finalStartDate,
+                  }
+                : {
+                      name: model.name!.trim(),
+                      hospitalId: hospitalOpt.id,
+                      picDeploymentId: picOpts[0].id,
+                      picDeploymentIds: allPicIds,
+                      agencyId: null,
+                      hisSystemId: null,
+                      hardwareId: null,
+                      quantity: null,
+                      apiTestStatus: model.apiTestStatus ?? null,
+                      bhytPortCheckInfo: null,
+                      additionalRequest: cleanedAdditionalRequest || null,
+                      apiUrl: null,
+                      deadline: toISOOrNull(model.deadline) ?? null,
+                      completionDate: derivedCompletion,
+                      status: model.status ?? null,
+                      startDate: finalStartDate,
+                  };
 
         try {
             setSubmitting(true);
             // console.log('Submitting with PICs:', picOpts.map(p => ({ id: p.id, name: p.name })));
             // console.log('Payload additionalRequest:', payload.additionalRequest);
-            await onSubmit(payload, initial?.id);
+            await onSubmit(payload as ImplementationTaskRequestDTO, initial?.id);
             // Không hiển thị toast ở đây vì handleSubmit trong implementsuper-task.tsx đã có toast rồi
             onClose();
         } catch (err: unknown) {
@@ -940,6 +1042,7 @@ export default function TaskFormModal({
                 setPicOpts={setPicOpts}
                 searchHospitals={searchHospitals}
                 hospitalStaticOptions={pageHospitalOptions}
+                hospitalRemoteSupplement={fetchSuperadminHccFacilityOptions}
                 searchPICs={searchPICs}
                 excludeAccepted={excludeAccepted}
                 STATUS_OPTIONS={STATUS_OPTIONS}
