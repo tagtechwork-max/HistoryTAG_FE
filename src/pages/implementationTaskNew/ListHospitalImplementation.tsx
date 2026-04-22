@@ -1228,7 +1228,7 @@ export default function ListHospitalImplementation() {
                           >
                             {orDash(display.phaseLabel)}
                           </span>
-                          {typeof commentCount === "number" && commentCount > 0 && (
+                          {display.health !== "completed" && typeof commentCount === "number" && commentCount > 0 && (
                             <p className="truncate max-w-[220px] text-xs text-red-600 dark:text-red-400">
                               {`${commentCount} bình luận`}
                             </p>
