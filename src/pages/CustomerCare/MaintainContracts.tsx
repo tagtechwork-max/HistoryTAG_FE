@@ -395,6 +395,16 @@ export default function MaintainContractsPage() {
     } else {
       setPaidAmountDisplay('');
     }
+
+    const hosp = item.hospital as { id?: number; label?: string; name?: string } | null | undefined;
+    if (hosp?.id != null) {
+      const hid = Number(hosp.id);
+      const labelRaw = hosp.label ?? hosp.name ?? "";
+      const label = String(labelRaw).trim() || `Bệnh viện #${hid}`;
+      setSelectedHospital({ id: hid, label });
+    } else {
+      setSelectedHospital(null);
+    }
   }
 
   // Pic User và Hospital options
@@ -447,10 +457,17 @@ export default function MaintainContractsPage() {
     if (form.picUserId) {
       const pic = picOptions.find((p) => p.id === form.picUserId);
       setSelectedPic(pic || null);
+    } else {
+      setSelectedPic(null);
     }
     if (form.hospitalId) {
       const hospital = hospitalOptions.find((h) => h.id === form.hospitalId);
-      setSelectedHospital(hospital || null);
+      if (hospital) {
+        setSelectedHospital(hospital);
+      }
+      // hospitalOptions is often empty (lazy load); do not clear — fillForm / RemoteSelect set label+id
+    } else {
+      setSelectedHospital(null);
     }
   }, [open, form.picUserId, form.hospitalId, picOptions, hospitalOptions]);
 
@@ -788,6 +805,8 @@ export default function MaintainContractsPage() {
     setTotalPriceDisplay("");
     setPaidAmountDisplay("");
     setPaidAmountError(null);
+    setSelectedHospital(null);
+    setSelectedPic(null);
     setOpen(true);
   }
 
@@ -1874,6 +1893,7 @@ export default function MaintainContractsPage() {
                                 <span>{fmtDate(item.startDate)}</span>
                               </div>
                             ) : (
+                              
                               <span className="text-sm text-gray-400">—</span>
                             )}
                           </td>

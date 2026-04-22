@@ -283,13 +283,6 @@ function RemoteSelectHospital({
     };
   }, [q, fetchOptions]);
 
-  // Auto focus input when openBox becomes true
-  useEffect(() => {
-    if (openBox && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [openBox]);
-
   // Handle click outside to close dropdown
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -410,7 +403,11 @@ function RemoteSelectHospital({
           </button>
         )} */}
         {openBox && !disabled && (
-          <div className="absolute z-[110] mt-1 max-h-56 w-full overflow-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+          <div
+            ref={dropdownRef}
+            className="absolute z-[110] mt-1 max-h-56 w-full overflow-auto rounded-xl border border-gray-200 bg-white shadow-lg"
+            onMouseDown={(e) => e.preventDefault()}
+          >
             {loadingBox && (
               <div className="px-4 py-3 text-sm text-gray-500 text-center">
                 Đang tìm kiếm...
@@ -526,66 +523,62 @@ export default function MaintainContractForm({
 
   const searchHospitalsWrapped = useMemo(
     () => async (term: string) => {
+      const t = (term || "").trim();
+      const searchLower = t.toLowerCase();
+
+      // Primary: global hospital search API (works for any hospital, not only those in customer care)
       try {
-        // Lấy danh sách hospitals từ customer care list
+        const list = await searchHospitals(t);
+        const mapped = Array.isArray(list)
+          ? list.map((h: any) => {
+              const id = Number(h.id ?? h.hospitalId);
+              const label = String(
+                h.label ?? h.name ?? h.hospitalName ?? (Number.isFinite(id) ? String(id) : "")
+              ).trim();
+              return { id, label };
+            })
+          : [];
+        const valid = mapped.filter((h) => Number.isFinite(h.id) && h.label);
+        if (valid.length > 0) {
+          return valid.sort((a, b) => a.label.localeCompare(b.label, "vi", { sensitivity: "base" }));
+        }
+      } catch (e) {
+        console.error("searchHospitals failed:", e);
+      }
+
+      // Fallback: hospitals referenced on customer care records
+      try {
         const customerCaresRes = await getAllCustomerCares({
           page: 0,
-          size: 1000, // Lấy tất cả để filter
-          sortBy: 'createdAt',
-          sortDir: 'desc'
+          size: 1000,
+          sortBy: "createdAt",
+          sortDir: "desc",
         });
-        
-        // Extract hospitals từ customer care list
         const hospitals = new Map<number, { id: number; label: string }>();
-        
         const content = customerCaresRes?.content || customerCaresRes || [];
         content.forEach((care: any) => {
           if (care.hospitalId && care.hospitalName) {
             const hospitalId = Number(care.hospitalId);
-            const hospitalName = String(care.hospitalName || '');
-            
-            // Filter theo search term nếu có
-            if (term && term.trim()) {
-              const searchLower = term.toLowerCase().trim();
-              if (!hospitalName.toLowerCase().includes(searchLower) &&
-                  !(care.hospitalCode || '').toLowerCase().includes(searchLower)) {
-                return; // Skip nếu không match
+            const hospitalName = String(care.hospitalName || "");
+            if (t) {
+              if (
+                !hospitalName.toLowerCase().includes(searchLower) &&
+                !(String(care.hospitalCode || "").toLowerCase().includes(searchLower))
+              ) {
+                return;
               }
             }
-            
             if (!hospitals.has(hospitalId)) {
-              hospitals.set(hospitalId, {
-                id: hospitalId,
-                label: hospitalName
-              });
+              hospitals.set(hospitalId, { id: hospitalId, label: hospitalName });
             }
           }
         });
-        
-        // Convert map to array và sort
-        const result = Array.from(hospitals.values()).sort((a, b) => 
-          a.label.localeCompare(b.label, 'vi', { sensitivity: 'base' })
+        return Array.from(hospitals.values()).sort((a, b) =>
+          a.label.localeCompare(b.label, "vi", { sensitivity: "base" })
         );
-        
-        return result;
       } catch (e) {
         console.error("Error loading hospitals from customer care:", e);
-        // Fallback: nếu lỗi thì vẫn search từ tất cả hospitals
-        try {
-          const list = await searchHospitals(term);
-          const mapped = Array.isArray(list) ? list.map((h: any) => {
-            const id = h.id || h.hospitalId;
-            const label = h.label || h.name || h.hospitalName || String(id || '');
-            return {
-              id: Number(id),
-              label: String(label),
-            };
-          }) : [];
-          return mapped.filter((h) => Number.isFinite(h.id) && h.label && h.label.trim() !== '');
-        } catch (fallbackErr) {
-          console.error("Fallback search also failed:", fallbackErr);
-          return [];
-        }
+        return [];
       }
     },
     []

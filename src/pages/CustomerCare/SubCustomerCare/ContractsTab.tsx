@@ -75,8 +75,10 @@ export default function ContractsTab({
     durationYears: "",
     yearlyPrice: "",
     totalPrice: "",
+    kioskQuantity: "",
     paymentStatus: "CHUA_THANH_TOAN",
     paidAmount: "",
+    paymentDate: null,
     startDate: null,
     endDate: null,
   });
@@ -198,8 +200,10 @@ export default function ContractsTab({
           durationYears: "",
           yearlyPrice: "",
           totalPrice: "",
+          kioskQuantity: "",
           paymentStatus: "CHUA_THANH_TOAN",
           paidAmount: "",
+          paymentDate: null,
           startDate: null,
           endDate: null,
         });
@@ -323,6 +327,7 @@ export default function ContractsTab({
       kioskQuantity: "",
       paymentStatus: "CHUA_THANH_TOAN",
       paidAmount: "",
+      paymentDate: null,
       startDate: null,
       endDate: null,
     });
@@ -419,6 +424,13 @@ export default function ContractsTab({
         ? (contractDetail as any).paidAmount
         : ((contractDetail as any).paidAmount ? Number((contractDetail as any).paidAmount) : "");
 
+      const paymentDateRaw =
+        (contractDetail as any)?.paymentDate ?? (contractDetail as any)?.payment_date ?? null;
+      const paymentDateForInput =
+        typeof paymentDateRaw === "string" && paymentDateRaw.length >= 10
+          ? paymentDateRaw.slice(0, 10)
+          : null;
+
       setForm({
         contractCode: contractDetail.contractCode || contract.code || '',
         picUserId: contractDetail.picUser?.id,
@@ -429,6 +441,10 @@ export default function ContractsTab({
         kioskQuantity: contractDetail.kioskQuantity || '',
         paymentStatus: (paymentStatus === "DA_THANH_TOAN" ? "DA_THANH_TOAN" : paymentStatus === "THANH_TOAN_HET" ? "THANH_TOAN_HET" : "CHUA_THANH_TOAN") as "CHUA_THANH_TOAN" | "DA_THANH_TOAN" | "THANH_TOAN_HET",
         paidAmount: (paymentStatus === "DA_THANH_TOAN" || paymentStatus === "THANH_TOAN_HET" ? paidAmount : ""),
+        paymentDate:
+          paymentStatus === "DA_THANH_TOAN" || paymentStatus === "THANH_TOAN_HET"
+            ? paymentDateForInput
+            : null,
         startDate: startDateFormatted,
         endDate: endDateFormatted,
       });
@@ -478,6 +494,7 @@ export default function ContractsTab({
         kioskQuantity: '',
         paymentStatus: "CHUA_THANH_TOAN",
         paidAmount: "",
+        paymentDate: null,
         startDate: null,
         endDate: null,
       });
@@ -595,6 +612,7 @@ export default function ContractsTab({
         kioskQuantity: contractDetail.kioskQuantity || '',
         paymentStatus: "CHUA_THANH_TOAN",
         paidAmount: "",
+        paymentDate: null,
         startDate: startDateFormatted,
         endDate: null, // Sẽ được tính tự động dựa trên durationYears
       });
@@ -805,6 +823,15 @@ export default function ContractsTab({
         return;
       }
     }
+    if (
+      (form.paymentStatus || "CHUA_THANH_TOAN") === "DA_THANH_TOAN" ||
+      form.paymentStatus === "THANH_TOAN_HET"
+    ) {
+      if (!form.paymentDate || !String(form.paymentDate).trim()) {
+        setError("Vui lòng nhập ngày thanh toán");
+        return;
+      }
+    }
 
     // Validate và convert prices
     let yearlyPriceNum: number;
@@ -873,6 +900,13 @@ export default function ContractsTab({
         }
       };
 
+      const paymentDateForPayload =
+        (form.paymentStatus === "DA_THANH_TOAN" || form.paymentStatus === "THANH_TOAN_HET") &&
+        form.paymentDate &&
+        String(form.paymentDate).trim()
+          ? `${String(form.paymentDate).trim()}T00:00:00`
+          : null;
+
       const payload = {
         contractCode: form.contractCode.trim(),
         type: "Bảo trì (Maintenance)" as const,
@@ -887,6 +921,7 @@ export default function ContractsTab({
         paidAmount: form.paymentStatus === "THANH_TOAN_HET"
           ? (typeof form.totalPrice === "number" ? form.totalPrice : null)
           : (form.paymentStatus === "DA_THANH_TOAN" && typeof form.paidAmount === "number") ? form.paidAmount : null,
+        paymentDate: paymentDateForPayload,
         startDate: formatDateTimeForBackend(form.startDate),
         endDate: formatDateTimeForBackend(form.endDate),
         linkedContractId: renewingContractId || null, // Link với hợp đồng gốc nếu đang gia hạn
