@@ -21,12 +21,67 @@ type PreviewData = {
   allTasks: PreviewItem[];
   incompleteTasks: PreviewItem[];
 };
+type GroupedPreviewRow = {
+  item: PreviewItem;
+  dateFacilityRowSpan: number;
+  isDateFacilityStart: boolean;
+  statusRowSpan: number;
+  isStatusStart: boolean;
+};
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
 function authHeaders(): Record<string, string> {
   const token = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function buildGroupedRows(items: PreviewItem[]): GroupedPreviewRow[] {
+  const rows: GroupedPreviewRow[] = items.map((item) => ({
+    item,
+    dateFacilityRowSpan: 0,
+    isDateFacilityStart: false,
+    statusRowSpan: 0,
+    isStatusStart: false,
+  }));
+
+  let i = 0;
+  while (i < items.length) {
+    const current = items[i];
+    let dateFacilitySpan = 1;
+    let j = i + 1;
+    while (j < items.length) {
+      const next = items[j];
+      const sameDateFacility = next.dateLabel === current.dateLabel && next.note === current.note;
+      if (!sameDateFacility) break;
+      dateFacilitySpan += 1;
+      j += 1;
+    }
+    rows[i].isDateFacilityStart = true;
+    rows[i].dateFacilityRowSpan = dateFacilitySpan;
+    i += dateFacilitySpan;
+  }
+
+  i = 0;
+  while (i < items.length) {
+    const current = items[i];
+    let statusSpan = 1;
+    let j = i + 1;
+    while (j < items.length) {
+      const next = items[j];
+      const sameStatusGroup =
+        next.dateLabel === current.dateLabel &&
+        next.note === current.note &&
+        next.status === current.status;
+      if (!sameStatusGroup) break;
+      statusSpan += 1;
+      j += 1;
+    }
+    rows[i].isStatusStart = true;
+    rows[i].statusRowSpan = statusSpan;
+    i += statusSpan;
+  }
+  return rows;
 }
 
 export default function WorkReportExportButton({ role }: { role: "admin" | "superadmin" }) {
@@ -46,6 +101,14 @@ export default function WorkReportExportButton({ role }: { role: "admin" | "supe
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const fromDateRef = useRef<HTMLInputElement | null>(null);
   const toDateRef = useRef<HTMLInputElement | null>(null);
+  const groupedAllTasks = useMemo(
+    () => (previewData ? buildGroupedRows(previewData.allTasks) : []),
+    [previewData],
+  );
+  const groupedIncompleteTasks = useMemo(
+    () => (previewData ? buildGroupedRows(previewData.incompleteTasks) : []),
+    [previewData],
+  );
 
   const currentUser = useMemo(() => {
     try {
@@ -335,13 +398,19 @@ export default function WorkReportExportButton({ role }: { role: "admin" | "supe
                   </tr>
                 </thead>
                 <tbody>
-                  {previewData.allTasks.map((r, idx) => (
+                  {groupedAllTasks.map((row, idx) => (
                     <tr key={`all-${idx}`}>
-                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{r.dateLabel}</td>
-                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{r.note}</td>
-                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{r.status}</td>
-                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{r.taskName}</td>
-                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{r.additionalRequest || ""}</td>
+                      {row.isDateFacilityStart && (
+                        <>
+                          <td rowSpan={row.dateFacilityRowSpan} className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{row.item.dateLabel}</td>
+                          <td rowSpan={row.dateFacilityRowSpan} className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{row.item.note}</td>
+                        </>
+                      )}
+                      {row.isStatusStart && (
+                        <td rowSpan={row.statusRowSpan} className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{row.item.status}</td>
+                      )}
+                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{row.item.taskName}</td>
+                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{row.item.additionalRequest || ""}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -358,13 +427,19 @@ export default function WorkReportExportButton({ role }: { role: "admin" | "supe
                   </tr>
                 </thead>
                 <tbody>
-                  {previewData.incompleteTasks.map((r, idx) => (
+                  {groupedIncompleteTasks.map((row, idx) => (
                     <tr key={`in-${idx}`}>
-                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{r.dateLabel}</td>
-                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{r.note}</td>
-                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{r.status}</td>
-                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{r.taskName}</td>
-                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{r.additionalRequest || ""}</td>
+                      {row.isDateFacilityStart && (
+                        <>
+                          <td rowSpan={row.dateFacilityRowSpan} className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{row.item.dateLabel}</td>
+                          <td rowSpan={row.dateFacilityRowSpan} className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{row.item.note}</td>
+                        </>
+                      )}
+                      {row.isStatusStart && (
+                        <td rowSpan={row.statusRowSpan} className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{row.item.status}</td>
+                      )}
+                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{row.item.taskName}</td>
+                      <td className="border border-slate-400 px-2 py-1 align-top break-words whitespace-pre-wrap">{row.item.additionalRequest || ""}</td>
                     </tr>
                   ))}
                 </tbody>

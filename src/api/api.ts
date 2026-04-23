@@ -145,6 +145,34 @@ export type WorkItemDetailDto = TaskDetail & {
   }[];
 };
 
+export type SupplementalTaskItem = {
+  id: number;
+  taskName: string;
+  assigneeUserId: number | null;
+  assigneeName: string | null;
+  startDate: string | null;
+  deadline: string | null;
+  status: string;
+  statusLabel: string;
+  note: string | null;
+  version: number;
+};
+
+export type SupplementalTaskUpsertPayload = {
+  taskName: string;
+  assigneeUserId: number;
+  startDate?: string | null;
+  deadline?: string | null;
+  status: string;
+  note?: string | null;
+  version?: number;
+};
+
+export type SupplementalTaskAssigneeOption = {
+  id: number;
+  fullName: string;
+};
+
 /** Convert date-only "YYYY-MM-DD" to ISO LocalDateTime "YYYY-MM-DDTHH:mm:ss" for Java backend */
 function toLocalDateTime(v: string | null | undefined): string | null {
   if (!v || typeof v !== "string") return null;
@@ -565,6 +593,54 @@ export async function fetchWorkItems(params: {
 export async function fetchWorkItemDetail(id: number | string): Promise<WorkItemDetailDto> {
   const { data } = await api.get<WorkItemDetailDto>(`/api/v1/work-items/${id}`);
   return data;
+}
+
+export async function fetchSupplementalTasks(
+  implementationTaskId: string | number
+): Promise<SupplementalTaskItem[]> {
+  const { data } = await api.get<SupplementalTaskItem[]>(
+    `/api/v1/implementation-tasks/${implementationTaskId}/supplemental-tasks`
+  );
+  return Array.isArray(data) ? data : [];
+}
+
+export async function createSupplementalTask(
+  implementationTaskId: string | number,
+  payload: SupplementalTaskUpsertPayload
+): Promise<SupplementalTaskItem> {
+  const { data } = await api.post<SupplementalTaskItem>(
+    `/api/v1/implementation-tasks/${implementationTaskId}/supplemental-tasks`,
+    payload
+  );
+  return data;
+}
+
+export async function updateSupplementalTask(
+  implementationTaskId: string | number,
+  supplementalTaskId: number,
+  payload: SupplementalTaskUpsertPayload
+): Promise<SupplementalTaskItem> {
+  const { data } = await api.patch<SupplementalTaskItem>(
+    `/api/v1/implementation-tasks/${implementationTaskId}/supplemental-tasks/${supplementalTaskId}`,
+    payload
+  );
+  return data;
+}
+
+export async function deleteSupplementalTask(
+  implementationTaskId: string | number,
+  supplementalTaskId: number
+): Promise<void> {
+  await api.delete(
+    `/api/v1/implementation-tasks/${implementationTaskId}/supplemental-tasks/${supplementalTaskId}`
+  );
+}
+
+export async function fetchSupplementalTaskAssignees(): Promise<SupplementalTaskAssigneeOption[]> {
+  const { data } = await api.get<SupplementalTaskAssigneeOption[]>(
+    "/api/v1/implementation-tasks/supplemental-tasks/assignees"
+  );
+  return Array.isArray(data) ? data : [];
 }
 
 export async function createWorkItem(params: {
