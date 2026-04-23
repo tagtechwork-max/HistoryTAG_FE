@@ -16,9 +16,6 @@ export type ConfirmDialogProps = {
   onConfirm: () => void | Promise<void>;
 };
 
-/**
- * In-app confirmation overlay (replaces window.confirm).
- */
 export function ConfirmDialog({
   open,
   title,

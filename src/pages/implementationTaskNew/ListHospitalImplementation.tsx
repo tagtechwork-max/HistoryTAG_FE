@@ -9,6 +9,8 @@ import {
   fetchImplementationTasks,
   fetchImplementationTaskDetail,
   fetchMilestones,
+  fetchWorkItems,
+  fetchWorkItemDetail,
   createImplementationTask,
   updateImplementationTask,
   deleteImplementationTask,
@@ -119,23 +121,6 @@ function getCompletionDeadlineLabel(
 /** Display value or "-" when empty (no data) */
 function orDash(value: string | null | undefined): string {
   return value != null && String(value).trim() !== "" ? String(value).trim() : "-";
-}
-
-/** Returns "overdue" | "near" | null. Near = within 3 days. Only for non-completed tasks. */
-function getDeadlineStatus(
-  deadline: string | null,
-  health: string
-): "overdue" | "near" | null {
-  if (health === "completed" || !deadline) return null;
-  const d = new Date(deadline.includes("T") ? deadline : deadline + "T00:00:00");
-  if (Number.isNaN(d.getTime())) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  d.setHours(0, 0, 0, 0);
-  const dayDiff = Math.round((d.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
-  if (dayDiff < 0) return "overdue";
-  if (dayDiff <= 3) return "near";
-  return null;
 }
 
 const PHASE_COLORS: Record<string, string> = {
@@ -346,6 +331,8 @@ export default function ListHospitalImplementation() {
   const pendingCountRef = useRef<number>(0);
   /** Milestones per task id for current page – used to derive progress/health when all 4 phases completed */
   const [milestonesByTaskId, setMilestonesByTaskId] = useState<Record<string, MilestoneDto[]>>({});
+  /** Total comments per implementation task (sum of comments from all work-items) for current page */
+  const [commentCountByTaskId, setCommentCountByTaskId] = useState<Record<string, number>>({});
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
 
@@ -517,11 +504,14 @@ export default function ListHospitalImplementation() {
     );
     if (selectedNames.size === 0) return rows;
 
-    // Include rows where selected person is PTC (Phụ trách chính) OR NTH (Người thực hiện)
+    // Include rows where selected person is PTC or one of support engineers.
     return rows.filter((row) => {
       const pmName = (row.pmName || "").toLowerCase().trim();
+      const supportNames = (row.supportEngineerNames ?? [])
+        .map((name) => String(name || "").toLowerCase().trim())
+        .filter(Boolean);
       const engineerName = (row.engineerName || "").toLowerCase().trim();
-      return selectedNames.has(pmName) || selectedNames.has(engineerName);
+      return selectedNames.has(pmName) || supportNames.some((name) => selectedNames.has(name)) || selectedNames.has(engineerName);
     });
   })();
 
@@ -675,6 +665,45 @@ export default function ListHospitalImplementation() {
     };
   }, [data]);
 
+  useEffect(() => {
+    if (data.length === 0) {
+      setCommentCountByTaskId({});
+      return;
+    }
+    let cancelled = false;
+    Promise.all(
+      data.map(async (item) => {
+        try {
+          const workItems = await fetchWorkItems({ implementationTaskId: item.id });
+          if (!Array.isArray(workItems) || workItems.length === 0) {
+            return { id: String(item.id), count: 0 };
+          }
+          const counts = await Promise.all(
+            workItems.map((workItem) =>
+              fetchWorkItemDetail(workItem.id)
+                .then((detail) => detail.comments?.length ?? 0)
+                .catch(() => 0)
+            )
+          );
+          const totalComments = counts.reduce((sum, count) => sum + count, 0);
+          return { id: String(item.id), count: totalComments };
+        } catch {
+          return { id: String(item.id), count: 0 };
+        }
+      })
+    ).then((pairs) => {
+      if (cancelled) return;
+      const map: Record<string, number> = {};
+      pairs.forEach(({ id, count }) => {
+        map[id] = count;
+      });
+      setCommentCountByTaskId(map);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [data]);
+
   const handleItemsPerPageChange = (value: number) => {
     const allowed = [5, 10, 20, 50];
     const v = allowed.includes(value) ? value : 10;
@@ -756,8 +785,10 @@ export default function ListHospitalImplementation() {
           goLiveDeadline: toDateInput(task.goLiveDeadline ? String(task.goLiveDeadline) : null),
           pmUserId: task.pmUserId ?? null,
           engineerUserId: task.engineerUserId ?? null,
+          engineerUserIds: task.supportEngineerUserIds ?? (task.engineerUserId ? [task.engineerUserId] : []),
           pmName: task.pmName ?? undefined,
           engineerName: task.engineerName ?? undefined,
+          supportEngineerNames: task.supportEngineerNames ?? [],
           _version: task.version,
         };
         setEditHospital(initial);
@@ -818,6 +849,7 @@ export default function ListHospitalImplementation() {
           goLiveDeadline: payload.goLiveDeadline,
           pmUserId: payload.pmUserId ?? undefined,
           engineerUserId: payload.engineerUserId ?? undefined,
+          engineerUserIds: payload.engineerUserIds,
           version: payload.version,
         });
       } else if (payload.hospitalId) {
@@ -829,6 +861,7 @@ export default function ListHospitalImplementation() {
           goLiveDeadline: payload.goLiveDeadline,
           pmUserId: payload.pmUserId,
           engineerUserId: payload.engineerUserId,
+          engineerUserIds: payload.engineerUserIds,
         });
         createdDetail = created;
         createdId = created?.id ?? null;
@@ -1098,12 +1131,6 @@ export default function ListHospitalImplementation() {
                     Ngày bắt đầu
                   </th>
                   <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                    Hạn báo cáo
-                  </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                    Hạn go-live
-                  </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
                     Ngày hoàn thành
                   </th>
                   <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 min-w-[180px]">
@@ -1112,8 +1139,8 @@ export default function ListHospitalImplementation() {
                   <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
                     Tiến độ
                   </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 min-w-[140px]">
-                    PTC & NHT
+                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 min-w-[180px]">
+                    PTC & KTH
                   </th>
                   <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 min-w-[120px]">
                     Tình trạng
@@ -1127,14 +1154,13 @@ export default function ListHospitalImplementation() {
                 {displayedRows.map((row, index) => {
                   const display = getRowDisplay(row, milestonesByTaskId[String(row.id)]);
                   const statusDisplay = getStatusDisplay(row, display.health, display.healthLabel);
+                  const commentCount = commentCountByTaskId[String(row.id)];
                   const borderClass =
                     display.health === "at_risk"
                       ? "border-l-4 border-l-red-500"
                       : display.health === "blocked"
                         ? "border-l-4 border-l-amber-500"
                         : "";
-                  const reportStatus = getDeadlineStatus(row.reportDeadline, display.health);
-                  const goLiveStatus = getDeadlineStatus(row.goLiveDeadline, display.health);
                   return (
                     <tr
                       key={row.id}
@@ -1169,48 +1195,6 @@ export default function ListHospitalImplementation() {
                         {formatDate(row.startDate) || "-"}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm">
-                        <div className="flex flex-col gap-0.5">
-                          <span
-                            className={
-                              reportStatus === "overdue"
-                                ? "font-medium text-red-600 dark:text-red-400"
-                                : reportStatus === "near"
-                                  ? "font-medium text-amber-600 dark:text-amber-400"
-                                  : "text-gray-700 dark:text-gray-300"
-                            }
-                          >
-                            {formatDate(row.reportDeadline) || "-"}
-                          </span>
-                          {reportStatus === "overdue" && (
-                            <span className="text-xs font-medium text-red-600 dark:text-red-400">Quá hạn</span>
-                          )}
-                          {reportStatus === "near" && (
-                            <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Sắp đến hạn</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm">
-                        <div className="flex flex-col gap-0.5">
-                          <span
-                            className={
-                              goLiveStatus === "overdue"
-                                ? "font-medium text-red-600 dark:text-red-400"
-                                : goLiveStatus === "near"
-                                  ? "font-medium text-amber-600 dark:text-amber-400"
-                                  : "text-gray-700 dark:text-gray-300"
-                            }
-                          >
-                            {formatDate(row.goLiveDeadline) || "-"}
-                          </span>
-                          {goLiveStatus === "overdue" && (
-                            <span className="text-xs font-medium text-red-600 dark:text-red-400">Quá hạn</span>
-                          )}
-                          {goLiveStatus === "near" && (
-                            <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Sắp đến hạn</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm">
                         {(() => {
                           const { dateText, statusLabel, isOnTime } = getCompletionDeadlineLabel(
                             row.completionDate ?? null,
@@ -1235,14 +1219,21 @@ export default function ListHospitalImplementation() {
                         })()}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
-                        <span
-                          className={`inline-flex max-w-[220px] truncate rounded-full px-2.5 py-1 text-xs font-medium ${
-                            PHASE_COLORS[display.phaseColor]
-                          }`}
-                          title={display.phaseLabel}
-                        >
-                          {orDash(display.phaseLabel)}
-                        </span>
+                        <div className="flex flex-col gap-1">
+                          <span
+                            className={`inline-flex max-w-[220px] truncate rounded-full px-2.5 py-1 text-xs font-medium ${
+                              PHASE_COLORS[display.phaseColor]
+                            }`}
+                            title={display.phaseLabel}
+                          >
+                            {orDash(display.phaseLabel)}
+                          </span>
+                          {display.health !== "completed" && typeof commentCount === "number" && commentCount > 0 && (
+                            <p className="truncate max-w-[220px] text-xs text-red-600 dark:text-red-400">
+                              {`${commentCount} bình luận`}
+                            </p>
+                          )}
+                        </div>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <div className="flex items-center gap-2">
@@ -1257,13 +1248,22 @@ export default function ListHospitalImplementation() {
                           </span>
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm min-w-[140px]">
+                      <td className="whitespace-nowrap px-4 py-3 text-sm min-w-[180px]">
                         <div className="min-w-0">
-                          <p className="truncate max-w-[140px] font-medium text-gray-900 dark:text-white" title={row.pmName ?? ""}>
+                          <p className="truncate max-w-[180px] font-medium text-gray-900 dark:text-white" title={row.pmName ?? ""}>
                             PTC: {orDash(row.pmName)}
                           </p>
-                          <p className="truncate max-w-[140px] text-xs text-gray-500 dark:text-gray-400" title={row.engineerName ?? ""}>
-                            NHT: {orDash(row.engineerName)}
+                          <p
+                            className="truncate max-w-[180px] text-xs text-gray-500 dark:text-gray-400"
+                            title={(row.supportEngineerNames && row.supportEngineerNames.length > 0)
+                              ? row.supportEngineerNames.join(", ")
+                              : (row.engineerName ?? "")}
+                          >
+                            Kỹ thuật hỗ trợ: {orDash(
+                              row.supportEngineerNames && row.supportEngineerNames.length > 0
+                                ? row.supportEngineerNames.join(", ")
+                                : row.engineerName
+                            )}
                           </p>
                         </div>
                       </td>

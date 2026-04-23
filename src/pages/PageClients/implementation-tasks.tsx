@@ -527,6 +527,7 @@ function TaskFormModal({
   const searchPICs = useMemo(
     () => async (term: string) => {
       const params = new URLSearchParams({ name: term });
+      params.set("includeSuperAdmin", "true");
       // Lọc theo team DEPLOYMENT cho implementation tasks
       if (userTeam === "DEPLOYMENT") {
         params.set("team", "DEPLOYMENT");
@@ -2036,6 +2037,7 @@ const ImplementationTasksPage: React.FC = () => {
       try {
         const params = new URLSearchParams({
           department: "IT",
+          includeSuperAdmin: "true",
         });
         const res = await fetch(`${API_ROOT}/api/v1/admin/users/search?${params.toString()}`, {
           method: 'GET',

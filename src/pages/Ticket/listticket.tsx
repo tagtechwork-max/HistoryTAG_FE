@@ -290,7 +290,7 @@ export default function ListTicketPage() {
   const loadItUsers = async () => {
     setLoadingItUsers(true);
     try {
-      const res = await api.get('/api/v1/admin/users/search?department=IT');
+      const res = await api.get('/api/v1/admin/users/search?department=IT&includeSuperAdmin=true');
       const list = Array.isArray(res.data) ? res.data : [];
       
       // Map from EntitySelectDTO format (id, label, subLabel) to our format

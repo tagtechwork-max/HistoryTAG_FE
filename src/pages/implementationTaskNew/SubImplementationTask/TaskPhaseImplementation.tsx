@@ -123,7 +123,7 @@ const MENU_HEIGHT = 140;
 
 export default function TaskPhaseImplementation() {
   const { hospitalId, phaseId } = useParams<{ hospitalId: string; phaseId: string }>();
-  const [task, setTask] = useState<{ hospitalName: string } | null>(null);
+  const [task, setTask] = useState<{ hospitalName: string; pmUserId: number | null } | null>(null);
   const [phase, setPhase] = useState<MilestoneDto | null>(null);
   const [resolvedMilestoneId, setResolvedMilestoneId] = useState<string | null>(null);
   const [workItems, setWorkItems] = useState<WorkItemListDto[]>([]);
@@ -134,6 +134,7 @@ export default function TaskPhaseImplementation() {
   const [menuAnchor, setMenuAnchor] = useState<DOMRect | null>(null);
   const [detailTask, setDetailTask] = useState<TaskDetail | null>(null);
   const [workItemDetail, setWorkItemDetail] = useState<WorkItemDetailDto | null>(null);
+  const [commentCountByTaskId, setCommentCountByTaskId] = useState<Record<number, number>>({});
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
   const [editTask, setEditTask] = useState<EditTaskInitial | null>(null);
@@ -142,6 +143,51 @@ export default function TaskPhaseImplementation() {
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const { ask: askConfirm, dialog: genericConfirmDialog } = useConfirmDialog();
+
+  const getCurrentUserId = useCallback((): number | null => {
+    try {
+      const direct = localStorage.getItem("userId") || sessionStorage.getItem("userId");
+      if (direct) {
+        const n = Number(direct);
+        if (Number.isFinite(n)) return n;
+      }
+      const raw = localStorage.getItem("user") || sessionStorage.getItem("user");
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as { id?: number | string; userId?: number | string };
+      const candidate = parsed.id ?? parsed.userId;
+      const n = Number(candidate);
+      return Number.isFinite(n) ? n : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const currentUserId = getCurrentUserId();
+
+  const getLikedCommentIds = useCallback((workItemId: number): number[] => {
+    if (currentUserId == null || !Number.isFinite(workItemId)) return [];
+    try {
+      const key = `impl_comment_reads_${currentUserId}_${workItemId}`;
+      const raw = localStorage.getItem(key);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as number[];
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((id) => Number.isFinite(Number(id))).map((id) => Number(id));
+    } catch {
+      return [];
+    }
+  }, [currentUserId]);
+
+  const setLikedCommentIds = useCallback((workItemId: number, ids: number[]) => {
+    if (currentUserId == null || !Number.isFinite(workItemId)) return;
+    const key = `impl_comment_reads_${currentUserId}_${workItemId}`;
+    localStorage.setItem(key, JSON.stringify(ids));
+  }, [currentUserId]);
+
+  const getUnreadCommentCount = useCallback((workItemId: number, totalComments: number) => {
+    const liked = new Set(getLikedCommentIds(workItemId));
+    return Math.max(0, totalComments - liked.size);
+  }, [getLikedCommentIds]);
 
   const openMenu = useCallback((taskId: string, button: HTMLButtonElement) => {
     const rect = button.getBoundingClientRect();
@@ -165,7 +211,10 @@ export default function TaskPhaseImplementation() {
     Promise.all([fetchImplementationTaskDetail(hospitalId), fetchMilestones(hospitalId)])
       .then(([detail, milestones]) => {
         if (cancelled) return;
-        setTask({ hospitalName: detail.hospitalName ?? detail.name ?? "—" });
+        setTask({
+          hospitalName: detail.hospitalName ?? detail.name ?? "—",
+          pmUserId: detail.pmUserId ?? null,
+        });
         const m =
           milestones.find((x) => String(x.id) === phaseId) ??
           milestones.find((x) => String(x.number) === phaseId);
@@ -210,6 +259,38 @@ export default function TaskPhaseImplementation() {
     };
   }, [hospitalId, phaseId]);
 
+  // Load comment counts for task cards so list view can show badges like "1 bình luận".
+  useEffect(() => {
+    if (workItems.length === 0) {
+      setCommentCountByTaskId({});
+      return;
+    }
+    let cancelled = false;
+    Promise.all(
+      workItems.map(async (item) => {
+        try {
+          const detail = await fetchWorkItemDetail(item.id);
+          return {
+            id: item.id,
+            count: getUnreadCommentCount(item.id, detail.comments?.length ?? 0),
+          };
+        } catch {
+          return { id: item.id, count: 0 };
+        }
+      })
+    ).then((rows) => {
+      if (cancelled) return;
+      const next: Record<number, number> = {};
+      rows.forEach((row) => {
+        next[row.id] = row.count;
+      });
+      setCommentCountByTaskId(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [workItems, getUnreadCommentCount]);
+
   const columns = workItems.length > 0 ? workItemsToColumns(workItems) : workItemsToColumns([]);
 
   // Completion % = completed tasks / all tasks in this phase (user request: "tính theo phần trăm hoàn thành trên tất cả")
@@ -246,6 +327,11 @@ export default function TaskPhaseImplementation() {
     if (action === "add") {
       try {
         const detail = await fetchWorkItemDetail(taskId);
+        const commentTotal = detail.comments?.length ?? 0;
+        setCommentCountByTaskId((prev) => ({
+          ...prev,
+          [Number(taskId)]: getUnreadCommentCount(Number(taskId), commentTotal),
+        }));
         const w = workItems.find((x) => x.id === numId);
         const detailTaskData: TaskDetail = {
           id: String(detail.id),
@@ -717,6 +803,15 @@ export default function TaskPhaseImplementation() {
                         <p className={`text-xs font-bold leading-snug text-slate-800 dark:text-slate-200 ${isCompletedCard ? "line-through text-slate-400" : ""}`}>
                           {task.title}
                         </p>
+                        {(() => {
+                          const count = commentCountByTaskId[Number(task.id)] ?? 0;
+                          if (count <= 0) return null;
+                          return (
+                            <p className="text-[10px] font-semibold text-red-600 dark:text-red-400">
+                              {count} bình luận
+                            </p>
+                          );
+                        })()}
 
                         {/* Blocked reason box - red style like reference */}
                         {task.blockedReason && (
@@ -848,10 +943,35 @@ export default function TaskPhaseImplementation() {
         task={detailTask}
         activityLog={workItemDetail?.activityLog}
         comments={workItemDetail?.comments}
+        canLikeComments={Boolean(
+          task?.pmUserId != null &&
+          currentUserId != null &&
+          Number(task.pmUserId) === Number(currentUserId)
+        )}
+        likedCommentIds={detailTask ? getLikedCommentIds(Number(detailTask.id)) : []}
+        onToggleLikeComment={detailTask ? (commentId: number) => {
+          const workItemId = Number(detailTask.id);
+          const current = new Set(getLikedCommentIds(workItemId));
+          if (current.has(commentId)) current.delete(commentId);
+          else current.add(commentId);
+          const next = Array.from(current.values());
+          setLikedCommentIds(workItemId, next);
+          const totalComments = workItemDetail?.comments?.length ?? 0;
+          setCommentCountByTaskId((prev) => ({
+            ...prev,
+            [workItemId]: Math.max(0, totalComments - next.length),
+          }));
+          setWorkItemDetail((prev) => (prev ? { ...prev } : prev));
+        } : undefined}
         onSendComment={detailTask ? async (content) => {
           await addWorkItemComment(detailTask.id, content);
           const refreshed = await fetchWorkItemDetail(detailTask.id);
           setWorkItemDetail(refreshed);
+          const workItemId = Number(detailTask.id);
+          setCommentCountByTaskId((prev) => ({
+            ...prev,
+            [workItemId]: getUnreadCommentCount(workItemId, refreshed.comments?.length ?? 0),
+          }));
         } : undefined}
         isOpen={isDetailOpen}
         onClose={() => {

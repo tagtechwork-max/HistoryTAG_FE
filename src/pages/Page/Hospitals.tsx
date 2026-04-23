@@ -1323,6 +1323,7 @@ export default function HospitalsPage() {
         // ✅ Dùng /api/v1/admin thay vì /api/v1/superadmin để admin thường cũng có thể dùng
         const params = new URLSearchParams({
           department: "IT",
+          includeSuperAdmin: "true",
         });
         const res = await fetch(`${API_BASE}/api/v1/admin/users/search?${params.toString()}`, {
           headers: { ...authHeader() },
