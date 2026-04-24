@@ -267,6 +267,10 @@ export default function PhaseImplementation() {
   const deadlineDateRef = useRef<HTMLInputElement | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportItems, setReportItems] = useState<WorkItemListDto[]>([]);
 
   const isSuperAdmin = window.location.pathname.startsWith("/superadmin");
   const basePath = isSuperAdmin ? "/superadmin/implementation-tasks-new" : "/implementation-tasks-new";
@@ -463,6 +467,11 @@ export default function PhaseImplementation() {
         }
       : null;
 
+  const currentPhase = useMemo(() => {
+    if (!hospital || phases.length === 0) return null;
+    return phases.find((p) => p.number === hospital.currentPhase) ?? null;
+  }, [phases, hospital]);
+
   const openCreateSupplementalModal = () => {
     const defaultAssigneeId = task?.pmUserId ? String(task.pmUserId) : "";
     setEditingSupplementalTask(null);
@@ -551,6 +560,26 @@ export default function PhaseImplementation() {
       toast.error(err?.response?.data?.message ?? err?.message ?? "Không thể xóa công việc bổ sung.");
     } finally {
       setDeletingSupplementalTask(false);
+    }
+  };
+
+  const handleOpenReport = async () => {
+    if (!hospitalId || !currentPhase) return;
+    setReportOpen(true);
+    setReportLoading(true);
+    setReportError(null);
+    try {
+      const items = await fetchWorkItems({
+        implementationTaskId: hospitalId,
+        milestoneId: String(currentPhase.id),
+      });
+      setReportItems(items);
+    } catch (e) {
+      const err = e as { response?: { data?: { message?: string } }; message?: string };
+      setReportError(err?.response?.data?.message ?? err?.message ?? "Không thể tải dữ liệu báo cáo.");
+      setReportItems([]);
+    } finally {
+      setReportLoading(false);
     }
   };
 
@@ -661,6 +690,10 @@ export default function PhaseImplementation() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => {
+                      void handleOpenReport();
+                    }}
+                    disabled={!currentPhase}
                     className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
                   >
                     Báo cáo
@@ -787,7 +820,6 @@ export default function PhaseImplementation() {
                 Trạng thái công việc chi tiết
               </h2>
               {(() => {
-                const currentPhase = phases.find((p) => p.number === hospital.currentPhase);
                 const viewAllUrl = currentPhase
                   ? `${basePath}/${hospitalId}/${currentPhase.id}`
                   : basePath;
@@ -1211,6 +1243,58 @@ export default function PhaseImplementation() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={confirmDeleteSupplementalTask}
       />
+
+      {reportOpen && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-4xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Báo cáo công việc giai đoạn hiện tại</h3>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  {hospital.name} - {currentPhase?.label ?? "Không xác định giai đoạn"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReportOpen(false)}
+                className="text-2xl leading-none text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                aria-label="Đóng"
+              >
+                x
+              </button>
+            </div>
+            <div className="max-h-[70vh] overflow-y-auto p-5">
+              {reportLoading ? (
+                <div className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">Đang tải dữ liệu báo cáo...</div>
+              ) : reportError ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+                  {reportError}
+                </div>
+              ) : reportItems.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                  Không có công việc nào trong giai đoạn hiện tại.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {reportItems.map((item) => (
+                    <div key={item.id} className="rounded-lg border border-slate-200 px-3 py-3 dark:border-slate-700">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{item.title}</p>
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                          {item.status}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Phụ trách: {item.assignee ?? "—"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

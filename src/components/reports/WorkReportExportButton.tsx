@@ -3,6 +3,12 @@ import { FiShare2 } from "react-icons/fi";
 import toast from "react-hot-toast";
 import flatpickr from "flatpickr";
 import { Vietnamese } from "flatpickr/dist/l10n/vn";
+import {
+  fetchImplementationTaskDetail,
+  fetchMilestones,
+  fetchWorkItems,
+  type WorkItemListDto,
+} from "../../api/api";
 
 type UserOpt = { id: number; label: string };
 type PreviewItem = {
@@ -28,6 +34,56 @@ type GroupedPreviewRow = {
   statusRowSpan: number;
   isStatusStart: boolean;
 };
+
+function normalizeText(value: string | null | undefined): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function isCompletedPreviewItem(item: PreviewItem): boolean {
+  const status = normalizeText(item.status);
+  const taskName = normalizeText(item.taskName);
+  return (
+    status.includes("hoan thanh") ||
+    status.includes("completed") ||
+    status.includes("done") ||
+    status === "xong" ||
+    taskName.includes("(hoan thanh)")
+  );
+}
+
+function buildPreviewItemKey(item: PreviewItem): string {
+  return [
+    normalizeText(item.dateLabel),
+    normalizeText(item.note),
+    normalizeText(item.taskName),
+  ].join("|");
+}
+
+function withCompletedSuffix(item: PreviewItem): PreviewItem {
+  if (!isCompletedPreviewItem(item)) return item;
+  const taskName = String(item.taskName ?? "");
+  const normalizedTaskName = normalizeText(taskName);
+  if (normalizedTaskName.includes("(hoan thanh)")) return item;
+  return { ...item, taskName: `${taskName} (Hoàn thành)` };
+}
+
+function normalizeTaskName(taskName: string | null | undefined): string {
+  return normalizeText(taskName).replace(/\(hoan thanh\)/g, "").trim();
+}
+
+function dedupePreviewItems(items: PreviewItem[]): PreviewItem[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = buildPreviewItemKey(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
@@ -101,13 +157,33 @@ export default function WorkReportExportButton({ role }: { role: "admin" | "supe
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const fromDateRef = useRef<HTMLInputElement | null>(null);
   const toDateRef = useRef<HTMLInputElement | null>(null);
+  const completedTasks = useMemo(() => {
+    if (!previewData) return [];
+    return previewData.allTasks
+      .filter((item) => isCompletedPreviewItem(item))
+      .map((item) => withCompletedSuffix(item));
+  }, [previewData]);
   const groupedAllTasks = useMemo(
-    () => (previewData ? buildGroupedRows(previewData.allTasks) : []),
-    [previewData],
+    () => buildGroupedRows(completedTasks),
+    [completedTasks],
   );
+  const filteredIncompleteTasks = useMemo(() => {
+    if (!previewData) return [];
+    const completedKeys = new Set(completedTasks.map((item) => buildPreviewItemKey(item)));
+    const fromAllTasks = previewData.allTasks.filter((item) => !isCompletedPreviewItem(item));
+    const fromIncompleteTasks = previewData.incompleteTasks.filter((item) => !completedKeys.has(buildPreviewItemKey(item)));
+    const merged = [...fromAllTasks, ...fromIncompleteTasks];
+    const seen = new Set<string>();
+    return merged.filter((item) => {
+      const key = buildPreviewItemKey(item);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [previewData, completedTasks]);
   const groupedIncompleteTasks = useMemo(
-    () => (previewData ? buildGroupedRows(previewData.incompleteTasks) : []),
-    [previewData],
+    () => buildGroupedRows(filteredIncompleteTasks),
+    [filteredIncompleteTasks],
   );
 
   const currentUser = useMemo(() => {
@@ -123,6 +199,69 @@ export default function WorkReportExportButton({ role }: { role: "admin" | "supe
       return null;
     }
   }, []);
+
+  const normalizeWithBoardStatus = async (
+    preview: PreviewData,
+    userId: number,
+  ): Promise<PreviewData> => {
+    try {
+      const pathname = window.location.pathname;
+      const match = pathname.match(/\/(?:superadmin\/)?implementation-tasks-new\/(\d+)(?:\/(\d+))?/);
+      if (!match) return preview;
+      const implementationTaskId = match[1];
+      const phaseInPath = match[2];
+
+      const [detail, milestones] = await Promise.all([
+        fetchImplementationTaskDetail(implementationTaskId),
+        fetchMilestones(implementationTaskId),
+      ]);
+
+      let milestoneId: string | null = null;
+      if (phaseInPath) {
+        const foundByIdOrNumber = milestones.find(
+          (m) => String(m.id) === phaseInPath || String(m.number) === phaseInPath,
+        );
+        milestoneId = foundByIdOrNumber ? String(foundByIdOrNumber.id) : phaseInPath;
+      } else {
+        const currentPhaseNumber = Number(detail.currentPhase ?? 1);
+        const currentMilestone = milestones.find((m) => m.number === currentPhaseNumber);
+        milestoneId = currentMilestone ? String(currentMilestone.id) : null;
+      }
+      if (!milestoneId) return preview;
+
+      const boardItems = await fetchWorkItems({
+        implementationTaskId,
+        milestoneId,
+      });
+      const userBoardItems = boardItems.filter((w: WorkItemListDto) => Number(w.assigneeUserId) === Number(userId));
+      const completedNameSet = new Set(
+        userBoardItems
+          .filter((w: WorkItemListDto) => w.status === "completed")
+          .map((w: WorkItemListDto) => normalizeTaskName(w.title)),
+      );
+      if (completedNameSet.size === 0) return preview;
+
+      const promotedFromIncomplete = preview.incompleteTasks
+        .filter((item) => completedNameSet.has(normalizeTaskName(item.taskName)))
+        .map((item) => withCompletedSuffix(item));
+
+      const nextAllTasks = dedupePreviewItems([
+        ...preview.allTasks.map((item) => (completedNameSet.has(normalizeTaskName(item.taskName)) ? withCompletedSuffix(item) : item)),
+        ...promotedFromIncomplete,
+      ]);
+      const nextIncompleteTasks = dedupePreviewItems(
+        preview.incompleteTasks.filter((item) => !completedNameSet.has(normalizeTaskName(item.taskName))),
+      );
+
+      return {
+        ...preview,
+        allTasks: nextAllTasks,
+        incompleteTasks: nextIncompleteTasks,
+      };
+    } catch {
+      return preview;
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -271,7 +410,8 @@ export default function WorkReportExportButton({ role }: { role: "admin" | "supe
         throw new Error(t || `HTTP ${res.status}`);
       }
       const data = (await res.json()) as PreviewData;
-      setPreviewData(data);
+      const normalized = await normalizeWithBoardStatus(data, Number(selectedUserId));
+      setPreviewData(normalized);
       setPreviewOpen(true);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Xem trước báo cáo thất bại");
