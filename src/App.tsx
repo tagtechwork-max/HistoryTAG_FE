@@ -27,6 +27,7 @@ import DeploymentDashboard from "./pages/Dashboard/DeploymentDashboard";
 import ImplementationTasksPage from "./pages/PageClients/implementation-tasks";
 import DevTasksPage from "./pages/PageClients/dev-tasks";
 import MaintenanceTasksPage from "./pages/PageClients/maintenance-tasks";
+import OtherTasksPage from "./pages/PageClients/other-tasks";
 import Hospitals from "./pages/Page/Hospitals";
 import HisSystemPage from "./pages/Page/HisSystem";
 import HccFacilitiesPage from "./pages/Page/HccFacilities";
@@ -172,6 +173,7 @@ export default function App() {
             <Route path="/superadmin/implementation-tasks-new/:hospitalId/:phaseId" element={<TaskPhaseImplementation />} />
             <Route path="/superadmin/dev-tasks" element={<DevSuperTaskPage />} />
             <Route path="/superadmin/maintenance-tasks" element={<MaintenanceSuperTaskPage />} />
+            <Route path="/superadmin/other-tasks" element={<OtherTasksPage />} />
             <Route path="/superadmin/profile" element={<SuperAdminProfile />} />
             {/* SuperAdmin notifications - keep layout consistent for superadmin users */}
             {/* SuperAdmin Business (reuse Admin Business page) */}
@@ -216,6 +218,7 @@ export default function App() {
             <Route path="/implementation-tasks-new/:hospitalId/:phaseId" element={<TaskPhaseImplementation />} />
             <Route path="/dev-tasks" element={<DevTasksPage />} />
             <Route path="/maintenance-tasks" element={<MaintenanceTasksPage />} />
+            <Route path="/other-tasks" element={<OtherTasksPage />} />
 
             {/* Forms */}
             <Route path="/form-elements" element={<FormElements />} />

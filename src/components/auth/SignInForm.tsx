@@ -167,7 +167,7 @@ export default function SignInForm() {
   className="mt-10 space-y-6 rounded-3xl border border-white/35 bg-gradient-to-br from-white/20 via-white/10 to-blue-500/20 p-10 shadow-[0_12px_40px_rgba(15,23,42,0.28)] backdrop-blur-2xl"
 >
         {err && (
-          <div className="rounded-2xl border border-red-300/45 bg-red-500/15 px-4 py-3 text-sm text-red-100 backdrop-blur-sm">
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:border-red-800/60 dark:bg-red-950/40 dark:text-red-200">
             {err}
           </div>
         )}
@@ -196,7 +196,7 @@ export default function SignInForm() {
             }`}
           />
           {errors.username && (
-            <p id="username-error" className="mt-1.5 block text-xs text-red-200">
+            <p id="username-error" className="mt-1.5 block text-xs font-medium text-red-700 dark:text-red-300">
               {errors.username}
             </p>
           )}
@@ -241,7 +241,7 @@ export default function SignInForm() {
             </button>
           </div>
           {errors.password && (
-            <p id="password-error" className="mt-1.5 block text-xs text-red-200">
+            <p id="password-error" className="mt-1.5 block text-xs font-medium text-red-700 dark:text-red-300">
               {errors.password}
             </p>
           )}

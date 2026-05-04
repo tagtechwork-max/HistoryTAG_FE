@@ -135,7 +135,7 @@ export default function ResetPasswordForm() {
       <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl">
         <form onSubmit={onSubmit} noValidate className="space-y-6">
           {err && (
-            <div className="bg-red-500/20 border border-red-400/50 text-red-100 text-sm rounded-lg p-3">
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-800 dark:border-red-800/60 dark:bg-red-950/40 dark:text-red-200">
               {err}
             </div>
           )}

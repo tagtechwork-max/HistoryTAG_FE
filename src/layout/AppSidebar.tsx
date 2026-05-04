@@ -78,6 +78,7 @@ const navItems: NavItem[] = [
       { name: "Công việc triển khai", path: "/implementation-tasks-new", pro: false },
       // { name: "Công việc DEV", path: "/dev-tasks", pro: false },
       { name: "Công việc bảo trì", path: "/maintenance-tasks", pro: false },
+      { name: "Công việc khác", path: "/other-tasks", pro: false },
     ],
   },
   

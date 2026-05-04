@@ -82,6 +82,7 @@ const navItems: NavItem[] = [
       { name: "Công việc triển khai", path: "/superadmin/implementation-tasks-new", pro: false },
       // { name: "Công việc Dev", path: "/superadmin/dev-tasks", pro: false },
       { name: "Công việc Bảo Trì", path: "/superadmin/maintenance-tasks", pro: false },
+      { name: "Công việc khác", path: "/superadmin/other-tasks", pro: false },
     ],
   },
   
