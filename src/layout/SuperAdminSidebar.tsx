@@ -103,6 +103,11 @@ const navItems: NavItem[] = [
     ],
   },
   {
+    name: "Log OT",
+    icon: <TimeIcon />,
+    path: "/log-ot",
+  },
+  {
     name: "Phê duyệt OT",
     icon: <TimeIcon />,
     path: "/superadmin/log-ot",
