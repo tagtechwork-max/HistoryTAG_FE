@@ -731,7 +731,7 @@ export default function OtherTasksPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <input
               className="h-11 min-w-[240px] flex-1 rounded-xl border border-slate-200 bg-slate-50/80 px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-              placeholder="Tìm theo tên công việc hoặc người phụ trách…"
+              placeholder="Tìm theo tên công việc hoặc người phụ trách..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
