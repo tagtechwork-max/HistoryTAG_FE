@@ -117,7 +117,7 @@ const navItems: NavItem[] = [
 // const othersItems: NavItem[] = [
 //   {
 //     icon: <PieChartIcon />,
-//     name: "Biểu đồ",
+//     name: "Biểu đồ",.
 //     subItems: [
 //       { name: "Biểu đồ đường", path: "/line-chart", pro: false },
 //       { name: "Biểu đồ cột", path: "/bar-chart", pro: false },
