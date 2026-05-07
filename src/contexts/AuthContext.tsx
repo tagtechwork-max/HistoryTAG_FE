@@ -168,6 +168,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isTeamSwitching, setIsTeamSwitching] = useState(false);
+  const isAuthPage = (path: string) =>
+    path === '/signin' ||
+    path === '/signup' ||
+    path === '/forgot-password' ||
+    path === '/reset-password';
 
   // ✅ Listen for token changes (khi login/logout)
   useEffect(() => {
@@ -175,6 +180,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const currentToken = getAuthToken();
       setToken(currentToken);
       setIsLoading(false);
+
+      // Ensure user is sent to login immediately when no valid token exists.
+      if (!currentToken && typeof window !== 'undefined') {
+        const currentPath = window.location.pathname;
+        if (!isAuthPage(currentPath)) {
+          window.location.replace('/signin');
+        }
+      }
     };
 
     // Initial load
