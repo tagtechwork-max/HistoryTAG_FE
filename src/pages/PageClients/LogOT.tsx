@@ -164,6 +164,8 @@ export default function LogOT() {
   const [editingEntry, setEditingEntry] = useState<OTEntry | null>(null);
   const [formDate, setFormDate] = useState("");
   const formDateInputRef = useRef<HTMLInputElement>(null);
+  const formStartTimeInputRef = useRef<HTMLInputElement>(null);
+  const formEndTimeInputRef = useRef<HTMLInputElement>(null);
   const [formStart, setFormStart] = useState("18:00");
   const [formEnd, setFormEnd] = useState("20:30");
   const [formOTType, setFormOTType] = useState<"weekday" | "offday">("weekday");
@@ -628,28 +630,56 @@ export default function LogOT() {
                 <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Giờ bắt đầu</label>
                 <div className="relative">
                   <input
+                    ref={formStartTimeInputRef}
                     type="time"
                     value={formStart}
                     onChange={(e) => setFormStart(e.target.value)}
                     className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-12 text-sm text-gray-800 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const el = formStartTimeInputRef.current;
+                      if (!el) return;
+                      if (typeof el.showPicker === "function") {
+                        el.showPicker();
+                      } else {
+                        el.focus();
+                      }
+                    }}
+                    className="absolute right-0 top-0 flex h-full w-12 items-center justify-center rounded-r-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                    title="Chọn giờ bắt đầu"
+                  >
                     <TimeIcon className="size-5" />
-                  </span>
+                  </button>
                 </div>
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Giờ kết thúc</label>
                 <div className="relative">
                   <input
+                    ref={formEndTimeInputRef}
                     type="time"
                     value={formEnd}
                     onChange={(e) => setFormEnd(e.target.value)}
                     className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-12 text-sm text-gray-800 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const el = formEndTimeInputRef.current;
+                      if (!el) return;
+                      if (typeof el.showPicker === "function") {
+                        el.showPicker();
+                      } else {
+                        el.focus();
+                      }
+                    }}
+                    className="absolute right-0 top-0 flex h-full w-12 items-center justify-center rounded-r-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                    title="Chọn giờ kết thúc"
+                  >
                     <TimeIcon className="size-5" />
-                  </span>
+                  </button>
                 </div>
               </div>
             </div>
