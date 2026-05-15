@@ -1,7 +1,11 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
-import { getAuthToken } from '../api/client';
+import {
+  AUTH_TOKEN_REFRESHED_EVENT,
+  getAuthToken,
+  getStoredAccessToken,
+} from '../api/client';
 
 interface WebSocketContextType {
   subscribe: (destination: string, callback: (message: any) => void) => () => void;
@@ -25,22 +29,35 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const clientRef = useRef<Client | null>(null);
   const subscriptionsRef = useRef<{ [key: string]: ((message: any) => void)[] }>({});
 
+  const disconnect = useCallback(() => {
+    if (clientRef.current) {
+      try {
+        clientRef.current.deactivate();
+      } catch (err) {
+        console.error('Error deactivating WebSocket client:', err);
+      }
+      clientRef.current = null;
+    }
+    setIsConnected(false);
+  }, []);
+
   const connect = useCallback(() => {
     try {
-      const token = getAuthToken();
+      const token = getAuthToken() || getStoredAccessToken();
       if (!token) {
-        // Không có token thì không kết nối (chưa login)
+        disconnect();
         return;
       }
 
-      // Nếu đã có client đang kết nối, không tạo mới
       if (clientRef.current?.connected || clientRef.current?.active) {
         return;
       }
 
+      if (clientRef.current) {
+        disconnect();
+      }
+
       const stompUrl = import.meta.env.VITE_NOTIFICATION_STOMP_URL || '/ws';
-      // ✅ SECURITY FIX: Do NOT send token in query string (it will appear in logs)
-      // Token is sent via STOMP connectHeaders instead
 
       const client = new Client({
         webSocketFactory: () => {
@@ -55,7 +72,6 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         reconnectDelay: 5000,
         onConnect: () => {
           setIsConnected(true);
-          // Resubscribe to all existing destinations
           Object.keys(subscriptionsRef.current).forEach((dest) => {
             try {
               client.subscribe(dest, (message) => {
@@ -95,26 +111,26 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       console.error('Failed to initialize WebSocket connection:', err);
       setIsConnected(false);
     }
-  }, []);
+  }, [disconnect]);
+
+  const reconnect = useCallback(() => {
+    disconnect();
+    connect();
+  }, [disconnect, connect]);
 
   useEffect(() => {
-    // Chỉ kết nối khi có token
-    const token = getAuthToken();
-    if (token) {
-      connect();
-    }
-    
-    return () => {
-      if (clientRef.current) {
-        try {
-          clientRef.current.deactivate();
-        } catch (err) {
-          console.error('Error deactivating WebSocket client:', err);
-        }
-        clientRef.current = null;
-      }
+    connect();
+
+    const onTokenRefreshed = () => {
+      reconnect();
     };
-  }, [connect]);
+    window.addEventListener(AUTH_TOKEN_REFRESHED_EVENT, onTokenRefreshed);
+
+    return () => {
+      window.removeEventListener(AUTH_TOKEN_REFRESHED_EVENT, onTokenRefreshed);
+      disconnect();
+    };
+  }, [connect, disconnect, reconnect]);
 
   const subscribe = useCallback((destination: string, callback: (message: any) => void) => {
     if (!subscriptionsRef.current[destination]) {
@@ -122,7 +138,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
     subscriptionsRef.current[destination].push(callback);
 
-    let subscription: any = null;
+    let subscription: { unsubscribe: () => void } | null = null;
     if (clientRef.current?.connected) {
       subscription = clientRef.current.subscribe(destination, (message) => {
         const payload = JSON.parse(message.body);
@@ -131,7 +147,9 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
 
     return () => {
-      subscriptionsRef.current[destination] = subscriptionsRef.current[destination].filter((cb) => cb !== callback);
+      subscriptionsRef.current[destination] = subscriptionsRef.current[destination].filter(
+        (cb) => cb !== callback
+      );
       if (subscription) {
         subscription.unsubscribe();
       }
@@ -151,4 +169,3 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     </WebSocketContext.Provider>
   );
 };
-

@@ -1,143 +1,265 @@
-// src/api/client.ts
-import axios from "axios";
+// src/api/client.tsx
+import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
+import { refreshAccessToken } from "./tokenRefresh";
 
-/** Helpers cho cookie */
+export const AUTH_TOKEN_REFRESHED_EVENT = "auth:token-refreshed";
+
 function getCookie(name: string) {
   const m = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
   return m ? decodeURIComponent(m[2]) : null;
 }
 
-/** Ưu tiên đọc token từ cookie rồi tới localStorage, cuối cùng là sessionStorage.
- *  Trả về null nếu không có token hoặc token đã hết hạn (để tránh menu ẩn khi để qua đêm).
- */
-export function getAuthToken(): string | null {
-  const raw =
-    getCookie("access_token") 
-    || localStorage.getItem("access_token") 
-    || sessionStorage.getItem("access_token")
-    || localStorage.getItem("token");
-  if (!raw) return null;
-  if (isTokenExpired(raw)) {
-    clearAllAuthData();
-    if (typeof window !== "undefined" && !isRedirecting) {
-      const path = window.location.pathname;
-      const isAuthPage = path === "/signin" || path === "/signup" || path === "/forgot-password" || path === "/reset-password";
-      if (!isAuthPage) {
-        isRedirecting = true;
-        window.location.href = "/signin";
-      }
-    }
-    return null;
-  }
-  return raw;
+/** Read access token from storage/cookie without expiry check. */
+export function getStoredAccessToken(): string | null {
+  return (
+    getCookie("access_token") ||
+    localStorage.getItem("access_token") ||
+    sessionStorage.getItem("access_token") ||
+    localStorage.getItem("token")
+  );
 }
 
-// ✅ Helper để check xem token có expired không (export để dùng chung)
 export function isTokenExpired(token: string): boolean {
   try {
-    const parts = token.split('.');
+    const parts = token.split(".");
     if (parts.length < 2) return true;
-    
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-    const exp = payload.exp; // JWT exp claim (Unix timestamp in seconds)
-    
-    if (!exp) return false; // Không có exp claim, assume valid
-    
-    // Convert to milliseconds và check
-    const expirationTime = exp * 1000;
-    const now = Date.now();
-    
-    // ✅ Token expired nếu thời gian hiện tại > expiration time
-    return now >= expirationTime;
+
+    const payload = JSON.parse(
+      atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"))
+    );
+    const exp = payload.exp;
+
+    if (!exp) return false;
+
+    return Date.now() >= exp * 1000;
   } catch {
-    // Nếu không parse được, assume expired để an toàn
     return true;
   }
 }
 
-// ✅ Helper để clear tất cả auth data
-function clearAllAuthData() {
-  // Clear localStorage
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('token');
-  localStorage.removeItem('username');
-  localStorage.removeItem('roles');
-  localStorage.removeItem('userId');
-  localStorage.removeItem('user');
-  
-  // Clear sessionStorage
-  sessionStorage.removeItem('access_token');
-  sessionStorage.removeItem('token');
-  sessionStorage.removeItem('username');
-  sessionStorage.removeItem('roles');
-  sessionStorage.removeItem('userId');
-  sessionStorage.removeItem('user');
-  
-  // ✅ Clear cookie (quan trọng!)
-  document.cookie = 'access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-  document.cookie = 'access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=qlcvtagtech.com;';
-  
-  // Clear axios default headers
-  delete api.defaults.headers.common['Authorization'];
-}
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
-  withCredentials: true,
-});
-
-// ✅ Flag để prevent multiple redirects khi nhiều requests cùng bị 401
-let isRedirecting = false;
-
-// ✅ Helper để check xem user có phải SUPERADMIN không
-function isSuperAdminUser(): boolean {
-  const isSuperAdminRole = (value: unknown): boolean => {
-    if (value == null) return false;
-    const raw = String(value).toUpperCase().trim();
-    const compact = raw
-      .replace(/^ROLE[_\s-]*/i, '')
-      .replace(/[_\s-]/g, '');
-    return compact === 'SUPERADMIN' || compact.includes('SUPERADMIN');
-  };
-
-  if (typeof window === 'undefined') return false;
+function parseJwtPayload(token: string): Record<string, unknown> | null {
   try {
-    // Check pathname
-    if (window.location.pathname.startsWith('/superadmin')) return true;
-    // Check roles from localStorage/sessionStorage
-    const roles = JSON.parse(localStorage.getItem('roles') || sessionStorage.getItem('roles') || '[]');
-    if (Array.isArray(roles) && roles.some((r: unknown) => {
-      if (typeof r === 'string') return isSuperAdminRole(r);
-      if (r && typeof r === 'object') {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    return JSON.parse(
+      atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"))
+    ) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+/** Sync roles from JWT v1/v2 into the same storage as access_token. */
+export function syncRolesFromAccessToken(token: string) {
+  const payload = parseJwtPayload(token);
+  if (!payload) return;
+
+  const roles: string[] = [];
+  const globalRole = payload.globalRole;
+  if (typeof globalRole === "string" && globalRole.trim()) {
+    roles.push(globalRole.trim());
+  }
+  const fromArray =
+    payload.roles || payload.authorities || payload.role || [];
+  if (Array.isArray(fromArray)) {
+    for (const r of fromArray) {
+      if (typeof r === "string" && r.trim()) roles.push(r.trim());
+      else if (r && typeof r === "object") {
         const rr = r as Record<string, unknown>;
         const rn = rr.roleName ?? rr.role_name ?? rr.role ?? rr.name ?? rr.authority;
-        return isSuperAdminRole(rn);
+        if (typeof rn === "string" && rn.trim()) roles.push(rn.trim());
       }
-      return false;
-    })) {
-      return true;
     }
-    // Check JWT token
-    const token = getAuthToken();
+  }
+
+  const unique = [...new Set(roles.map((r) => r.toUpperCase()))];
+  if (unique.length === 0) return;
+
+  const storage = localStorage.getItem("access_token")
+    ? localStorage
+    : sessionStorage;
+  try {
+    storage.setItem("roles", JSON.stringify(unique));
+  } catch {
+    // ignore
+  }
+}
+
+export function persistAccessToken(token: string) {
+  const storage = localStorage.getItem("access_token")
+    ? localStorage
+    : sessionStorage.getItem("access_token")
+      ? sessionStorage
+      : localStorage;
+
+  storage.setItem("access_token", token);
+  syncRolesFromAccessToken(token);
+  api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(AUTH_TOKEN_REFRESHED_EVENT, { detail: { accessToken: token } })
+    );
+  }
+}
+
+export function clearAllAuthData() {
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("token");
+  localStorage.removeItem("username");
+  localStorage.removeItem("roles");
+  localStorage.removeItem("userId");
+  localStorage.removeItem("user");
+
+  sessionStorage.removeItem("access_token");
+  sessionStorage.removeItem("token");
+  sessionStorage.removeItem("username");
+  sessionStorage.removeItem("roles");
+  sessionStorage.removeItem("userId");
+  sessionStorage.removeItem("user");
+
+  document.cookie =
+    "access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+  document.cookie =
+    "access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=qlcvtagtech.com;";
+
+  delete api.defaults.headers.common["Authorization"];
+}
+
+/**
+ * Valid access token, or null if missing/expired (does not redirect).
+ * Use tryRefreshAccessToken() before giving up on expired sessions.
+ */
+export function getAuthToken(): string | null {
+  const raw = getStoredAccessToken();
+  if (!raw) return null;
+  if (isTokenExpired(raw)) return null;
+  return raw;
+}
+
+function isAuthPagePath(path: string) {
+  return (
+    path === "/signin" ||
+    path === "/signup" ||
+    path === "/forgot-password" ||
+    path === "/reset-password"
+  );
+}
+
+let isRedirecting = false;
+
+export function redirectToSignIn() {
+  if (typeof window === "undefined" || isRedirecting) return;
+  const path = window.location.pathname;
+  if (isAuthPagePath(path)) return;
+  isRedirecting = true;
+  clearAllAuthData();
+  window.location.href = "/signin";
+}
+
+let refreshPromise: Promise<string | null> | null = null;
+
+/** Single-flight refresh using httpOnly refresh_token cookie. */
+export async function tryRefreshAccessToken(): Promise<string | null> {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = refreshAccessToken()
+    .then((data) => {
+      if (data?.accessToken) {
+        persistAccessToken(data.accessToken);
+        return data.accessToken;
+      }
+      return null;
+    })
+    .catch(() => null)
+    .finally(() => {
+      refreshPromise = null;
+    });
+
+  return refreshPromise;
+}
+
+function isPublicPath(url?: string) {
+  return !!url?.startsWith("/api/v1/public/");
+}
+
+/** sign-in and refresh need credentials to send/receive refresh_token cookie. */
+function isPublicPathWithCredentials(url?: string) {
+  if (!url) return false;
+  return (
+    url.includes("/api/v1/public/sign-in") ||
+    url.includes("/api/v1/public/refresh")
+  );
+}
+
+function isAuthRefreshExcludedUrl(url?: string) {
+  if (!url) return true;
+  if (url.includes("/api/v1/public/sign-in")) return true;
+  if (url.includes("/api/v1/public/refresh")) return true;
+  if (url.includes("/api/v1/public/sign-up")) return true;
+  if (url.includes("/api/v1/public/forgot-password")) return true;
+  if (url.includes("/api/v1/public/reset-password")) return true;
+  return false;
+}
+
+function isSuperAdminRole(value: unknown): boolean {
+  if (value == null) return false;
+  const raw = String(value).toUpperCase().trim();
+  const compact = raw.replace(/^ROLE[_\s-]*/i, "").replace(/[_\s-]/g, "");
+  return compact === "SUPERADMIN" || compact.includes("SUPERADMIN");
+}
+
+function isSuperAdminUser(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    if (window.location.pathname.startsWith("/superadmin")) return true;
+
+    const rolesStr =
+      localStorage.getItem("roles") || sessionStorage.getItem("roles");
+    if (rolesStr) {
+      const roles = JSON.parse(rolesStr);
+      if (
+        Array.isArray(roles) &&
+        roles.some((r: unknown) => {
+          if (typeof r === "string") return isSuperAdminRole(r);
+          if (r && typeof r === "object") {
+            const rr = r as Record<string, unknown>;
+            const rn =
+              rr.roleName ?? rr.role_name ?? rr.role ?? rr.name ?? rr.authority;
+            return isSuperAdminRole(rn);
+          }
+          return false;
+        })
+      ) {
+        return true;
+      }
+    }
+
+    const token = getStoredAccessToken();
     if (token) {
-      try {
-        const parts = token.split('.');
-        if (parts.length >= 2) {
-          const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-          const maybeRoles = payload.roles || payload.authorities || payload.role || payload.realm_access && payload.realm_access.roles;
-          if (Array.isArray(maybeRoles) && maybeRoles.some((r: unknown) => {
-            if (typeof r === 'string') return isSuperAdminRole(r);
-            if (r && typeof r === 'object') {
+      const payload = parseJwtPayload(token);
+      if (payload) {
+        if (isSuperAdminRole(payload.globalRole)) return true;
+        const maybeRoles =
+          payload.roles ||
+          payload.authorities ||
+          payload.role ||
+          (payload.realm_access as { roles?: unknown })?.roles;
+        if (
+          Array.isArray(maybeRoles) &&
+          maybeRoles.some((r: unknown) => {
+            if (typeof r === "string") return isSuperAdminRole(r);
+            if (r && typeof r === "object") {
               const rr = r as Record<string, unknown>;
-              const rn = rr.roleName ?? rr.role_name ?? rr.role ?? rr.name ?? rr.authority;
+              const rn =
+                rr.roleName ?? rr.role_name ?? rr.role ?? rr.name ?? rr.authority;
               return isSuperAdminRole(rn);
             }
             return false;
-          })) {
-            return true;
-          }
+          })
+        ) {
+          return true;
         }
-      } catch {
-        // ignore decode errors
       }
     }
   } catch {
@@ -146,134 +268,94 @@ function isSuperAdminUser(): boolean {
   return false;
 }
 
-api.interceptors.request.use((config) => {
-  // ✅ Auto-refresh roles từ token nếu localStorage mất (fix button ẩn issue)
+type RetryConfig = InternalAxiosRequestConfig & { _retry?: boolean };
+
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL,
+  withCredentials: true,
+});
+
+api.interceptors.request.use(async (config) => {
   try {
-    const token = getAuthToken();
-    if (token && !isTokenExpired(token)) {
-      const rolesStr = localStorage.getItem('roles') || sessionStorage.getItem('roles');
-      if (!rolesStr) {
-        // localStorage roles mất → parse từ token và sync lại
-        const parts = token.split('.');
-        if (parts.length >= 2) {
-          const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-          const roles = payload.roles || payload.authorities || payload.role || [];
-          if (Array.isArray(roles) && roles.length > 0) {
-            const storage = localStorage.getItem('access_token') ? localStorage : sessionStorage;
-            storage.setItem('roles', JSON.stringify(roles));
-          }
-        }
-      }
+    const token = getStoredAccessToken();
+    if (token) {
+      const rolesStr =
+        localStorage.getItem("roles") || sessionStorage.getItem("roles");
+      if (!rolesStr) syncRolesFromAccessToken(token);
     }
-  } catch (e) {
-    // Ignore errors - không block request
+  } catch {
+    // ignore
   }
-  
-  // ✅ Chặn superadmin API calls từ ADMIN users (chặn từ gốc)
-  // Ngoại lệ: /api/v1/superadmin/ot/** cho phép ADMIN gọi (server sẽ kiểm tra canApproveOt)
-  const isSuperAdminAPI = config.url?.includes('/api/v1/superadmin/');
-  const isOTApprovalAPI = config.url?.includes('/api/v1/superadmin/ot');
+
+  const isSuperAdminAPI = config.url?.includes("/api/v1/superadmin/");
+  const isOTApprovalAPI = config.url?.includes("/api/v1/superadmin/ot");
   if (isSuperAdminAPI && !isSuperAdminUser()) {
-    if (isOTApprovalAPI) {
-      // Allow ADMIN to call OT approval APIs; backend will check canApproveOt
-    } else {
+    if (!isOTApprovalAPI) {
       return Promise.reject({
-        message: 'FORBIDDEN_CLIENT: ADMIN users cannot access SUPERADMIN endpoints',
+        message: "FORBIDDEN_CLIENT: ADMIN users cannot access SUPERADMIN endpoints",
         config,
         silent: true,
-      }) as any;
+      });
     }
   }
 
-  // ✅ Không gửi token cho các API public (đăng nhập, đăng ký, quên mật khẩu, etc.)
-  // Điều này tránh lỗi 401 khi token hết hạn hoặc invalid trên Server
-  // Pattern matching: bắt tất cả các path bắt đầu bằng /api/v1/public/
-  const isPublicPath = config.url?.startsWith('/api/v1/public/') || false;
-  
-  if (isPublicPath) {
-    // ✅ Tắt withCredentials cho API public để browser KHÔNG gửi cookie
-    // Điều này ngăn chặn việc gửi cookie access_token cũ (hết hạn) đến server
+  const publicPath = isPublicPath(config.url);
+  const publicWithCreds = isPublicPathWithCredentials(config.url);
+
+  if (publicPath && !publicWithCreds) {
     config.withCredentials = false;
   } else {
-    // ✅ Chỉ thêm token nếu KHÔNG phải là API public
-    const token = getAuthToken();
-    if (token) {
-      // ✅ Check token expired TRƯỚC KHI gửi request
-      if (isTokenExpired(token)) {
-        // Token đã hết hạn → clear và redirect ngay (chỉ 1 lần)
-        if (!isRedirecting) {
-          isRedirecting = true;
-          clearAllAuthData();
-          const currentPath = window.location.pathname;
-          const isAuthPage = currentPath === '/signin' || 
-                            currentPath === '/signup' || 
-                            currentPath === '/forgot-password' || 
-                            currentPath === '/reset-password';
-          
-          if (!isAuthPage) {
-            window.location.href = '/signin';
-          }
-        }
-        
-        // Reject request với expired token
-        return Promise.reject({
-          message: 'TOKEN_EXPIRED',
-          config,
-          silent: true,
-        }) as any;
+    if (publicWithCreds) {
+      config.withCredentials = true;
+    }
+    if (!publicPath) {
+      let token: string | null = getStoredAccessToken();
+      if (token && isTokenExpired(token)) {
+        token = await tryRefreshAccessToken();
       }
-      
-      // Token hợp lệ → thêm vào header
-      config.headers = config.headers || {};
-      config.headers.Authorization = `Bearer ${token}`;
+      if (token && !isTokenExpired(token)) {
+        config.headers = config.headers || {};
+        config.headers.Authorization = `Bearer ${token}`;
+      }
     }
   }
-  
+
   return config;
 });
 
-// ✅ Response interceptor để handle 401 và 403 gracefully
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    // Handle 401 errors (Unauthorized)
-    if (error.response?.status === 401) {
+  async (error: AxiosError) => {
+    const config = error.config as RetryConfig | undefined;
+    const status = error.response?.status;
+
+    if (status === 401 && config && !config._retry && !isAuthRefreshExcludedUrl(config.url)) {
+      config._retry = true;
+      const newToken = await tryRefreshAccessToken();
+      if (newToken) {
+        config.headers = config.headers || {};
+        config.headers.Authorization = `Bearer ${newToken}`;
+        return api(config);
+      }
+
       const currentPath = window.location.pathname;
-      const isAuthPage = currentPath === '/signin' || 
-                        currentPath === '/signup' || 
-                        currentPath === '/forgot-password' || 
-                        currentPath === '/reset-password';
-      
-      // ✅ Prevent redirect loop: không redirect nếu đang ở trang auth
-      if (!isAuthPage && !isRedirecting) {
-        isRedirecting = true;
-        // ✅ Clear tất cả auth data (localStorage, sessionStorage, cookie, axios headers)
-        clearAllAuthData();
-        
-        // Redirect to login (chỉ khi không ở trang auth và chưa redirect)
-        window.location.href = '/signin';
+      if (!isAuthPagePath(currentPath) && !isRedirecting) {
+        redirectToSignIn();
       }
-      
-      // ✅ Suppress 401 errors cho notification API khi chưa login
-      // Điều này tránh spam console với 401 errors
-      const isNotificationAPI = error.config?.url?.includes('/auth/notifications');
-      if (isNotificationAPI && isAuthPage) {
-        // Return a silent rejection để không log error
-        return Promise.reject({
-          ...error,
-          silent: true, // Flag để caller biết đây là error có thể ignore
-        });
+
+      const isNotificationAPI = config.url?.includes("/auth/notifications");
+      if (isNotificationAPI && isAuthPagePath(currentPath)) {
+        return Promise.reject({ ...error, silent: true });
       }
     }
-    
-    // Handle 403 errors (Forbidden - Permission denied)
-    if (error.response?.status === 403) {
-      // Log để debug (có thể remove sau khi fix xong)
-      console.warn('403 Forbidden:', error.response?.data?.message || error.message);
-      // Error sẽ được propagate để component có thể hiển thị toast/notification
-      // Không redirect vì đây là lỗi permission, không phải authentication
+
+    if (status === 403) {
+      console.warn(
+        "403 Forbidden:",
+        (error.response?.data as { message?: string })?.message || error.message
+      );
     }
-    
+
     return Promise.reject(error);
   }
 );

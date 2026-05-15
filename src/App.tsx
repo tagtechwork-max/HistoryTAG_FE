@@ -56,46 +56,24 @@ import DocumentLinksPage from "./pages/Utility/DocumentLinksPage";
 import ListTicketPage from "./pages/Ticket/listticket";
 import ToolEncryption from "./pages/Tool/ToolEncryption";
 import { AuthProvider } from "./contexts/AuthContext";
-
-// Helper to check SuperAdmin role
-function checkIsSuperAdmin(): boolean {
-  try {
-    const rolesStr = localStorage.getItem("roles") || sessionStorage.getItem("roles");
-    if (!rolesStr) return false;
-    const roles = JSON.parse(rolesStr);
-    if (!Array.isArray(roles)) return false;
-    
-    const normalizeRole = (r: unknown): string => {
-      if (typeof r === "string") return r.toUpperCase();
-      if (r && typeof r === "object") {
-        const rr = r as Record<string, unknown>;
-        const roleName = rr.roleName || rr.role_name || rr.role;
-        if (typeof roleName === "string") return roleName.toUpperCase();
-      }
-      return "";
-    };
-    
-    return roles.map(normalizeRole).some(r => r === "SUPERADMIN" || r === "SUPER_ADMIN");
-  } catch {
-    return false;
-  }
-}
+import { getStoredAccessToken } from "./api/client";
+import { isSuperAdmin as checkIsSuperAdminFromToken } from "./utils/permission";
 
 // Profile Route - redirect based on role BEFORE rendering any layout
 const ProfileRoute = () => {
-  const isSuperAdmin = checkIsSuperAdmin();
+  const isSuperAdmin = checkIsSuperAdminFromToken();
   // Redirect ngay lập tức, không render layout nào cả
   return <Navigate to={isSuperAdmin ? "/superadmin/profile" : "/admin/profile"} replace />;
 };
 
 // Protected Route Component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const token = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
-  
-  if (!token) { 
+  const token = getStoredAccessToken();
+
+  if (!token) {
     return <Navigate to="/signin" replace />;
   }
-  
+
   return <>{children}</>;
 };
 

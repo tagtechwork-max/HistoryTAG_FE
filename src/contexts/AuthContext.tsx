@@ -9,7 +9,13 @@
  */
 
 import React, { createContext, useContext, useMemo, useEffect, useState } from 'react';
-import { getAuthToken } from '../api/client';
+import {
+  AUTH_TOKEN_REFRESHED_EVENT,
+  getAuthToken,
+  getStoredAccessToken,
+  isTokenExpired,
+  tryRefreshAccessToken,
+} from '../api/client';
 import { switchTeam as switchTeamAPI, setCookie } from '../api/auth.api';
 
 interface AuthContextType {
@@ -176,12 +182,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // ✅ Listen for token changes (khi login/logout)
   useEffect(() => {
-    const updateToken = () => {
-      const currentToken = getAuthToken();
+    const updateToken = async () => {
+      let currentToken = getAuthToken();
+      if (!currentToken) {
+        const stored = getStoredAccessToken();
+        if (stored && isTokenExpired(stored)) {
+          currentToken = (await tryRefreshAccessToken()) ?? null;
+        }
+      }
       setToken(currentToken);
       setIsLoading(false);
 
-      // Ensure user is sent to login immediately when no valid token exists.
       if (!currentToken && typeof window !== 'undefined') {
         const currentPath = window.location.pathname;
         if (!isAuthPage(currentPath)) {
@@ -190,23 +201,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
 
-    // Initial load
-    updateToken();
+    void updateToken();
 
-    // ✅ Listen for storage events (khi token thay đổi ở tab khác)
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'access_token' || e.key === 'token') {
-        updateToken();
+        void updateToken();
       }
     };
 
-    window.addEventListener('storage', handleStorageChange);
+    const handleTokenRefreshed = () => {
+      void updateToken();
+    };
 
-    // ✅ Polling để detect token changes (fallback nếu storage event không fire)
-    const interval = setInterval(updateToken, 1000);
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener(AUTH_TOKEN_REFRESHED_EVENT, handleTokenRefreshed);
+
+    const interval = setInterval(() => {
+      void updateToken();
+    }, 1000);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener(AUTH_TOKEN_REFRESHED_EVENT, handleTokenRefreshed);
       clearInterval(interval);
     };
   }, []);

@@ -4,7 +4,13 @@ import {
   getUnreadCount as apiGetUnreadCount,
   markAsRead as apiMarkAsRead,
 } from "../api/notification.api";
-import { getAuthToken } from "../api/client";
+import {
+  AUTH_TOKEN_REFRESHED_EVENT,
+  getAuthToken,
+  getStoredAccessToken,
+  isTokenExpired,
+  tryRefreshAccessToken,
+} from "../api/client";
 
 type Notification = any;
 
@@ -156,18 +162,23 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setLiveNotification(null);
   };
 
-  // Monitor token changes (login/logout)
+  // Monitor token changes (login / logout / refresh)
   useEffect(() => {
-    const checkTokenChange = setInterval(() => {
-      const currentToken = getAuthToken();
-      if (currentToken !== authToken) {
-        // console.log("[NotificationContext] Token changed, updating state");
-        setAuthToken(currentToken);
-      }
-    }, 500);
+    const syncToken = () => {
+      const currentToken = getAuthToken() || getStoredAccessToken();
+      setAuthToken((prev) => (prev === currentToken ? prev : currentToken));
+    };
 
-    return () => clearInterval(checkTokenChange);
-  }, [authToken]);
+    syncToken();
+    const checkTokenChange = setInterval(syncToken, 500);
+    const onTokenRefreshed = () => syncToken();
+    window.addEventListener(AUTH_TOKEN_REFRESHED_EVENT, onTokenRefreshed);
+
+    return () => {
+      clearInterval(checkTokenChange);
+      window.removeEventListener(AUTH_TOKEN_REFRESHED_EVENT, onTokenRefreshed);
+    };
+  }, []);
 
   // transient in-app notification state and native browser notification helper
   const [liveNotification, setLiveNotification] = useState<Notification | null>(null);
@@ -589,32 +600,16 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             return;
           }
           
-          // ✅ Check token expired trước khi poll
-          try {
-            if (currentToken) {
-              const parts = currentToken.split('.');
-              if (parts.length >= 2) {
-                const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-                const exp = payload.exp;
-                if (exp && Date.now() >= exp * 1000) {
-                  // Token expired - stop polling
-                  if (pollInterval) {
-                    window.clearInterval(pollInterval);
-                    pollInterval = null;
-                  }
-                  return;
-                }
+          const stored = getStoredAccessToken();
+          if (stored && isTokenExpired(stored)) {
+            void tryRefreshAccessToken().then((refreshed) => {
+              if (refreshed) {
+                loadUnread();
               }
-            }
-          } catch {
-            // If parse fails, stop polling to be safe
-            if (pollInterval) {
-              window.clearInterval(pollInterval);
-              pollInterval = null;
-            }
+            });
             return;
           }
-          
+
           loadUnread();
         }, 10000);
       } else {

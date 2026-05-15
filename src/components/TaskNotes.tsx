@@ -1,6 +1,11 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { toast } from "react-hot-toast";
 import { useConfirmDialog } from "../hooks/useConfirmDialog";
+import {
+  AUTH_TOKEN_REFRESHED_EVENT,
+  getAuthToken,
+  getStoredAccessToken,
+} from "../api/client";
 
 const API_ROOT = import.meta.env.VITE_API_URL || "";
 // ✅ SockJS cần URL HTTP (không phải ws://), nó sẽ tự động upgrade sang WebSocket
@@ -189,28 +194,28 @@ export default function TaskNotes({
     ? `${API_ROOT}/api/v1/admin/maintenance/tasks`
     : `${API_ROOT}/api/v1/admin/implementation/tasks`;
 
-  // WebSocket subscription for real-time updates
-  useEffect(() => {
-    if (!taskId) return;
+  const disconnectStomp = useCallback(() => {
+    if (subscriptionRef.current) {
+      try {
+        subscriptionRef.current.unsubscribe();
+      } catch {
+        // ignore
+      }
+      subscriptionRef.current = null;
+    }
+    if (stompClientRef.current) {
+      try {
+        stompClientRef.current.deactivate();
+      } catch {
+        // ignore
+      }
+      stompClientRef.current = null;
+    }
+  }, []);
 
-    const connectWebSocket = async () => {
-      // Cleanup existing connection first
-      if (subscriptionRef.current) {
-        try {
-          subscriptionRef.current.unsubscribe();
-        } catch (e) {
-          // ignore
-        }
-        subscriptionRef.current = null;
-      }
-      if (stompClientRef.current) {
-        try {
-          stompClientRef.current.deactivate();
-        } catch (e) {
-          // ignore
-        }
-        stompClientRef.current = null;
-      }
+  const connectWebSocket = useCallback(async () => {
+    if (!taskId) return;
+      disconnectStomp();
 
       try {
         const [stompMod, sockjsMod] = await Promise.all([
@@ -221,7 +226,11 @@ export default function TaskNotes({
         const StompClient = stompMod.Client;
         const SockJS = sockjsMod.default;
 
-        const token = authHeaders().Authorization?.replace("Bearer ", "") || "";
+        const token =
+          getAuthToken() ||
+          getStoredAccessToken() ||
+          authHeaders().Authorization?.replace("Bearer ", "") ||
+          "";
         // ✅ SECURITY FIX: Do NOT send token in query string (it will appear in logs)
         // Token is sent via STOMP connectHeaders instead
         const client = new StompClient({
@@ -277,29 +286,24 @@ export default function TaskNotes({
       } catch (err) {
         console.error("[TaskNotes] Failed to connect WebSocket:", err);
       }
-    };
+  }, [taskId, taskType, disconnectStomp]);
 
-    connectWebSocket();
+  // WebSocket subscription for real-time updates
+  useEffect(() => {
+    if (!taskId) return;
+
+    void connectWebSocket();
+
+    const onTokenRefreshed = () => {
+      void connectWebSocket();
+    };
+    window.addEventListener(AUTH_TOKEN_REFRESHED_EVENT, onTokenRefreshed);
 
     return () => {
-      if (subscriptionRef.current) {
-        try {
-          subscriptionRef.current.unsubscribe();
-        } catch (e) {
-          // ignore
-        }
-        subscriptionRef.current = null;
-      }
-      if (stompClientRef.current) {
-        try {
-          stompClientRef.current.deactivate();
-        } catch (e) {
-          // ignore
-        }
-        stompClientRef.current = null;
-      }
+      window.removeEventListener(AUTH_TOKEN_REFRESHED_EVENT, onTokenRefreshed);
+      disconnectStomp();
     };
-  }, [taskId, taskType]); // Removed currentUserId from dependencies
+  }, [taskId, taskType, connectWebSocket, disconnectStomp]);
 
   useEffect(() => {
     if (!taskId) return;

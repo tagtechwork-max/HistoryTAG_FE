@@ -169,47 +169,11 @@ const AppSidebar: React.FC = () => {
     return null;
   };
 
-  const getRoles = () => {
-    try {
-      const rolesStr = localStorage.getItem("roles") || sessionStorage.getItem("roles");
-      if (rolesStr) {
-        return JSON.parse(rolesStr);
-      }
-    } catch (e) {
-      console.error("Error parsing roles:", e);
-    }
-    return [];
-  };
-
   const userInfo = getUserInfo();
-  const roles = getRoles();
-  const isSuperAdmin = roles.some((role: any) => {
-    if (typeof role === "string") {
-      return role.toUpperCase() === "SUPERADMIN" || role.toUpperCase() === "SUPER_ADMIN";
-    }
-    if (role && typeof role === "object") {
-      const roleName = role.roleName || role.role_name || role.role;
-      return typeof roleName === "string" && roleName.toUpperCase() === "SUPERADMIN";
-    }
-    return false;
-  });
-
-  const isAdmin = roles.some((role: any) => {
-    if (typeof role === "string") {
-      return role.toUpperCase() === "ADMIN";
-    }
-    if (role && typeof role === "object") {
-      const roleName = role.roleName || role.role_name || role.role;
-      return typeof roleName === "string" && roleName.toUpperCase() === "ADMIN";
-    }
-    return false;
-  });
-
   const userTeam = userInfo?.team ? String(userInfo.team).toUpperCase() : null;
   const userDepartment = userInfo?.department ? String(userInfo.department).toUpperCase() : null;
 
-  // activeTeam from AuthContext (JWT) overrides stored user.team when present
-  const { activeTeam: authActiveTeam } = useAuth();
+  const { isSuperAdmin, isAdmin, activeTeam: authActiveTeam } = useAuth();
   const effectiveTeam = (authActiveTeam || userTeam || "").toString().toUpperCase();
   const isSalesTeam = effectiveTeam === "SALES";
 

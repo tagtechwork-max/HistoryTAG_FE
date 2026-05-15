@@ -9,7 +9,7 @@
  * @deprecated - Nên migrate sang useAuth() hook trong React components
  */
 
-import { getAuthToken } from '../api/client';
+import { getAuthToken, getStoredAccessToken, syncRolesFromAccessToken } from '../api/client';
 
 /**
  * Parse roles từ JWT token (source of truth)
@@ -17,7 +17,7 @@ import { getAuthToken } from '../api/client';
  */
 export function getRolesFromToken(): string[] {
   try {
-    const token = getAuthToken();
+    const token = getAuthToken() || getStoredAccessToken();
     if (!token) {
       // Fallback: Try localStorage
       try {
@@ -39,18 +39,25 @@ export function getRolesFromToken(): string[] {
     }
     
     const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-    const roles = payload.roles || payload.authorities || payload.role || [];
-    
-    // Normalize roles
-    if (Array.isArray(roles)) {
-      const normalized = roles.map(normalizeRole).filter(Boolean);
-      
-      // ✅ Sync với localStorage để cache (nhưng token là source of truth)
-      if (normalized.length > 0) {
-        const storage = localStorage.getItem('access_token') ? localStorage : sessionStorage;
-        storage.setItem('roles', JSON.stringify(normalized));
+    const collected: string[] = [];
+    const globalRole = payload.globalRole;
+    if (typeof globalRole === 'string' && globalRole.trim()) {
+      collected.push(globalRole.trim());
+    }
+    const fromArray = payload.roles || payload.authorities || payload.role || [];
+    if (Array.isArray(fromArray)) {
+      for (const r of fromArray) {
+        if (typeof r === 'string') collected.push(r);
+        else if (r && typeof r === 'object') {
+          const rr = r as Record<string, unknown>;
+          const rn = rr.roleName ?? rr.role_name ?? rr.role ?? rr.name ?? rr.authority;
+          if (typeof rn === 'string') collected.push(rn);
+        }
       }
-      
+    }
+    const normalized = [...new Set(collected.map(normalizeRole).filter(Boolean))];
+    if (normalized.length > 0) {
+      syncRolesFromAccessToken(token);
       return normalized;
     }
     
