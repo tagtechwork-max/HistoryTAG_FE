@@ -6,6 +6,7 @@ import {
   getAuthToken,
   getStoredAccessToken,
 } from '../api/client';
+import { stripUrlFragmentForWebSocket } from '../utils/sockJsUrl';
 
 interface WebSocketContextType {
   subscribe: (destination: string, callback: (message: any) => void) => () => void;
@@ -57,7 +58,9 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         disconnect();
       }
 
-      const stompUrl = import.meta.env.VITE_NOTIFICATION_STOMP_URL || '/ws';
+      const stompUrl = stripUrlFragmentForWebSocket(
+        import.meta.env.VITE_NOTIFICATION_STOMP_URL || '/ws'
+      );
 
       const client = new Client({
         webSocketFactory: () => {

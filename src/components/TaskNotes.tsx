@@ -6,11 +6,14 @@ import {
   getAuthToken,
   getStoredAccessToken,
 } from "../api/client";
+import { stripUrlFragmentForWebSocket } from "../utils/sockJsUrl";
 
 const API_ROOT = import.meta.env.VITE_API_URL || "";
 // ✅ SockJS cần URL HTTP (không phải ws://), nó sẽ tự động upgrade sang WebSocket
 // Nếu VITE_NOTIFICATION_STOMP_URL được set, dùng nó; nếu không, dùng API_ROOT + /ws
-const WS_URL = import.meta.env.VITE_NOTIFICATION_STOMP_URL || `${API_ROOT}/ws`;
+const WS_URL = stripUrlFragmentForWebSocket(
+  import.meta.env.VITE_NOTIFICATION_STOMP_URL || `${API_ROOT}/ws`
+);
 
 function authHeaders(extra?: Record<string, string>) {
   const token =

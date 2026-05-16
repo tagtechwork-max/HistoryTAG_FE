@@ -2,6 +2,29 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { refreshAccessToken } from "./tokenRefresh";
 
+const REFRESH_FAIL_COOLDOWN_MS = 120_000;
+const REFRESH_COOLDOWN_KEY = "tagweb_refresh_cooldown_until";
+
+function refreshCooldownUntil(): number {
+  if (typeof window === "undefined") return 0;
+  return Number(sessionStorage.getItem(REFRESH_COOLDOWN_KEY) || "0");
+}
+
+function armRefreshCooldown() {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(
+    REFRESH_COOLDOWN_KEY,
+    String(Date.now() + REFRESH_FAIL_COOLDOWN_MS)
+  );
+}
+
+/** Call after successful login or successful refresh — allows retries again. */
+export function clearRefreshFailureCooldown() {
+  if (typeof window !== "undefined") {
+    sessionStorage.removeItem(REFRESH_COOLDOWN_KEY);
+  }
+}
+
 export const AUTH_TOKEN_REFRESHED_EVENT = "auth:token-refreshed";
 
 function getCookie(name: string) {
@@ -86,6 +109,8 @@ export function syncRolesFromAccessToken(token: string) {
 }
 
 export function persistAccessToken(token: string) {
+  clearRefreshFailureCooldown();
+
   const storage = localStorage.getItem("access_token")
     ? localStorage
     : sessionStorage.getItem("access_token")
@@ -161,6 +186,10 @@ let refreshPromise: Promise<string | null> | null = null;
 
 /** Single-flight refresh using httpOnly refresh_token cookie. */
 export async function tryRefreshAccessToken(): Promise<string | null> {
+  if (typeof window !== "undefined" && Date.now() < refreshCooldownUntil()) {
+    return null;
+  }
+
   if (refreshPromise) return refreshPromise;
 
   refreshPromise = refreshAccessToken()
@@ -171,7 +200,19 @@ export async function tryRefreshAccessToken(): Promise<string | null> {
       }
       return null;
     })
-    .catch(() => null)
+    .catch((err: unknown) => {
+      const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+      // 404 = server chưa có /public/refresh (deploy BE). 401 = cookie hết/không có.
+      if (
+        status === 404 ||
+        status === 401 ||
+        status === 405 ||
+        status === 501
+      ) {
+        armRefreshCooldown();
+      }
+      return null;
+    })
     .finally(() => {
       refreshPromise = null;
     });

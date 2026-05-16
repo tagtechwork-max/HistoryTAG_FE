@@ -11,6 +11,7 @@ import {
   isTokenExpired,
   tryRefreshAccessToken,
 } from "../api/client";
+import { stripUrlFragmentForWebSocket } from "../utils/sockJsUrl";
 
 type Notification = any;
 
@@ -261,7 +262,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     loadNotifications(20);
 
     // choose connection strategy: STOMP (preferred) -> SSE -> WebSocket -> polling
-    const stompUrl = import.meta.env.VITE_NOTIFICATION_STOMP_URL as string | undefined;
+    const stompUrlRaw = import.meta.env.VITE_NOTIFICATION_STOMP_URL as string | undefined;
+    const stompUrl = stompUrlRaw
+      ? stripUrlFragmentForWebSocket(stompUrlRaw)
+      : undefined;
     const stompDest = (import.meta.env.VITE_NOTIFICATION_STOMP_DEST as string | undefined) || "/user/queue/notifications";
     const sseUrl = import.meta.env.VITE_NOTIFICATION_SSE_URL as string | undefined;
     const wsUrl = import.meta.env.VITE_NOTIFICATION_WS_URL as string | undefined;
@@ -383,7 +387,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           client = new StompClientClass({
             webSocketFactory: () => {
               // console.log("[NotificationContext] Creating SockJS connection to:", stompUrl);
-              return new SockJSClass(stompUrl);
+              return new SockJSClass(stompUrl as string);
             },
             connectHeaders: currentToken ? { Authorization: `Bearer ${currentToken}` } : {},
             reconnectDelay: 5000,
