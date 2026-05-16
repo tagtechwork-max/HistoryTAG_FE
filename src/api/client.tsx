@@ -365,7 +365,12 @@ api.interceptors.request.use(async (config) => {
 });
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (response.status >= 200 && response.status < 300) {
+      clearRefreshFailureCooldown();
+    }
+    return response;
+  },
   async (error: AxiosError) => {
     const config = error.config as RetryConfig | undefined;
     const status = error.response?.status;

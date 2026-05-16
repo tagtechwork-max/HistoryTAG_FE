@@ -15,6 +15,7 @@ import {
   getStoredAccessToken,
   isTokenExpired,
   tryRefreshAccessToken,
+  redirectToSignIn,
 } from '../api/client';
 import { switchTeam as switchTeamAPI, setCookie } from '../api/auth.api';
 
@@ -183,10 +184,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ✅ Listen for token changes (khi login/logout)
   useEffect(() => {
     const updateToken = async () => {
+      const path = window.location.pathname;
+      const onAuth = isAuthPage(path);
+
       let currentToken = getAuthToken();
-      if (!currentToken) {
+      if (!currentToken && !onAuth) {
         const stored = getStoredAccessToken();
         if (stored && isTokenExpired(stored)) {
+          currentToken = (await tryRefreshAccessToken()) ?? null;
+        } else if (!stored) {
           currentToken = (await tryRefreshAccessToken()) ?? null;
         }
       }
@@ -194,9 +200,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(false);
 
       if (!currentToken && typeof window !== 'undefined') {
-        const currentPath = window.location.pathname;
-        if (!isAuthPage(currentPath)) {
-          window.location.replace('/signin');
+        if (!onAuth) {
+          redirectToSignIn();
         }
       }
     };
@@ -216,9 +221,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener(AUTH_TOKEN_REFRESHED_EVENT, handleTokenRefreshed);
 
+    // Trước: mỗi 1s — token hết hạn + refresh tạm lỗi/cooldown dễ bị đẩy signin liên tục.
+    // 30s đủ đồng bộ sau khi refresh / tab khác; API interceptor vẫn xử lý khi gọi API.
     const interval = setInterval(() => {
       void updateToken();
-    }, 1000);
+    }, 30_000);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
