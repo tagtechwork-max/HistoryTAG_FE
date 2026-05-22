@@ -275,7 +275,8 @@ export default function ListHospitalImplementation() {
   const ownerAutoFilterSetRef = useRef(false);
   const [phase, setPhase] = useState("all");
   const [status, setStatus] = useState("all");
-  const [deadline, setDeadline] = useState("all");
+  const [startDateFrom, setStartDateFrom] = useState("");
+  const [startDateTo, setStartDateTo] = useState("");
 
   /** Pagination in URL so back from detail keeps the same page (?page=2&size=10). */
   const currentPage = useMemo(() => {
@@ -350,7 +351,8 @@ export default function ListHospitalImplementation() {
         projectOwner: ownerFilterIds.length === 1 ? ownerFilterIds[0] : undefined,
         phase: phase !== "all" ? phase : undefined,
         status: status !== "all" ? status : undefined,
-        deadline: deadline !== "all" ? deadline : undefined,
+        startDateFrom: startDateFrom || undefined,
+        startDateTo: startDateTo || undefined,
         page,
         size: itemsPerPage,
       });
@@ -371,7 +373,7 @@ export default function ListHospitalImplementation() {
     } finally {
       setLoading(false);
     }
-  }, [search, ownerFilterIds, phase, status, deadline, currentPage, itemsPerPage]);
+  }, [search, ownerFilterIds, phase, status, startDateFrom, startDateTo, currentPage, itemsPerPage]);
 
   useEffect(() => {
     const fetchProjectOwnerOptions = async () => {
@@ -492,7 +494,7 @@ export default function ListHospitalImplementation() {
   const displayedRows = (() => {
     let rows = data;
 
-    // Giai đoạn, trạng thái (health), hạn go-live tuần này: backend đã lọc qua GET /api/v1/implementation-tasks.
+    // Giai đoạn, trạng thái (health), khoảng ngày bắt đầu: backend đã lọc qua GET /api/v1/implementation-tasks.
     // Không lọc lại ở đây — logic milestone/display.health trên FE khác currentPhaseNumber/health trên server nên dễ ra bảng trống.
 
     if (ownerFilterIds.length === 0) return rows;
@@ -519,6 +521,14 @@ export default function ListHospitalImplementation() {
     setOwnerFilterIds([]);
     setCurrentPage(1);
   };
+
+  const clearStartDateFilter = () => {
+    setStartDateFrom("");
+    setStartDateTo("");
+    setCurrentPage(1);
+  };
+
+  const hasStartDateFilter = Boolean(startDateFrom || startDateTo);
 
   const toggleOwnerFilterValue = (value: string, checked: boolean) => {
     setOwnerFilterIds((prev) => {
@@ -1070,17 +1080,38 @@ export default function ListHospitalImplementation() {
               {/* <option value="blocked">Đang bị chặn</option> */}
               <option value="completed">Hoàn thành</option>
             </select>
-            <select
-              value={deadline}
-              onChange={(e) => {
-                setDeadline(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="min-w-[160px] rounded-full border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
-            >
-              <option value="all">Hạn chốt: Tất cả</option>
-              <option value="this_week">Hạn chót: Trong tuần này</option>
-            </select>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="shrink-0 text-sm text-gray-600 dark:text-gray-400">Ngày bắt đầu</span>
+              <input
+                type="date"
+                value={startDateFrom}
+                onChange={(e) => {
+                  setStartDateFrom(e.target.value);
+                  setCurrentPage(1);
+                }}
+                title="Từ ngày"
+                className="h-10 min-w-[140px] rounded-full border border-gray-200 bg-white px-3 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+              />
+              <span className="text-sm text-gray-400">–</span>
+              <input
+                type="date"
+                value={startDateTo}
+                onChange={(e) => {
+                  setStartDateTo(e.target.value);
+                  setCurrentPage(1);
+                }}
+                title="Đến ngày"
+                min={startDateFrom || undefined}
+                className="h-10 min-w-[140px] rounded-full border border-gray-200 bg-white px-3 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+              />
+              <button
+                type="button"
+                className={`px-3 py-1.5 text-xs text-blue-600 hover:underline ${hasStartDateFilter ? "visible" : "invisible pointer-events-none"}`}
+                onClick={clearStartDateFilter}
+              >
+                Bỏ lọc
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => loadData()}

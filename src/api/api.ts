@@ -197,7 +197,8 @@ export async function fetchImplementationTasks(params: {
   projectOwner?: string;
   phase?: string;
   status?: string;
-  deadline?: string;
+  startDateFrom?: string;
+  startDateTo?: string;
   page: number;
   size: number;
 }): Promise<ImplementationTaskPage> {
@@ -206,7 +207,8 @@ export async function fetchImplementationTasks(params: {
     projectOwner: params.projectOwner && params.projectOwner !== "all" ? params.projectOwner : undefined,
     phase: params.phase && params.phase !== "all" ? params.phase : undefined,
     health: params.status && params.status !== "all" ? params.status : undefined,
-    deadline: params.deadline,
+    startDateFrom: params.startDateFrom,
+    startDateTo: params.startDateTo,
     page: params.page,
     size: params.size,
   });

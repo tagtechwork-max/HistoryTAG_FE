@@ -198,6 +198,36 @@ function statusLabel(status?: string | null) {
   return map[normalized] || status;
 }
 
+type MaintTaskCanonicalStatus = "RECEIVED" | "IN_PROCESS" | "COMPLETED" | "ISSUE" | "CANCELLED";
+
+const HOSPITAL_TASK_STATUS_FILTER_OPTIONS: Array<{ value: MaintTaskCanonicalStatus; label: string }> = [
+  { value: "RECEIVED", label: "Đã tiếp nhận" },
+  { value: "IN_PROCESS", label: "Đang xử lý" },
+  { value: "COMPLETED", label: "Hoàn thành" },
+  { value: "ISSUE", label: "Gặp sự cố" },
+  { value: "CANCELLED", label: "Hủy" },
+];
+
+function normalizeMaintTaskStatus(status?: string | null): MaintTaskCanonicalStatus | undefined {
+  if (!status) return undefined;
+  const upper = status.trim().toUpperCase();
+  const map: Record<string, MaintTaskCanonicalStatus> = {
+    RECEIVED: "RECEIVED",
+    IN_PROCESS: "IN_PROCESS",
+    COMPLETED: "COMPLETED",
+    ISSUE: "ISSUE",
+    CANCELLED: "CANCELLED",
+    NOT_STARTED: "RECEIVED",
+    IN_PROGRESS: "IN_PROCESS",
+    API_TESTING: "IN_PROCESS",
+    INTEGRATING: "ISSUE",
+    WAITING_FOR_DEV: "COMPLETED",
+    ACCEPTED: "COMPLETED",
+    TRANSFERRED: "COMPLETED",
+  };
+  return map[upper];
+}
+
 type ToastVariant = "success" | "error";
 
 const showStyledToast = (
@@ -299,7 +329,9 @@ const MaintenanceSuperTaskPage: React.FC = () => {
   const [hospitalCodeSearch, setHospitalCodeSearch] = useState<string>("");
   const [hospitalRegionFilter, setHospitalRegionFilter] = useState<string>("");
   const [hospitalRegionQuery, setHospitalRegionQuery] = useState<string>("");
+  /** Lọc danh sách viện theo trạng thái task (canonical). */
   const [hospitalStatusFilter, setHospitalStatusFilter] = useState<string>("");
+  const [hospitalTaskStatusMap, setHospitalTaskStatusMap] = useState<Record<string, string[]>>({});
   /** Selected PIC display names for hospital list filter (OR). */
   const [hospitalPicFilters, setHospitalPicFilters] = useState<string[]>([]);
   /** Typing for autocomplete to add more PICs. */
@@ -733,6 +765,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
       // ✅ Fetch tasks để tính nearDueCount, overdueCount và collect PICs từ từng task
       const nearDueOverdueMap = new Map<string, { nearDueCount: number; overdueCount: number }>();
       const hospitalPicsFromTasks = new Map<string, { picIds: Set<string>; picNames: Set<string> }>();
+      const hospitalStatusSets = new Map<string, Set<string>>();
       try {
         // Fetch tasks (cả completed và chưa completed để lấy đầy đủ PICs)
         // ✅ Tối ưu: Fetch song song nhiều pages đầu để nhanh hơn, giới hạn tối đa để tránh chậm
@@ -789,6 +822,13 @@ const MaintenanceSuperTaskPage: React.FC = () => {
             const statusUp = String(task?.status || '').trim().toUpperCase();
             const hospitalName = String(task?.hospitalName || '').trim();
             if (!hospitalName) return;
+
+            const statusNorm = normalizeMaintTaskStatus(task?.status);
+            if (statusNorm) {
+              const statusSet = hospitalStatusSets.get(hospitalName) || new Set<string>();
+              statusSet.add(statusNorm);
+              hospitalStatusSets.set(hospitalName, statusSet);
+            }
             
             // ✅ Collect PICs từ từng task (quan trọng cho filter)
             const picId = task?.picDeploymentId ? String(task.picDeploymentId) : null;
@@ -847,6 +887,12 @@ const MaintenanceSuperTaskPage: React.FC = () => {
         console.warn("Failed to fetch tasks for nearDue/overdue calculation:", err);
       }
 
+      const taskStatusMap: Record<string, string[]> = {};
+      hospitalStatusSets.forEach((statusSet, hospitalName) => {
+        taskStatusMap[hospitalName] = Array.from(statusSet);
+      });
+      setHospitalTaskStatusMap(taskStatusMap);
+
       // ✅ Map summary - dùng taskCount từ summary, không cần aggregate từ tasks
       const normalized = summaries.map((item: any, idx: number) => {
         const hospitalId = Number(item?.hospitalId ?? -(idx + 1));
@@ -896,6 +942,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg || "Lỗi tải danh sách bệnh viện");
+      setHospitalTaskStatusMap({});
     } finally {
       setLoadingHospitals(false);
     }
@@ -973,12 +1020,12 @@ const MaintenanceSuperTaskPage: React.FC = () => {
       const regionQ = normalizeSearchText(hospitalRegionQuery);
       list = list.filter((h) => normalizeSearchText(h.subLabel || "").includes(regionQ));
     }
-    if (hospitalStatusFilter === 'accepted') list = list.filter(h => (h.acceptedCount || 0) > 0);
-    else if (hospitalStatusFilter === 'incomplete') list = list.filter(h => (h.acceptedCount || 0) < (h.taskCount || 0));
-    else if (hospitalStatusFilter === 'unaccepted') list = list.filter(h => (h.acceptedCount || 0) === 0);
-    else if (hospitalStatusFilter === 'fromDeployment') list = list.filter(h => h.fromDeployment && !h.acceptedByMaintenance);
-    else if (hospitalStatusFilter === 'acceptedFromDeployment') list = list.filter(h => h.fromDeployment && h.acceptedByMaintenance);
-    else if (hospitalStatusFilter === 'hasOpenTickets') list = list.filter(h => h.id && (ticketOpenCounts[h.id] ?? 0) > 0);
+    if (hospitalStatusFilter) {
+      list = list.filter((h) => {
+        const statuses = hospitalTaskStatusMap[h.label] || [];
+        return statuses.includes(hospitalStatusFilter);
+      });
+    }
     // Search by PIC name(s): any selected tag matches maintenance or deployment PIC (OR)
     if (hospitalPicFilters.length > 0) {
       list = list.filter((h) => {
@@ -1015,7 +1062,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
       return a.label.localeCompare(b.label, "vi", { sensitivity: "base" });
     });
     return list;
-  }, [hospitalsWithTasks, hospitalSearch, hospitalCodeSearch, hospitalRegionQuery, hospitalStatusFilter, hospitalPicFilters, ticketOpenCounts, ticketCountLoading]);
+  }, [hospitalsWithTasks, hospitalSearch, hospitalCodeSearch, hospitalRegionQuery, hospitalStatusFilter, hospitalTaskStatusMap, hospitalPicFilters, ticketOpenCounts, ticketCountLoading]);
 
   const regionOptions = useMemo(() => VIETNAM_PROVINCE_LABELS, []);
 
@@ -1378,20 +1425,31 @@ const MaintenanceSuperTaskPage: React.FC = () => {
       {showHospitalList && (
         <div className="mb-6 space-y-4">
           <div className="mb-6 rounded-xl border bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                {/* <h3 className="mb-3 text-lg font-semibold text-gray-900 dark:text-white">Tìm kiếm & Lọc</h3> */}
+            <div className="flex flex-col gap-4">
+              <div className="w-full">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                  {/* <div>
-                    <h4 className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">Lọc theo trạng thái</h4>
-                    <div className="mt-2 flex flex-wrap items-center gap-3">
-                      <button className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${hospitalStatusFilter === "" ? "bg-blue-600 text-white" : "bg-white text-gray-700 border border-[#dfe4f0] hover:bg-[#f8f9fc]"}`} onClick={() => { setHospitalStatusFilter(""); setHospitalPage(0); }}>Tất cả</button>
-                      <button className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${hospitalStatusFilter === "incomplete" ? "bg-blue-600 text-white" : "bg-white text-gray-700 border border-[#dfe4f0] hover:bg-[#f8f9fc]"}`} onClick={() => { setHospitalStatusFilter("incomplete"); setHospitalPage(0); }}>Đang thực hiện</button>
-                      <button className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${hospitalStatusFilter === "accepted" ? "bg-blue-600 text-white" : "bg-white text-gray-700 border border-[#dfe4f0] hover:bg-[#f8f9fc]"}`} onClick={() => { setHospitalStatusFilter("accepted"); setHospitalPage(0); }}>Đã hoàn thành</button>
-                    </div>
-                  </div> */}
+                  <div className="w-full shrink-0 sm:max-w-[240px]">
+                    <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                      Trạng thái task
+                    </label>
+                    <select
+                      value={hospitalStatusFilter}
+                      onChange={(e) => {
+                        setHospitalStatusFilter(e.target.value);
+                        setHospitalPage(0);
+                      }}
+                      className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+                    >
+                      <option value="">Tất cả trạng thái</option>
+                      {HOSPITAL_TASK_STATUS_FILTER_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                  <div className="grid w-full max-w-[760px] grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="grid w-full min-w-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-3 lg:max-w-[760px]">
                     <div>
                       <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">Tên bệnh viện</label>
                       <input
@@ -1411,7 +1469,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setIsPicSuggestOpen((prev) => !prev)}
-                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-left text-sm text-gray-700 shadow-sm transition hover:bg-gray-50 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                          className="flex h-10 w-full items-center rounded-lg border border-gray-200 bg-white px-3 text-left text-sm text-gray-700 shadow-sm transition hover:bg-gray-50 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
                         >
                           {hospitalPicFilters.length === 0
                             ? "Phụ trách chính: Tất cả"
@@ -1529,25 +1587,14 @@ const MaintenanceSuperTaskPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
+
                 <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-                  <span className="font-semibold text-gray-800">
+                  <span className="font-semibold text-gray-800 dark:text-gray-200">
                     Tổng bệnh viện:
                     <span className="ml-1 font-bold text-gray-900 dark:text-gray-100">
                       {loadingHospitals ? "..." : hospitalSummary.total}
                     </span>
                   </span>
-                  {/* <span className="font-semibold text-gray-800 dark:text-gray-200">
-                    Đang hiển thị:
-                    <span className="ml-1 font-bold text-gray-900 dark:text-gray-100">
-                      {loadingHospitals ? "..." : hospitalSummary.filteredCount}
-                    </span>
-                  </span> */}
-                  {/* <span className="font-semibold text-gray-800 dark:text-gray-200">
-                    Đã hoàn thành 100%:
-                    <span className="ml-1 font-bold text-gray-900 dark:text-gray-100">
-                      {loadingHospitals ? "..." : hospitalSummary.acceptedFull}
-                    </span>
-                  </span> */}
                 </div>
               </div>
             </div>
