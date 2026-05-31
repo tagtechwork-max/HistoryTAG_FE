@@ -24,10 +24,12 @@ import SuperAdminLayout from "./layout/SuperAdminLayout";
 import { ScrollToTop } from "./components/common/ScrollToTop";
 import Home from "./pages/Dashboard/Home";
 import DeploymentDashboard from "./pages/Dashboard/DeploymentDashboard";
+import TicketStatistics from "./pages/Dashboard/TicketStatistics";
 import ImplementationTasksPage from "./pages/PageClients/implementation-tasks";
 import DevTasksPage from "./pages/PageClients/dev-tasks";
 import MaintenanceTasksPage from "./pages/PageClients/maintenance-tasks";
 import OtherTasksPage from "./pages/PageClients/other-tasks";
+import TicketSentDevPage from "./pages/PageClients/ticket-sent-dev";
 import Hospitals from "./pages/Page/Hospitals";
 import HisSystemPage from "./pages/Page/HisSystem";
 import HccFacilitiesPage from "./pages/Page/HccFacilities";
@@ -133,6 +135,7 @@ export default function App() {
           <Route element={<ProtectedRoute><SuperAdminLayout /></ProtectedRoute>}>
             <Route path="/superadmin/home" element={<SuperAdminHome />} />
             <Route path="/superadmin/deployment-dashboard" element={<DeploymentDashboard />} />
+            <Route path="/superadmin/ticket-statistics" element={<TicketStatistics />} />
             <Route path="/superadmin/users" element={<SuperAdminUsers />} />
             <Route
               path="/superadmin/user-analytics/:userId"
@@ -152,6 +155,7 @@ export default function App() {
             <Route path="/superadmin/dev-tasks" element={<DevSuperTaskPage />} />
             <Route path="/superadmin/maintenance-tasks" element={<MaintenanceSuperTaskPage />} />
             <Route path="/superadmin/other-tasks" element={<OtherTasksPage />} />
+            <Route path="/superadmin/ticket-sent-dev" element={<TicketSentDevPage />} />
             <Route path="/superadmin/profile" element={<SuperAdminProfile />} />
             {/* SuperAdmin notifications - keep layout consistent for superadmin users */}
             {/* SuperAdmin Business (reuse Admin Business page) */}
@@ -175,6 +179,7 @@ export default function App() {
           <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
             <Route path="/home" element={<Home />} />
             <Route path="/deployment-dashboard" element={<DeploymentDashboard />} />
+            <Route path="/ticket-statistics" element={<TicketStatistics />} />
 
             {/* Admin - Business department */}
             <Route path="/admin/business" element={<BusinessPage />} />
@@ -197,6 +202,7 @@ export default function App() {
             <Route path="/dev-tasks" element={<DevTasksPage />} />
             <Route path="/maintenance-tasks" element={<MaintenanceTasksPage />} />
             <Route path="/other-tasks" element={<OtherTasksPage />} />
+            <Route path="/ticket-sent-dev" element={<TicketSentDevPage />} />
 
             {/* Forms */}
             <Route path="/form-elements" element={<FormElements />} />

@@ -34,6 +34,7 @@ const navItems: NavItem[] = [
     subItems: [
       { name: "Báo cáo tổng quan", path: "/superadmin/home", pro: false },
       { name: "Thống kê triển khai", path: "/superadmin/deployment-dashboard", pro: false },
+      { name: "Thống kê, báo cáo Tickets", path: "/superadmin/ticket-statistics", pro: false },
     ],
   },
   {
@@ -83,6 +84,7 @@ const navItems: NavItem[] = [
       // { name: "Công việc Dev", path: "/superadmin/dev-tasks", pro: false },
       { name: "Công việc Bảo Trì", path: "/superadmin/maintenance-tasks", pro: false },
       { name: "Công việc khác", path: "/superadmin/other-tasks", pro: false },
+      { name: "Quản lý Tickets", path: "/superadmin/ticket-sent-dev", pro: false },
     ],
   },
   
