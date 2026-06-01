@@ -38,7 +38,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { isSuperAdmin as checkSuperAdmin } from "../../utils/permission";
 
 // ---------------------------------------------------------------------------
-// Mock data (replace with API later where not yet implemented)
+// Mock data (replace with API later where not yet implemented) build
 // ---------------------------------------------------------------------------
 
 /** Default KPI when API has not loaded yet (all zeros) */
