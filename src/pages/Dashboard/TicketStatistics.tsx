@@ -760,7 +760,7 @@ export default function TicketStatistics() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                     <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                    <Tooltip formatter={(value: number) => [value, "Số lượng"]} />
+                    <Tooltip formatter={(value: number | undefined) => [value ?? 0, "Số lượng"]} />
                     <Bar dataKey="count" fill="#3b82f6" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -781,7 +781,7 @@ export default function TicketStatistics() {
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                     <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
                     <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={(value: number) => [value, "Tickets"]} />
+                    <Tooltip formatter={(value: number | undefined) => [value ?? 0, "Tickets"]} />
                     <Bar dataKey="count" fill="#8b5cf6" radius={[0, 6, 6, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
