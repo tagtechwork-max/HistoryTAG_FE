@@ -46,6 +46,8 @@ function buildUrl(path: string): URL {
   return new URL(path, window.location.origin);
 }
 
+import { fetchWithAuth } from "../../api/client";
+
 function authHeader(): Record<string, string> {
   const token = localStorage.getItem("access_token");
   return token
@@ -169,7 +171,7 @@ export default function AgenciesPage() {
     setIsModalLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${BASE}/${id}`, { headers: { ...authHeader() } });
+      const res = await fetchWithAuth(`${BASE}/${id}`, { headers: { ...authHeader() } });
       if (!res.ok) throw new Error(`GET detail failed ${res.status}`);
       const data = await res.json();
       return data as Agency;
@@ -193,7 +195,7 @@ export default function AgenciesPage() {
       url.searchParams.set("sortDir", sortDir);
       const search = [qName, qContact].filter(Boolean).join(" ").trim();
       if (search) url.searchParams.set("search", search);
-      const res = await fetch(url.toString(), { headers: { ...authHeader() } });
+      const res = await fetchWithAuth(url.toString(), { headers: { ...authHeader() } });
       if (!res.ok) throw new Error(`GET failed ${res.status}`);
       const data = await res.json();
       setItems(data.content ?? data);
@@ -263,7 +265,7 @@ export default function AgenciesPage() {
     if (!ok) return;
     setLoading(true);
     try {
-      const res = await fetch(`${BASE}/${id}`, { method: "DELETE", headers: { ...authHeader() } });
+      const res = await fetchWithAuth(`${BASE}/${id}`, { method: "DELETE", headers: { ...authHeader() } });
       if (!res.ok) throw new Error(`DELETE failed ${res.status}`);
       await fetchList();
       toast.success("Xóa đại lý thành công");
@@ -296,7 +298,7 @@ export default function AgenciesPage() {
 
       const method = isEditing ? "PUT" : "POST";
       const url = isEditing ? `${BASE}/${editing!.id}` : BASE;
-      const res = await fetch(url, {
+      const res = await fetchWithAuth(url, {
         method,
         headers: { "Content-Type": "application/json", ...authHeader() },
         body: JSON.stringify(payload),

@@ -129,7 +129,7 @@ async function downloadHospitalApiFile(hospitalId: number, apiFileUrl: string | 
   // Nếu là local file path → download qua secure endpoint
   try {
     const url = `${API_BASE}/api/v1/admin/hospitals/${hospitalId}/api-file/download`;
-    const response = await fetch(url, {
+    const response = await fetchWithAuth(url, {
       method: 'GET',
       headers: authHeader(),
       credentials: 'include',
@@ -722,6 +722,7 @@ function DetailModal({
 }
 
 import { useAuth } from "../../contexts/AuthContext";
+import { fetchWithAuth } from "../../api/client";
 
 export default function HospitalsPage() {
   // ✅ Use AuthContext hook - Performance optimized với useMemo, reactive với token changes
@@ -896,7 +897,7 @@ export default function HospitalsPage() {
       try {
         // ✅ Dùng /api/v1/admin thay vì /api/v1/superadmin để admin thường cũng có thể dùng
         const url = `${API_BASE}/api/v1/admin/hardware/search?search=${encodeURIComponent(term)}`;
-        const res = await fetch(url, { headers: { ...authHeader() }, credentials: "include" } as any);
+        const res = await fetchWithAuth(url, { headers: { ...authHeader() }, credentials: "include" } as any);
         if (!res.ok) return [];
         const list = await res.json();
         const mapped = Array.isArray(list) ? list.map((x: any) => ({ id: Number(x.id), name: String(x.label ?? x.name ?? x.id) })) : [];
@@ -919,7 +920,7 @@ export default function HospitalsPage() {
         if (term && term.trim()) {
           params.set("name", term.trim()); // admin API dùng "name" thay vì "fullName"
         }
-        const res = await fetch(`${API_BASE}/api/v1/admin/users/search?${params.toString()}`, {
+        const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/users/search?${params.toString()}`, {
           headers: { ...authHeader() },
           credentials: "include",
         } as any);
@@ -954,7 +955,7 @@ export default function HospitalsPage() {
         if (term && term.trim()) {
           params.set("name", term.trim()); // admin API dùng "name" thay vì "fullName"
         }
-        const res = await fetch(`${API_BASE}/api/v1/admin/users/search?${params.toString()}`, {
+        const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/users/search?${params.toString()}`, {
           headers: { ...authHeader() },
           credentials: "include",
         } as any);
@@ -1226,7 +1227,7 @@ export default function HospitalsPage() {
       try {
         // ✅ Dùng /api/v1/admin thay vì /api/v1/superadmin để admin thường cũng có thể dùng
         const url = `${API_BASE}/api/v1/admin/his?page=0&size=200`;
-        const res = await fetch(url, { headers: { ...authHeader() } });
+        const res = await fetchWithAuth(url, { headers: { ...authHeader() } });
         if (!res.ok) return;
         const data = await res.json();
         // data may be a Spring page or an array
@@ -1325,7 +1326,7 @@ export default function HospitalsPage() {
           department: "IT",
           includeSuperAdmin: "true",
         });
-        const res = await fetch(`${API_BASE}/api/v1/admin/users/search?${params.toString()}`, {
+        const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/users/search?${params.toString()}`, {
           headers: { ...authHeader() },
           credentials: "include",
         } as any);
@@ -1356,7 +1357,7 @@ export default function HospitalsPage() {
     setError(null);
     try {
       // API call: GET /api/v1/auth/hospitals/{hospitalId}
-      const res = await fetch(`${BASE}/${id}`, { headers: { ...authHeader() } });
+      const res = await fetchWithAuth(`${BASE}/${id}`, { headers: { ...authHeader() } });
       if (!res.ok) throw new Error(`GET detail failed ${res.status}`);
       const data = await res.json();
       return data as Hospital;
@@ -1395,7 +1396,7 @@ export default function HospitalsPage() {
       //   url: url.toString()
       // });
       
-      const res = await fetch(url.toString(), { headers: { ...authHeader() } });
+      const res = await fetchWithAuth(url.toString(), { headers: { ...authHeader() } });
       if (!res.ok) throw new Error(`GET failed ${res.status}`);
       const data = await res.json();
       const hospitals = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
@@ -1519,7 +1520,7 @@ export default function HospitalsPage() {
     try {
       // ✅ Dùng /api/v1/admin thay vì /api/v1/superadmin để admin thường cũng có thể dùng
       const businessUrl = `${API_BASE}/api/v1/admin/business?search=${encodeURIComponent(hospital.name)}&page=0&size=50`;
-      const businessRes = await fetch(businessUrl, {
+      const businessRes = await fetchWithAuth(businessUrl, {
         headers: { ...authHeader() },
       });
       
@@ -1544,7 +1545,7 @@ export default function HospitalsPage() {
 
     setLoading(true);
     try {
-      const res = await fetch(`${SUPERADMIN_BASE}/${hospitalToDelete.id}`, {
+      const res = await fetchWithAuth(`${SUPERADMIN_BASE}/${hospitalToDelete.id}`, {
         method: "DELETE",
         headers: { ...authHeader() },
       });
@@ -1572,7 +1573,7 @@ export default function HospitalsPage() {
     setHistoryLoading(true);
     setHistoryData([]);
     try {
-      const res = await fetch(`${BASE}/${h.id}/history`, {
+      const res = await fetchWithAuth(`${BASE}/${h.id}/history`, {
         headers: { ...authHeader() },
       });
       if (!res.ok) throw new Error(`GET history failed ${res.status}`);
@@ -1592,7 +1593,7 @@ export default function HospitalsPage() {
     setContractsLoading(true);
     setContractsData(null);
     try {
-      const res = await fetch(`${BASE}/${h.id}/contracts`, {
+      const res = await fetchWithAuth(`${BASE}/${h.id}/contracts`, {
         headers: { ...authHeader() },
       });
       if (!res.ok) throw new Error(`GET contracts failed ${res.status}`);
@@ -1616,7 +1617,7 @@ export default function HospitalsPage() {
 
   async function onExportHistory(hospitalId: number) {
     try {
-      const res = await fetch(`${BASE}/${hospitalId}/history/export`, {
+      const res = await fetchWithAuth(`${BASE}/${hospitalId}/history/export`, {
         headers: { ...authHeader() },
       });
       if (!res.ok) throw new Error(`Export failed ${res.status}`);
@@ -1707,7 +1708,7 @@ export default function HospitalsPage() {
 
       const formData = toFormData(payload);
 
-      const res = await fetch(url, {
+      const res = await fetchWithAuth(url, {
         method,
         headers: { ...authHeader() },
         body: formData,

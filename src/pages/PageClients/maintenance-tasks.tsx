@@ -13,6 +13,7 @@ import { useWebSocket } from "../../contexts/WebSocketContext";
 import TicketsTab from "../../pages/CustomerCare/SubCustomerCare/TicketsTab";
 import { getHospitalTickets } from "../../api/ticket.api";
 import { useAuth } from '../../contexts/AuthContext';
+import { fetchWithAuth } from "../../api/client";
 import { VIETNAM_PROVINCE_LABELS } from "../../utils/vietnamProvinceCenters";
 
 // Helper function để parse PIC IDs từ additionalRequest
@@ -900,8 +901,8 @@ function TaskFormModal({
     const searchHospitals = useMemo(
         () => async (term: string) => {
             const [hospitalRes, hccRes] = await Promise.all([
-                fetch(`${API_ROOT}/api/v1/admin/hospitals/search?name=${encodeURIComponent(term)}`, { headers: authHeaders(), credentials: "include" }),
-                fetch(`${API_ROOT}/api/v1/admin/hcc-facilities?search=${encodeURIComponent(term)}&page=0&size=20`, { headers: authHeaders(), credentials: "include" }),
+                fetchWithAuth(`${API_ROOT}/api/v1/admin/hospitals/search?name=${encodeURIComponent(term)}`, { headers: authHeaders(), credentials: "include" }),
+                fetchWithAuth(`${API_ROOT}/api/v1/admin/hcc-facilities?search=${encodeURIComponent(term)}&page=0&size=20`, { headers: authHeaders(), credentials: "include" }),
             ]);
             const hospitals: FacilityOption[] = hospitalRes.ok
                 ? ((await hospitalRes.json()) as Array<{ id?: number; label?: string; name?: string; hospitalName?: string; code?: string }>)
@@ -938,7 +939,7 @@ function TaskFormModal({
             }
             // Nếu SUPERADMIN, không lọc team để hiện tất cả
             const url = `${API_ROOT}/api/v1/admin/users/search?${params.toString()}`;
-            const res = await fetch(url, { headers: authHeaders(), credentials: "include" });
+            const res = await fetchWithAuth(url, { headers: authHeaders(), credentials: "include" });
             if (!res.ok) return [];
             const list = await res.json();
             const mapped = Array.isArray(list)
@@ -956,7 +957,7 @@ function TaskFormModal({
     // const searchAgencies = useMemo(
     //     () => async (term: string) => {
     //         const url = `${API_ROOT}/api/v1/admin/agencies/search?search=${encodeURIComponent(term)}`;
-    //         const res = await fetch(url, { headers: authHeaders(), credentials: "include" });
+    //         const res = await fetchWithAuth(url, { headers: authHeaders(), credentials: "include" });
     //         if (!res.ok) return [];
     //         const list = await res.json();
     //         const mapped = Array.isArray(list)
@@ -970,7 +971,7 @@ function TaskFormModal({
     // const searchHisSystems = useMemo(
     //     () => async (term: string) => {
     //         const url = `${API_ROOT}/api/v1/admin/his/search?search=${encodeURIComponent(term)}`;
-    //         const res = await fetch(url, { headers: authHeaders(), credentials: "include" });
+    //         const res = await fetchWithAuth(url, { headers: authHeaders(), credentials: "include" });
     //         if (!res.ok) return [];
     //         const list = await res.json();
     //         const mapped = Array.isArray(list)
@@ -984,7 +985,7 @@ function TaskFormModal({
     // const searchHardwares = useMemo(
     //     () => async (term: string) => {
     //         const url = `${API_ROOT}/api/v1/admin/hardware/search?search=${encodeURIComponent(term)}`;
-    //         const res = await fetch(url, { headers: authHeaders(), credentials: "include" });
+    //         const res = await fetchWithAuth(url, { headers: authHeaders(), credentials: "include" });
     //         if (!res.ok) return [];
     //         const list = await res.json();
     //         const mapped = Array.isArray(list)
@@ -1250,7 +1251,7 @@ function TaskFormModal({
 
             // 1) Try detail endpoint
             try {
-                const res = await fetch(`${API_ROOT}${detailPath}/${id}`, { headers: authHeaders(), credentials: "include" });
+                const res = await fetchWithAuth(`${API_ROOT}${detailPath}/${id}`, { headers: authHeaders(), credentials: "include" });
                 if (res.ok) {
                     const obj = await res.json();
                     const name = extractName(obj);
@@ -1265,7 +1266,7 @@ function TaskFormModal({
 
             // 2) Try listing/search endpoint
             try {
-                const res = await fetch(`${API_ROOT}${detailPath}?search=${encodeURIComponent(String(id))}&page=0&size=50`, { headers: authHeaders(), credentials: "include" });
+                const res = await fetchWithAuth(`${API_ROOT}${detailPath}?search=${encodeURIComponent(String(id))}&page=0&size=50`, { headers: authHeaders(), credentials: "include" });
                 if (res.ok) {
                     const obj = await res.json();
                     const list = Array.isArray(obj?.content) ? obj.content : Array.isArray(obj) ? obj : [];
@@ -1334,7 +1335,7 @@ function TaskFormModal({
                 const results = await Promise.all(
                     needsResolve.map(async (id) => {
                         try {
-                            const res = await fetch(`${API_ROOT}/api/v1/admin/users/${id}`, { headers: authHeaders(), credentials: "include" });
+                            const res = await fetchWithAuth(`${API_ROOT}/api/v1/admin/users/${id}`, { headers: authHeaders(), credentials: "include" });
                             if (!res.ok) return null;
                             return await res.json();
                         } catch {
@@ -1863,7 +1864,7 @@ function DetailModal({
             try {
                 const idsCsv = picIds.join(",");
                 const url = `${API_ROOT}/api/v1/admin/users/batch?ids=${encodeURIComponent(idsCsv)}`;
-                const res = await fetch(url, { headers: authHeaders(), credentials: "include" });
+                const res = await fetchWithAuth(url, { headers: authHeaders(), credentials: "include" });
                 if (!res.ok) throw new Error(`Batch fetch failed: ${res.status}`);
                 const payload = await res.json();
                 const list = Array.isArray(payload) ? payload : Array.isArray(payload?.content) ? payload.content : [];
@@ -2154,7 +2155,7 @@ const ImplementationTasksPage: React.FC = () => {
             const usersUrl = queryString
                 ? `${API_ROOT}/api/v1/admin/users/search?${queryString}`
                 : `${API_ROOT}/api/v1/admin/users/search`;
-            const usersRes = await fetch(usersUrl, { headers: authHeaders(), credentials: "include" });
+            const usersRes = await fetchWithAuth(usersUrl, { headers: authHeaders(), credentials: "include" });
             if (!usersRes.ok) return;
             const usersList = await usersRes.json();
             const users = Array.isArray(usersList) ? usersList : [];
@@ -2254,7 +2255,7 @@ const ImplementationTasksPage: React.FC = () => {
             if (selectedHospital) params.set("hospitalName", selectedHospital);
 
             const url = `${apiBase}?${params.toString()}`;
-            const res = await fetch(url, { method: "GET", headers: authHeaders(), credentials: "include" });
+            const res = await fetchWithAuth(url, { method: "GET", headers: authHeaders(), credentials: "include" });
             if (!res.ok) throw new Error(`GET ${url} failed: ${res.status}`);
             const resp = await res.json();
             const items = Array.isArray(resp?.content) ? resp.content : Array.isArray(resp) ? resp : [];
@@ -2287,7 +2288,7 @@ const ImplementationTasksPage: React.FC = () => {
                         if (selectedHospital) countParams.set("hospitalName", selectedHospital);
 
                         const countUrl = `${apiBase}?${countParams.toString()}`;
-                        const countRes = await fetch(countUrl, { method: "GET", headers: authHeaders(), credentials: "include" });
+                        const countRes = await fetchWithAuth(countUrl, { method: "GET", headers: authHeaders(), credentials: "include" });
                         if (countRes.ok) {
                             const countResp = await countRes.json();
                             if (countResp && typeof countResp.totalElements === "number") {
@@ -2330,7 +2331,7 @@ const ImplementationTasksPage: React.FC = () => {
         setLoadingPending(true);
         try {
             // ✅ API mới: Lấy danh sách bệnh viện chờ tiếp nhận (hospital-level)
-            const res = await fetch(`${API_ROOT}/api/v1/admin/maintenance/pending-hospitals`, {
+            const res = await fetchWithAuth(`${API_ROOT}/api/v1/admin/maintenance/pending-hospitals`, {
                 method: "GET",
                 headers: authHeaders(),
                 credentials: "include",
@@ -2371,7 +2372,7 @@ const ImplementationTasksPage: React.FC = () => {
 
         try {
             // ✅ API mới: Tiếp nhận bệnh viện (1 API call thay vì loop qua từng task)
-            const res = await fetch(`${API_ROOT}/api/v1/admin/maintenance/accept-hospital/${group.hospitalId}`, {
+            const res = await fetchWithAuth(`${API_ROOT}/api/v1/admin/maintenance/accept-hospital/${group.hospitalId}`, {
                 method: "PUT",
                 headers: authHeaders(),
                 credentials: "include",
@@ -2518,7 +2519,7 @@ const ImplementationTasksPage: React.FC = () => {
 
     async function fetchHospitalOptions(q: string) {
         try {
-            const res = await fetch(`${API_ROOT}/api/v1/admin/hospitals/search?name=${encodeURIComponent(q || "")}`, { headers: authHeaders() });
+            const res = await fetchWithAuth(`${API_ROOT}/api/v1/admin/hospitals/search?name=${encodeURIComponent(q || "")}`, { headers: authHeaders() });
             if (!res.ok) return;
             const list = await res.json();
             if (Array.isArray(list)) setHospitalOptions(list.map((h: any) => ({ id: Number(h.id), label: String(h.label ?? h.name ?? "") })));
@@ -2539,7 +2540,7 @@ const ImplementationTasksPage: React.FC = () => {
         try {
             // ✅ Chỉ cần 1 API call - summary đã có đầy đủ thống kê và PIC info
             const summaryEndpoint = `${API_ROOT}/api/v1/admin/maintenance/hospitals/summary`;
-            const summaryRes = await fetch(summaryEndpoint, {
+            const summaryRes = await fetchWithAuth(summaryEndpoint, {
                 method: "GET",
                 headers: authHeaders(),
                 credentials: "include",
@@ -2590,7 +2591,7 @@ const ImplementationTasksPage: React.FC = () => {
                 const usersUrl = queryString 
                     ? `${API_ROOT}/api/v1/admin/users/search?${queryString}`
                     : `${API_ROOT}/api/v1/admin/users/search`;
-                const usersRes = await fetch(usersUrl, { headers: authHeaders(), credentials: "include" });
+                const usersRes = await fetchWithAuth(usersUrl, { headers: authHeaders(), credentials: "include" });
                 if (usersRes.ok) {
                     const usersList = await usersRes.json();
                     const users = Array.isArray(usersList) ? usersList : [];
@@ -2623,7 +2624,7 @@ const ImplementationTasksPage: React.FC = () => {
                     // Fetch count of COMPLETED tasks for this hospital (maintenance tasks use COMPLETED status)
                     const params = new URLSearchParams({ page: "0", size: "1", status: "COMPLETED", hospitalName });
                     const url = `${API_ROOT}/api/v1/admin/maintenance/tasks?${params.toString()}`;
-                    const res = await fetch(url, {
+                    const res = await fetchWithAuth(url, {
                         method: "GET",
                         headers: authHeaders(),
                         credentials: "include",
@@ -2657,7 +2658,7 @@ const ImplementationTasksPage: React.FC = () => {
                 const initialPromises = Array.from({ length: initialPages }, (_, i) => {
                     const tasksParams = new URLSearchParams({ page: String(i), size: String(pageSize), sortBy: "id", sortDir: "asc" });
                     const tasksUrl = `${API_ROOT}/api/v1/admin/maintenance/tasks?${tasksParams.toString()}`;
-                    return fetch(tasksUrl, { headers: authHeaders(), credentials: "include" })
+                    return fetchWithAuth(tasksUrl, { headers: authHeaders(), credentials: "include" })
                         .then(res => res.ok ? res.json() : null)
                         .then(payload => {
                             const tasks = Array.isArray(payload?.content) ? payload.content : Array.isArray(payload) ? payload : [];
@@ -2678,7 +2679,7 @@ const ImplementationTasksPage: React.FC = () => {
                     for (let page = initialPages; page < maxPages; page++) {
                         const tasksParams = new URLSearchParams({ page: String(page), size: String(pageSize), sortBy: "id", sortDir: "asc" });
                         const tasksUrl = `${API_ROOT}/api/v1/admin/maintenance/tasks?${tasksParams.toString()}`;
-                        const tasksRes = await fetch(tasksUrl, { headers: authHeaders(), credentials: "include" });
+                        const tasksRes = await fetchWithAuth(tasksUrl, { headers: authHeaders(), credentials: "include" });
                         if (tasksRes.ok) {
                             const tasksPayload = await tasksRes.json();
                             const tasks = Array.isArray(tasksPayload?.content) ? tasksPayload.content : Array.isArray(tasksPayload) ? tasksPayload : [];
@@ -2985,7 +2986,7 @@ const ImplementationTasksPage: React.FC = () => {
 
     async function resolveHospitalIdByName(name: string): Promise<number | null> {
         try {
-            const res = await fetch(`${API_ROOT}/api/v1/admin/hospitals/search?name=${encodeURIComponent(name)}`, { headers: authHeaders(), credentials: 'include' });
+            const res = await fetchWithAuth(`${API_ROOT}/api/v1/admin/hospitals/search?name=${encodeURIComponent(name)}`, { headers: authHeaders(), credentials: 'include' });
             if (!res.ok) return null;
             const list = await res.json();
             if (!Array.isArray(list)) return null;
@@ -3001,7 +3002,7 @@ const ImplementationTasksPage: React.FC = () => {
         const url = isUpdate ? `${apiBase}/${id}` : apiBase;
         const method = isUpdate ? "PUT" : "POST";
 
-        const res = await fetch(url, {
+        const res = await fetchWithAuth(url, {
             method,
             headers: authHeaders(),
             body: JSON.stringify(payload),
@@ -3046,7 +3047,7 @@ const ImplementationTasksPage: React.FC = () => {
         setDeleteSubmitting(true);
         try {
             const id = deleteDialogId;
-            const res = await fetch(`${apiBase}/${id}`, {
+            const res = await fetchWithAuth(`${apiBase}/${id}`, {
                 method: "DELETE",
                 headers: authHeaders(),
                 credentials: "include",
