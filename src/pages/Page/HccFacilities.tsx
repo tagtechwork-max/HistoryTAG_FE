@@ -6,6 +6,7 @@ import { AiOutlineDelete, AiOutlineEdit, AiOutlineEye, AiOutlinePlus } from "rea
 import { FiMapPin, FiUsers } from "react-icons/fi";
 import toast from "react-hot-toast";
 import { useConfirmDialog } from "../../hooks/useConfirmDialog";
+import { fetchWithAuth } from "../../api/client";
 
 const VIETNAM_PROVINCES = [
   "An Giang", "Bà Rịa - Vũng Tàu", "Bạc Liêu", "Bắc Giang", "Bắc Kạn", "Bắc Ninh",
@@ -283,7 +284,7 @@ export default function HccFacilitiesPage() {
       url.searchParams.set("size", String(size));
       url.searchParams.set("sortBy", sortBy);
       url.searchParams.set("sortDir", sortDir);
-      const res = await fetch(url.toString(), { headers: { ...authHeader() } });
+      const res = await fetchWithAuth(url.toString(), { headers: { ...authHeader() } });
       if (!res.ok) throw new Error(`GET ${res.status}`);
       const data = (await res.json()) as SpringPage<HccFacilityResponseDTO>;
       setItems(data.content ?? []);
@@ -309,7 +310,7 @@ export default function HccFacilitiesPage() {
         url.searchParams.set("name", "");
         url.searchParams.set("department", "IT");
         url.searchParams.set("includeSuperAdmin", "true");
-        const res = await fetch(url.toString(), { headers: { ...authHeader() } });
+        const res = await fetchWithAuth(url.toString(), { headers: { ...authHeader() } });
         if (!res.ok || !alive) return;
         const data = (await res.json()) as EntitySelect[];
         if (alive) setItUsers(Array.isArray(data) ? data : []);
@@ -339,7 +340,7 @@ export default function HccFacilitiesPage() {
 
   async function loadDetail(id: number): Promise<HccFacilityResponseDTO | null> {
     const base = getApiBase("GET", false);
-    const res = await fetch(`${base}/${id}`, { headers: { ...authHeader() } });
+    const res = await fetchWithAuth(`${base}/${id}`, { headers: { ...authHeader() } });
     if (!res.ok) return null;
     return (await res.json()) as HccFacilityResponseDTO;
   }
@@ -401,7 +402,7 @@ export default function HccFacilitiesPage() {
     setLoading(true);
     try {
       const base = getApiBase("DELETE", isSuperAdmin);
-      const res = await fetch(`${base}/${id}`, { method: "DELETE", headers: { ...authHeader() } });
+      const res = await fetchWithAuth(`${base}/${id}`, { method: "DELETE", headers: { ...authHeader() } });
       if (!res.ok) throw new Error(`DELETE ${res.status}`);
       if (items.length === 1 && page > 0) setPage((p) => p - 1);
       await fetchList();
@@ -446,7 +447,7 @@ export default function HccFacilitiesPage() {
             primaryResponsibleUserId: formPrimaryId,
             secondaryResponsibleUserIds: formSecondaryIds,
           };
-      const res = await fetch(url, {
+      const res = await fetchWithAuth(url, {
         method,
         headers: { ...authHeader() },
         body: JSON.stringify(body),

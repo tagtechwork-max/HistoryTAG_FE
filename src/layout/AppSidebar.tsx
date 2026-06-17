@@ -18,6 +18,7 @@ import {
 import { UserIcon } from "../icons";
 import { useSidebar } from "../context/SidebarContext";
 import { useAuth } from "../contexts/AuthContext";
+import { AUTH_TOKEN_REFRESHED_EVENT } from "../api/client";
 
 // Kiểu dữ liệu cho mục điều hướng
 type NavItem = {
@@ -158,8 +159,7 @@ const AppSidebar: React.FC = () => {
   const [subMenuHeight, setSubMenuHeight] = useState<Record<string, number>>({});
   const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // Get user info to filter calendar menu
-  const getUserInfo = () => {
+  const readUserInfo = () => {
     try {
       const storedUserRaw = localStorage.getItem("user") || sessionStorage.getItem("user");
       if (storedUserRaw) {
@@ -171,7 +171,14 @@ const AppSidebar: React.FC = () => {
     return null;
   };
 
-  const userInfo = getUserInfo();
+  const [userInfo, setUserInfo] = useState(readUserInfo);
+
+  useEffect(() => {
+    const syncUserInfo = () => setUserInfo(readUserInfo());
+    window.addEventListener(AUTH_TOKEN_REFRESHED_EVENT, syncUserInfo);
+    return () => window.removeEventListener(AUTH_TOKEN_REFRESHED_EVENT, syncUserInfo);
+  }, []);
+
   const userTeam = userInfo?.team ? String(userInfo.team).toUpperCase() : null;
   const userDepartment = userInfo?.department ? String(userInfo.department).toUpperCase() : null;
 

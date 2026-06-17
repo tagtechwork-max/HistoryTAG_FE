@@ -188,12 +188,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const onAuth = isAuthPage(path);
 
       let currentToken = getAuthToken();
+      const stored = getStoredAccessToken();
+      const needsRefresh =
+        !currentToken &&
+        !onAuth &&
+        (!stored || (stored && isTokenExpired(stored)));
+
+      if (needsRefresh) {
+        setIsLoading(true);
+      }
+
       if (!currentToken && !onAuth) {
-        const stored = getStoredAccessToken();
         if (stored && isTokenExpired(stored)) {
           currentToken = (await tryRefreshAccessToken()) ?? null;
+          if (currentToken) {
+            currentToken = getAuthToken() ?? currentToken;
+          }
         } else if (!stored) {
           currentToken = (await tryRefreshAccessToken()) ?? null;
+          if (currentToken) {
+            currentToken = getAuthToken() ?? currentToken;
+          }
         }
       }
       setToken(currentToken);

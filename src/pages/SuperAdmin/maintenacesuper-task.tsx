@@ -14,6 +14,7 @@ import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import TicketsTab from "../../pages/CustomerCare/SubCustomerCare/TicketsTab";
 import { getHospitalTickets } from "../../api/ticket.api";
 import { useAuth } from '../../contexts/AuthContext';
+import { fetchWithAuth } from "../../api/client";
 import { VIETNAM_PROVINCE_LABELS } from "../../utils/vietnamProvinceCenters";
 
 const API_ROOT = import.meta.env.VITE_API_URL || "";
@@ -411,7 +412,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
       if (selectedHospital) params.set("hospitalName", selectedHospital);
 
       const url = `${apiBase}?${params.toString()}`;
-      const res = await fetch(url, {
+      const res = await fetchWithAuth(url, {
         method: "GET",
         headers: authHeaders(),
         credentials: "include",
@@ -511,7 +512,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
     setDeleteSubmitting(true);
     try {
       const id = deleteDialogId;
-      const res = await fetch(`${apiBase}/${id}`, {
+      const res = await fetchWithAuth(`${apiBase}/${id}`, {
         method: "DELETE",
         headers: authHeaders(),
         credentials: "include",
@@ -541,7 +542,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
     setLoadingPending(true);
     try {
       // ✅ API mới: Lấy danh sách bệnh viện chờ tiếp nhận (hospital-level)
-      const res = await fetch(`${API_ROOT}/api/v1/admin/maintenance/pending-hospitals`, {
+      const res = await fetchWithAuth(`${API_ROOT}/api/v1/admin/maintenance/pending-hospitals`, {
         method: "GET",
         headers: authHeaders(),
         credentials: "include",
@@ -581,7 +582,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
 
     try {
       // ✅ API mới: Tiếp nhận bệnh viện (1 API call thay vì loop qua từng task)
-      const res = await fetch(`${API_ROOT}/api/v1/admin/maintenance/accept-hospital/${group.hospitalId}`, {
+      const res = await fetchWithAuth(`${API_ROOT}/api/v1/admin/maintenance/accept-hospital/${group.hospitalId}`, {
         method: "PUT",
         headers: authHeaders(),
         credentials: "include",
@@ -693,7 +694,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
     try {
       // ✅ Tối ưu: Chỉ fetch summary (đã có đầy đủ thông tin), không cần fetch tất cả tasks
       const summaryEndpoint = `${API_ROOT}/api/v1/admin/maintenance/hospitals/summary`;
-      const summaryRes = await fetch(summaryEndpoint, {
+      const summaryRes = await fetchWithAuth(summaryEndpoint, {
         method: "GET",
         headers: authHeaders(),
         credentials: "include",
@@ -744,7 +745,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
           // Fetch count of ACCEPTED tasks for this hospital
           const params = new URLSearchParams({ page: "0", size: "1", status: "ACCEPTED", hospitalName });
           const url = `${API_ROOT}/api/v1/superadmin/maintenance/tasks?${params.toString()}`;
-          const res = await fetch(url, {
+          const res = await fetchWithAuth(url, {
             method: "GET",
             headers: authHeaders(),
             credentials: "include",
@@ -778,7 +779,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
         const initialPromises = Array.from({ length: initialPages }, (_, i) => {
           const tasksParams = new URLSearchParams({ page: String(i), size: String(pageSize), sortBy: "id", sortDir: "asc" });
           const tasksUrl = `${API_ROOT}/api/v1/superadmin/maintenance/tasks?${tasksParams.toString()}`;
-          return fetch(tasksUrl, { headers: authHeaders(), credentials: "include" })
+          return fetchWithAuth(tasksUrl, { headers: authHeaders(), credentials: "include" })
             .then(res => res.ok ? res.json() : null)
             .then(payload => {
               const tasks = Array.isArray(payload?.content) ? payload.content : Array.isArray(payload) ? payload : [];
@@ -799,7 +800,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
           for (let page = initialPages; page < maxPages; page++) {
             const tasksParams = new URLSearchParams({ page: String(page), size: String(pageSize), sortBy: "id", sortDir: "asc" });
             const tasksUrl = `${API_ROOT}/api/v1/superadmin/maintenance/tasks?${tasksParams.toString()}`;
-            const tasksRes = await fetch(tasksUrl, { headers: authHeaders(), credentials: "include" });
+            const tasksRes = await fetchWithAuth(tasksUrl, { headers: authHeaders(), credentials: "include" });
             if (tasksRes.ok) {
               const tasksPayload = await tasksRes.json();
               const tasks = Array.isArray(tasksPayload?.content) ? tasksPayload.content : Array.isArray(tasksPayload) ? tasksPayload : [];
@@ -951,7 +952,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
   // Resolve hospital id by exact name using superadmin search endpoint
   async function resolveHospitalIdByName(name: string): Promise<number | null> {
     try {
-      const res = await fetch(`${API_ROOT}/api/v1/superadmin/hospitals/search?name=${encodeURIComponent(name)}`, { headers: authHeaders(), credentials: 'include' });
+      const res = await fetchWithAuth(`${API_ROOT}/api/v1/superadmin/hospitals/search?name=${encodeURIComponent(name)}`, { headers: authHeaders(), credentials: 'include' });
       if (!res.ok) return null;
       const arr = await res.json();
       if (!Array.isArray(arr) || arr.length === 0) return null;
@@ -984,7 +985,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
     try {
       const params = new URLSearchParams({ page: "0", size: "1", status: "ACCEPTED", hospitalName });
       const url = `${apiBase}?${params.toString()}`;
-      const res = await fetch(url, { method: "GET", headers: authHeaders(), credentials: "include" });
+      const res = await fetchWithAuth(url, { method: "GET", headers: authHeaders(), credentials: "include" });
       if (!res.ok) {
         setAcceptedCount(null);
         return;
@@ -1196,7 +1197,7 @@ const MaintenanceSuperTaskPage: React.FC = () => {
     const isUpdate = Boolean(id);
     const url = isUpdate ? `${apiBase}/${id}` : apiBase;
     const method = isUpdate ? "PUT" : "POST";
-    const res = await fetch(url, {
+    const res = await fetchWithAuth(url, {
       method,
       headers: authHeaders(),
       body: JSON.stringify(payload),
@@ -2002,7 +2003,7 @@ function DetailModal({
 
         try {
           const url = `${API_ROOT}/api/v1/superadmin/users/${id}`;
-          const res = await fetch(url, { headers: authHeaders(), credentials: "include" });
+          const res = await fetchWithAuth(url, { headers: authHeaders(), credentials: "include" });
           if (!res.ok) return { id, name: String(id) };
           const user = await res.json();
           const name = user.fullName || user.fullname || user.name || user.username || user.email || String(id);

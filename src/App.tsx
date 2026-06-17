@@ -57,8 +57,8 @@ import MapHospitals from "./pages/Utility/MapHospitals";
 import DocumentLinksPage from "./pages/Utility/DocumentLinksPage";
 import ListTicketPage from "./pages/Ticket/listticket";
 import ToolEncryption from "./pages/Tool/ToolEncryption";
-import { AuthProvider } from "./contexts/AuthContext";
-import { getStoredAccessToken } from "./api/client";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { getAuthToken, getStoredAccessToken, isTokenExpired } from "./api/client";
 import { isSuperAdmin as checkIsSuperAdminFromToken } from "./utils/permission";
 
 // Profile Route - redirect based on role BEFORE rendering any layout
@@ -68,11 +68,21 @@ const ProfileRoute = () => {
   return <Navigate to={isSuperAdmin ? "/superadmin/profile" : "/admin/profile"} replace />;
 };
 
-// Protected Route Component
+// Protected Route Component — reactive to AuthContext (refresh / session expiry)
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const token = getStoredAccessToken();
+  const { isLoading, roles } = useAuth();
+  const stored = getStoredAccessToken();
 
-  if (!token) {
+  if (isLoading) {
+    return null;
+  }
+
+  if (!stored) {
+    return <Navigate to="/signin" replace />;
+  }
+
+  // Refresh failed: AuthContext cleared token but stale JWT may remain in storage
+  if (roles.length === 0 && isTokenExpired(stored) && !getAuthToken()) {
     return <Navigate to="/signin" replace />;
   }
 

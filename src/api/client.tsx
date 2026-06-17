@@ -32,14 +32,23 @@ function getCookie(name: string) {
   return m ? decodeURIComponent(m[2]) : null;
 }
 
-/** Read access token from storage/cookie without expiry check. */
+/**
+ * Read access token from storage/cookie without expiry check.
+ * Prefer localStorage/sessionStorage over legacy access_token cookie — after refresh,
+ * only storage is updated; a stale cookie would otherwise shadow the new JWT.
+ */
 export function getStoredAccessToken(): string | null {
-  return (
-    getCookie("access_token") ||
-    localStorage.getItem("access_token") ||
-    sessionStorage.getItem("access_token") ||
-    localStorage.getItem("token")
-  );
+  const candidates = [
+    localStorage.getItem("access_token"),
+    sessionStorage.getItem("access_token"),
+    localStorage.getItem("token"),
+    getCookie("access_token"),
+  ].filter((t): t is string => !!t);
+
+  if (candidates.length === 0) return null;
+
+  const valid = candidates.find((t) => !isTokenExpired(t));
+  return valid ?? candidates[0];
 }
 
 export function isTokenExpired(token: string): boolean {
@@ -108,8 +117,11 @@ export function syncRolesFromAccessToken(token: string) {
   }
 }
 
+let isRedirecting = false;
+
 export function persistAccessToken(token: string) {
   clearRefreshFailureCooldown();
+  isRedirecting = false;
 
   const storage = localStorage.getItem("access_token")
     ? localStorage
@@ -120,6 +132,12 @@ export function persistAccessToken(token: string) {
   storage.setItem("access_token", token);
   syncRolesFromAccessToken(token);
   api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+
+  // Legacy: remove stale access_token cookie so it cannot shadow storage after refresh
+  document.cookie =
+    "access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+  document.cookie =
+    "access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=qlcvtagtech.com;";
 
   if (typeof window !== "undefined") {
     window.dispatchEvent(
@@ -171,15 +189,20 @@ function isAuthPagePath(path: string) {
   );
 }
 
-let isRedirecting = false;
-
 export function redirectToSignIn() {
-  if (typeof window === "undefined" || isRedirecting) return;
+  if (typeof window === "undefined") return;
   const path = window.location.pathname;
   if (isAuthPagePath(path)) return;
+  if (isRedirecting) return;
+
   isRedirecting = true;
   clearAllAuthData();
   window.location.href = "/signin";
+}
+
+/** Reset redirect guard after manual navigation to sign-in (e.g. logout). */
+export function resetRedirectGuard() {
+  isRedirecting = false;
 }
 
 let refreshPromise: Promise<string | null> | null = null;
@@ -218,6 +241,61 @@ export async function tryRefreshAccessToken(): Promise<string | null> {
     });
 
   return refreshPromise;
+}
+
+/** Obtain a valid access JWT, refreshing via httpOnly cookie when missing/expired. */
+export async function ensureAccessToken(): Promise<string | null> {
+  let token = getAuthToken();
+  if (token) return token;
+  token = await tryRefreshAccessToken();
+  return token ? getAuthToken() ?? token : null;
+}
+
+function mergeFetchHeaders(
+  init: RequestInit | undefined,
+  token: string | null
+): Headers {
+  const headers = new Headers(init?.headers);
+  if (!headers.has("Accept")) {
+    headers.set("Accept", "application/json");
+  }
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  } else {
+    headers.delete("Authorization");
+  }
+  return headers;
+}
+
+/**
+ * fetch() wrapper for pages that bypass the axios client.
+ * Ensures refresh before the request and retries once on 401.
+ */
+export async function fetchWithAuth(
+  input: RequestInfo | URL,
+  init?: RequestInit
+): Promise<Response> {
+  const token = await ensureAccessToken();
+  let res = await fetch(input, {
+    ...init,
+    credentials: init?.credentials ?? "include",
+    headers: mergeFetchHeaders(init, token),
+  });
+
+  if (res.status === 401) {
+    const newToken = await tryRefreshAccessToken();
+    if (newToken) {
+      res = await fetch(input, {
+        ...init,
+        credentials: init?.credentials ?? "include",
+        headers: mergeFetchHeaders(init, getAuthToken() ?? newToken),
+      });
+    } else if (typeof window !== "undefined" && !isAuthPagePath(window.location.pathname)) {
+      redirectToSignIn();
+    }
+  }
+
+  return res;
 }
 
 function isPublicPath(url?: string) {

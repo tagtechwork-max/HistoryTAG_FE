@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import ExcelJS from "exceljs";
 import toast from "react-hot-toast";
 import { useConfirmDialog } from "../../hooks/useConfirmDialog";
+import { fetchWithAuth } from "../../api/client";
 
 // ===================== Types ===================== //
 export type SortDir = "asc" | "desc";
@@ -308,7 +309,7 @@ const HisSystemPage: React.FC = () => {
         url.searchParams.set("size", String(size));
         url.searchParams.set("sortBy", String(sortBy));
         url.searchParams.set("sortDir", sortDir);
-      const res = await fetch(url.toString(), { headers: { ...authHeader() } });
+      const res = await fetchWithAuth(url.toString(), { headers: { ...authHeader() } });
       if (!res.ok) throw new Error(`GET ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -348,7 +349,7 @@ const HisSystemPage: React.FC = () => {
     url.searchParams.set("page", "0");
     url.searchParams.set("size", "500"); // Reduced from 10000 to 500 for better performance
 
-    const res = await fetch(url.toString(), { headers: { ...authHeader() } });
+    const res = await fetchWithAuth(url.toString(), { headers: { ...authHeader() } });
     if (!res.ok) return cache?.data ?? [];
 
     const data = await res.json();
@@ -364,7 +365,7 @@ const HisSystemPage: React.FC = () => {
     const loadCounts = async () => {
       try {
         const url = buildUrl(`${API_BASE}/api/v1/auth/hospitals/count-by-his`);
-        const res = await fetch(url.toString(), { headers: { ...authHeader() } });
+        const res = await fetchWithAuth(url.toString(), { headers: { ...authHeader() } });
         if (res.ok) {
           const data = await res.json();
           if (data && typeof data === "object") {
@@ -406,7 +407,7 @@ const HisSystemPage: React.FC = () => {
       url.searchParams.set("hisSystemId", String(hisId));
       url.searchParams.set("size", "500"); // Reduced from 10000 to 500 for better performance
       
-      const res = await fetch(url.toString(), { headers: { ...authHeader() } });
+      const res = await fetchWithAuth(url.toString(), { headers: { ...authHeader() } });
       if (!res.ok) {
         setSelectedHospitals([]);
         return;
@@ -622,7 +623,7 @@ const HisSystemPage: React.FC = () => {
     try {
       // ✅ GET request: luôn dùng admin API
       const base = getApiBase("GET", false);
-      const res = await fetch(`${base}/${h.id}`, { headers: { ...authHeader() } });
+      const res = await fetchWithAuth(`${base}/${h.id}`, { headers: { ...authHeader() } });
       if (!res.ok) throw new Error(`GET ${res.status}`);
       const detail = (await res.json()) as HisResponseDTO;
       setEditing(detail);
@@ -653,7 +654,7 @@ const HisSystemPage: React.FC = () => {
     try {
       // ✅ GET request: luôn dùng admin API
       const base = getApiBase("GET", false);
-      const res = await fetch(`${base}/${h.id}`, { headers: { ...authHeader() } });
+      const res = await fetchWithAuth(`${base}/${h.id}`, { headers: { ...authHeader() } });
       if (!res.ok) throw new Error(`GET ${res.status}`);
       const detail = (await res.json()) as HisResponseDTO;
       setViewing(detail);
@@ -692,7 +693,7 @@ const HisSystemPage: React.FC = () => {
     try {
       // ✅ DELETE request: dùng admin API nếu là admin, superadmin API nếu là superadmin
       const base = getApiBase("DELETE", isSuperAdmin);
-      const res = await fetch(`${base}/${id}`, { method: "DELETE", headers: { ...authHeader() } });
+      const res = await fetchWithAuth(`${base}/${id}`, { method: "DELETE", headers: { ...authHeader() } });
       if (!res.ok) throw new Error(`DELETE ${res.status}`);
       // adjust page when last item removed
       if (items.length === 1 && page > 0) setPage((p) => p - 1);
@@ -724,7 +725,7 @@ const HisSystemPage: React.FC = () => {
       // ✅ POST/PUT request: dùng admin API nếu là admin, superadmin API nếu là superadmin
       const base = getApiBase(method, isSuperAdmin);
       const url = isEditing ? `${base}/${editing!.id}` : base;
-      const res = await fetch(url, {
+      const res = await fetchWithAuth(url, {
         method,
         headers: { ...authHeader() },
         body: JSON.stringify(form),
