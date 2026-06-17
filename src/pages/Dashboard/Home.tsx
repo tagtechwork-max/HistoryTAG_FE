@@ -11,7 +11,7 @@ import UserDashboard from "../../components/reports/UserDashboard";
 import WorkReportExportButton from "../../components/reports/WorkReportExportButton";
 
 export default function Home() {
-  // Kiểm tra team của user hiện tại
+  // Kiểm tra team của user hiện tại test
   const isCSKH = useMemo(() => {
     try {
       // Ưu tiên lấy từ user profile (localStorage)
