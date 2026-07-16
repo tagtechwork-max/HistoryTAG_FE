@@ -65,7 +65,8 @@ const BusinessPage: React.FC = () => {
   // commission is the user-facing input (entered as amount in VND)
   const [commission, setCommission] = useState<number | ''>('');
   const [commissionDisplay, setCommissionDisplay] = useState<string>('');
-  const [quantity, setQuantity] = useState<number | ''>(1);
+  const [quantity, setQuantity] = useState<number | ''>(0);
+  const [totalContractValue, setTotalContractValue] = useState<number | ''>('');
   const [name, setName] = useState<string>('');
   const [statusValue, setStatusValue] = useState<string>('CARING');
   const [startDateValue, setStartDateValue] = useState<string>('');
@@ -793,7 +794,9 @@ const BusinessPage: React.FC = () => {
     if (!selectedHospitalId) errors.selectedHospitalId = 'Vui lòng chọn bệnh viện';
     // if (!selectedHardwareId) errors.selectedHardwareId = 'Vui lòng chọn phần cứng';
     if (businessPicOptionsState.length > 0 && !selectedPicId) errors.selectedPicId = 'Vui lòng chọn người phụ trách';
-    if (!quantity || quantity < 1) errors.quantity = 'Số lượng phải lớn hơn hoặc bằng 1';
+    if (quantity !== '' && Number(quantity) < 0) {
+      errors.quantity = 'Số lượng không được nhỏ hơn 0';
+    }
     // Validate paid amount khi trạng thái thanh toán là DA_THANH_TOAN
     if (paymentStatusValue === 'DA_THANH_TOAN') {
       if (paidAmount === '' || paidAmount <= 0) {
@@ -877,14 +880,15 @@ const BusinessPage: React.FC = () => {
       bankContactPerson: bankContactPerson?.trim() || null,
       unitPrice: finalUnitPrice,
       unitPriceNet: unitPriceNet !== '' ? Number(unitPriceNet) : null,
+      totalPrice: totalContractValue !== '' ? Number(totalContractValue) : null,
       paymentStatus: paymentStatusValue,
       paidAmount:
         paymentStatusValue === 'THANH_TOAN_HET'
-          ? (finalUnitPrice != null && quantity ? finalUnitPrice * (typeof quantity === 'number' ? quantity : 0) : null)
+          ? (totalContractValue !== '' ? Number(totalContractValue) : (finalUnitPrice != null && quantity ? finalUnitPrice * (typeof quantity === 'number' ? quantity : 0) : null))
           : (paymentStatusValue === 'DA_THANH_TOAN' && typeof paidAmount === 'number' ? paidAmount : null),
       paymentDate:
         (paymentStatusValue === 'DA_THANH_TOAN' || paymentStatusValue === 'THANH_TOAN_HET')
-          ? toLocalDateTimeStr(paymentDateValue ? `${paymentDateValue}T00:00` : null)
+          ? toLocalDateTimeStr(paymentDateValue || null)
           : null,
       notes: notes?.trim() || null,
       attachmentUrls: attachments.map(a => a.url),
@@ -977,7 +981,8 @@ const BusinessPage: React.FC = () => {
       setSelectedHardwarePrice(null);
       setUnitPrice('');
       setUnitPriceNet('');
-      setQuantity(1);
+      setQuantity(0);
+      setTotalContractValue('');
       setStatusValue('CARING');
       setOriginalStatus('CARING');
       setCommission('');
@@ -1051,10 +1056,37 @@ const BusinessPage: React.FC = () => {
   }
 
   function computeTotal() {
-    const price = unitPrice !== '' ? Number(unitPrice) : (selectedHardwarePrice ?? 0);
-    if (price === 0) return 0;
-    return price * (Number(quantity) || 0);
+    return totalContractValue !== '' ? Number(totalContractValue) : 0;
   }
+
+  const handleQuantityChange = (qtyVal: number | '') => {
+    setQuantity(qtyVal);
+    clearFieldError('quantity');
+    
+    const q = qtyVal !== '' ? Number(qtyVal) : 0;
+    if (unitPrice !== '') {
+      setTotalContractValue(Number(unitPrice) * q);
+    } else {
+      setTotalContractValue('');
+    }
+  };
+
+  const handleUnitPriceChange = (priceVal: number | '') => {
+    setUnitPrice(priceVal);
+    clearFieldError('unitPrice');
+    
+    const q = quantity !== '' ? Number(quantity) : 0;
+    if (priceVal !== '') {
+      setTotalContractValue(priceVal * q);
+    } else {
+      setTotalContractValue('');
+    }
+  };
+
+  const handleTotalContractValueChange = (totalVal: number | '') => {
+    setTotalContractValue(totalVal);
+    clearFieldError('totalContractValue');
+  };
 
   async function exportExcel() {
     setExporting(true);
@@ -1603,7 +1635,8 @@ const BusinessPage: React.FC = () => {
         setCommission('');
       setCommissionDisplay('');
       }
-      setQuantity(res.quantity != null ? Number(String(res.quantity)) : 1);
+      setQuantity(res.quantity != null ? Number(String(res.quantity)) : 0);
+      setTotalContractValue(res.totalPrice != null ? Number(res.totalPrice) : '');
       // Load unitPrice từ response (có thể khác với giá mặc định từ phần cứng)
       if (res.unitPrice != null) {
         setUnitPrice(Number(res.unitPrice));
@@ -1639,7 +1672,8 @@ const BusinessPage: React.FC = () => {
       }
       const paymentDateRaw = (res as any).paymentDate ?? (res as any).payment_date ?? null;
       if (paymentDateRaw && typeof paymentDateRaw === 'string') {
-        setPaymentDateValue(paymentDateRaw.slice(0, 10));
+        const normalized = paymentDateRaw.replace(' ', 'T');
+        setPaymentDateValue(normalized.length >= 16 ? normalized.substring(0, 16) : normalized);
       } else {
         setPaymentDateValue('');
       }
@@ -2048,7 +2082,8 @@ const BusinessPage: React.FC = () => {
               setSelectedPicId(null);
               setPicDropdownOpen(false);
               setPicSearchInput('');
-              setQuantity(1);
+              setQuantity(0);
+              setTotalContractValue('');
               setStatusValue('CARING');
               setStartDateValue(nowDateTimeLocal());
               setCompletionDateValue('');
@@ -2306,25 +2341,43 @@ const BusinessPage: React.FC = () => {
               <label className="block text-sm font-medium mb-1">Số lượng Kiosk</label>
               <input
                 type="number"
-                min={1}
+                min={0}
                 value={quantity === '' ? '' : quantity}
-                onChange={(e) => setQuantity(e.target.value ? Number(e.target.value) : '')}
+                onChange={(e) => {
+                  const val = e.target.value ? Number(e.target.value) : '';
+                  handleQuantityChange(val);
+                }}
                 className="w-40 rounded border px-3 py-2"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Đơn giá (Gross)</label>
+              <label className="block text-sm font-medium mb-1">Đơn giá 1 sản phẩm</label>
               <input
                 type="number"
                 step="0.01"
                 min="0"
                 value={unitPrice === '' ? '' : unitPrice}
                 onChange={(e) => {
-                  const val = e.target.value;
-                  setUnitPrice(val === '' ? '' : Number(val));
+                  const val = e.target.value ? Number(e.target.value) : '';
+                  handleUnitPriceChange(val);
                 }}
                 placeholder={selectedHardwarePrice != null ? `Giá mặc định: ${selectedHardwarePrice.toLocaleString()} ₫` : 'Nhập đơn giá'}
                 className="w-full rounded border px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold mb-1 text-blue-600">Tổng tiền hợp đồng</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={totalContractValue === '' ? '' : totalContractValue}
+                onChange={(e) => {
+                  const val = e.target.value ? Number(e.target.value) : '';
+                  handleTotalContractValueChange(val);
+                }}
+                placeholder="Nhập tổng tiền hợp đồng"
+                className="w-full rounded border border-blue-400 px-3 py-2"
               />
             </div>
             <div>
@@ -2548,18 +2601,18 @@ const BusinessPage: React.FC = () => {
                       <label className="block text-sm font-medium mb-1">Số lượng Kiosk</label>
                       <input
                         type="number"
-                        min={1}
+                        min={0}
                         value={quantity === '' ? '' : quantity}
                         onChange={(e) => {
-                          setQuantity(e.target.value ? Number(e.target.value) : '');
-                          clearFieldError('quantity');
+                          const val = e.target.value ? Number(e.target.value) : '';
+                          handleQuantityChange(val);
                         }}
                         className={`w-full rounded border px-3 py-2 ${fieldErrors.quantity ? 'border-red-500' : ''}`}
                       />
                       {fieldErrors.quantity && <div className="mt-1 text-sm text-red-600">{fieldErrors.quantity}</div>}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Hoa hồng của viện</label>
+                      <label className="block text-sm font-medium mb-1">Chăm sóc khách hàng</label>
                       {canManage ? (
                         <input 
                           type="text" 
@@ -2624,27 +2677,44 @@ const BusinessPage: React.FC = () => {
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-medium mb-1">Đơn giá (Gross)</label>
+                      <label className="block text-sm font-medium mb-1">Đơn giá 1 sản phẩm</label>
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
                           value={formatNumber(unitPrice)}
                           onChange={(e) => {
                             const parsed = parseFormattedNumber(e.target.value);
-                            setUnitPrice(parsed);
-                            clearFieldError('unitPrice');
+                            handleUnitPriceChange(parsed);
                           }}
                           onBlur={(e) => {
-                            // Format lại khi blur
                             const parsed = parseFormattedNumber(e.target.value);
-                            setUnitPrice(parsed);
+                            handleUnitPriceChange(parsed);
                           }}
-                          placeholder={selectedHardwarePrice != null ? `Giá mặc định: ${formatNumber(selectedHardwarePrice)} ₫` : 'Nhập đơn giá (Gross)'}
+                          placeholder={selectedHardwarePrice != null ? `Giá mặc định: ${formatNumber(selectedHardwarePrice)} ₫` : 'Nhập đơn giá 1 sản phẩm'}
                           className=" w-full flex-1 rounded border px-3 py-2"
                         />
-                         
                       </div>
                       {fieldErrors.unitPrice && <div className="mt-1 text-sm text-red-600">{fieldErrors.unitPrice}</div>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold mb-1 text-blue-600">Tổng tiền hợp đồng</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={formatNumber(totalContractValue)}
+                          onChange={(e) => {
+                            const parsed = parseFormattedNumber(e.target.value);
+                            handleTotalContractValueChange(parsed);
+                          }}
+                          onBlur={(e) => {
+                            const parsed = parseFormattedNumber(e.target.value);
+                            handleTotalContractValueChange(parsed);
+                          }}
+                          placeholder="Nhập tổng tiền hợp đồng"
+                          className={`w-full flex-1 rounded border px-3 py-2 ${fieldErrors.totalContractValue ? 'border-red-500' : 'border-blue-400'}`}
+                        />
+                      </div>
+                      {fieldErrors.totalContractValue && <div className="mt-1 text-sm text-red-600">{fieldErrors.totalContractValue}</div>}
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1">Đơn giá (NET)</label>
@@ -2682,10 +2752,16 @@ const BusinessPage: React.FC = () => {
                             const total = computeTotal();
                             setPaidAmount(total > 0 ? total : '');
                             setPaidAmountDisplay(total > 0 ? formatNumber(total) : '');
+                            if (!paymentDateValue) {
+                              setPaymentDateValue(nowDateTimeLocal());
+                            }
                           } else if (next === 'DA_THANH_TOAN') {
                             // Keep current paidAmount or reset
                             if (paidAmount === '') {
                               setPaidAmountDisplay('');
+                            }
+                            if (!paymentDateValue) {
+                              setPaymentDateValue(nowDateTimeLocal());
                             }
                           } else {
                             setPaidAmount('');
@@ -2745,7 +2821,7 @@ const BusinessPage: React.FC = () => {
                         <div>
                           <label className="block text-sm font-medium mb-1">Ngày thanh toán*</label>
                           <input
-                            type="date"
+                            type="datetime-local"
                             required
                             value={paymentDateValue}
                             onChange={(e) => {
@@ -3239,7 +3315,7 @@ const BusinessPage: React.FC = () => {
                     )}
                     {viewItem.unitPrice != null && (
                       <DetailField 
-                        label="Đơn giá (Gross)" 
+                        label="Đơn giá 1 sản phẩm" 
                         value={<span className="font-semibold text-gray-900">{viewItem.unitPrice.toLocaleString()} VND</span>} 
                       />
                     )}
@@ -3257,7 +3333,7 @@ const BusinessPage: React.FC = () => {
                     )}
                     {viewItem.commission != null && (
                       <DetailField 
-                        label="Hoa hồng của viện" 
+                        label="Chăm sóc khách hàng" 
                         value={
                           <div>
                             <span className="font-semibold text-gray-900">{Math.round(Number(viewItem.commission)).toLocaleString()} VND</span>
