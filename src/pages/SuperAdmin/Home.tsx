@@ -2008,7 +2008,7 @@ export default function SuperAdminHome() {
   };
 
   const exportBusinessesCsv = () => {
-    const headers = ['ID','Tên dự án','Doanh thu','Hoa hồng của viện','Trạng thái','Ngày'];
+    const headers = ['ID','Tên dự án','Doanh thu','Chăm sóc khách hàng','Trạng thái','Ngày'];
     const rows = displayedBusinesses.map(b => [String(b['id'] ?? ''), String(b['name'] ?? b['projectName'] ?? ''), String(Number(b['totalPrice'] ?? b['unitPrice'] ?? 0)), String(Number(b['commission'] ?? 0)), translateStatus(String(b['status'] ?? '')), String(b['startDate'] ?? b['completionDate'] ?? '')]);
     downloadCsv(makeFilename('businesses'), headers, rows);
   };
@@ -2032,7 +2032,7 @@ export default function SuperAdminHome() {
   sections.push({ title: 'Triển khai', headers: ['ID','Tên','PIC','Trạng thái','Ngày bắt đầu','Ngày hoàn thành','Phần cứng','Số lượng'], rows: filteredImplTasks.map(t => [String(t.id ?? ''), String(t.name ?? ''), String((t as any).picDeploymentName ?? ''), translateStatus(String(t.status ?? '')), String((t as any).startDate ?? ''), String((t as any).completionDate ?? ''), hardwareMap[String((((t as unknown) as Record<string, unknown>)['hardwareId']) ?? '')] ?? String((((t as unknown) as Record<string, unknown>)['hardwareId']) ?? ''), String(t.quantity ?? '')]) });
   sections.push({ title: 'Phát triển', headers: ['ID','Tên','PIC','Trạng thái','Ngày bắt đầu','Ngày kết thúc','Phần cứng','Số lượng'], rows: filteredDevTasks.map(t => [String(t.id ?? ''), String(t.name ?? ''), String((t as any).picDeploymentName ?? ''), translateStatus(String(t.status ?? '')), String((t as any).startDate ?? ''), String((t as any).endDate ?? ''), hardwareMap[String((((t as unknown) as Record<string, unknown>)['hardwareId']) ?? '')] ?? String((((t as unknown) as Record<string, unknown>)['hardwareId']) ?? ''), String(t.quantity ?? '')]) });
   sections.push({ title: 'Bảo trì', headers: ['ID','Tên','PIC','Trạng thái','Ngày bắt đầu','Ngày kết thúc','Phần cứng','Số lượng','Yêu cầu bổ sung'], rows: filteredMaintTasks.map(t => [String(t.id ?? ''), String(t.name ?? ''), String((t as any).picDeploymentName ?? ''), translateStatus(String(t.status ?? '')), String((t as any).startDate ?? ''), String((t as any).endDate ?? ''), hardwareMap[String((((t as unknown) as Record<string, unknown>)['hardwareId']) ?? '')] ?? String((((t as unknown) as Record<string, unknown>)['hardwareId']) ?? ''), String(t.quantity ?? ''), getSupplementRequest(t as unknown as Record<string, unknown>)]) });
-      sections.push({ title: 'Hợp đồng', headers: ['ID','Tên dự án','Doanh thu','Hoa hồng của viện','Trạng thái','Ngày'], rows: displayedBusinesses.map(b => [String(b['id'] ?? ''), String(b['name'] ?? b['projectName'] ?? ''), String(Number(b['totalPrice'] ?? b['unitPrice'] ?? 0)), String(Number(b['commission'] ?? 0)), translateStatus(String(b['status'] ?? '')), String(b['startDate'] ?? b['completionDate'] ?? '')]) });
+      sections.push({ title: 'Hợp đồng', headers: ['ID','Tên dự án','Doanh thu','Chăm sóc khách hàng','Trạng thái','Ngày'], rows: displayedBusinesses.map(b => [String(b['id'] ?? ''), String(b['name'] ?? b['projectName'] ?? ''), String(Number(b['totalPrice'] ?? b['unitPrice'] ?? 0)), String(Number(b['commission'] ?? 0)), translateStatus(String(b['status'] ?? '')), String(b['startDate'] ?? b['completionDate'] ?? '')]) });
 
       const lines: string[] = [];
       sections.forEach((s, idx) => {
@@ -3123,7 +3123,7 @@ export default function SuperAdminHome() {
                               <th className="px-3 py-2 text-center">Ngày bắt đầu</th>
                               <th className="px-3 py-2 text-center">Ngày hoàn thành</th>
                               <th className="px-3 py-2 text-right">Doanh thu</th>
-                              <th className="px-3 py-2 text-right">Hoa hồng của viện</th>
+                              <th className="px-3 py-2 text-right">Chăm sóc khách hàng</th>
                             </tr>
                           </thead>
                           <tbody>
