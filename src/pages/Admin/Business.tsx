@@ -94,6 +94,7 @@ const BusinessPage: React.FC = () => {
   const [notes, setNotes] = useState<string>('');
   const [attachments, setAttachments] = useState<Array<{ url: string; fileName: string }>>([]);
   const [uploadingFile, setUploadingFile] = useState<boolean>(false);
+  const [lastEdited, setLastEdited] = useState<'total' | 'price' | null>(null);
   type BusinessItem = {
     id: number;
     name?: string;
@@ -1002,6 +1003,7 @@ const BusinessPage: React.FC = () => {
       setNotes('');
       setAttachments([]);
       setEditingId(null);
+      setLastEdited(null);
       setShowModal(false);
       // reload the first page so the new item is visible
       setCurrentPage(0);
@@ -1064,20 +1066,40 @@ const BusinessPage: React.FC = () => {
     clearFieldError('quantity');
     
     const q = qtyVal !== '' ? Number(qtyVal) : 0;
-    if (unitPrice !== '') {
-      setTotalContractValue(Number(unitPrice) * q);
+    if (qtyVal === '' || q === 0) {
+      setUnitPrice('');
     } else {
-      setTotalContractValue('');
+      if (lastEdited === 'total') {
+        if (totalContractValue !== '') {
+          setUnitPrice(Math.round(Number(totalContractValue) / q));
+        }
+      } else if (lastEdited === 'price') {
+        if (unitPrice !== '') {
+          setTotalContractValue(Number(unitPrice) * q);
+        }
+      } else {
+        // Fallback when lastEdited is null
+        if (unitPrice !== '') {
+          setTotalContractValue(Number(unitPrice) * q);
+        } else if (totalContractValue !== '') {
+          setUnitPrice(Math.round(Number(totalContractValue) / q));
+        } else {
+          setTotalContractValue('');
+        }
+      }
     }
   };
 
   const handleUnitPriceChange = (priceVal: number | '') => {
     setUnitPrice(priceVal);
+    setLastEdited('price');
     clearFieldError('unitPrice');
     
     const q = quantity !== '' ? Number(quantity) : 0;
     if (priceVal !== '') {
       setTotalContractValue(priceVal * q);
+    } else if (totalContractValue !== '' && q > 0) {
+      // Keep total contract value
     } else {
       setTotalContractValue('');
     }
@@ -1085,7 +1107,13 @@ const BusinessPage: React.FC = () => {
 
   const handleTotalContractValueChange = (totalVal: number | '') => {
     setTotalContractValue(totalVal);
+    setLastEdited('total');
     clearFieldError('totalContractValue');
+    
+    const q = quantity !== '' ? Number(quantity) : 0;
+    if (totalVal !== '' && q > 0) {
+      setUnitPrice(Math.round(Number(totalVal) / q));
+    }
   };
 
   async function exportExcel() {
@@ -1682,6 +1710,7 @@ const BusinessPage: React.FC = () => {
       setFieldErrors({});
       setPendingSubmit(null);
       setStatusConfirmOpen(false);
+      setLastEdited('price');
       setShowModal(true);
     } catch (e) { console.error(e); setToast({ message: 'Không thể load mục để sửa', type: 'error' }); }
   }
@@ -2106,6 +2135,7 @@ const BusinessPage: React.FC = () => {
               setPaymentDateValue('');
               setNotes('');
               setAttachments([]);
+              setLastEdited(null);
               setShowModal(true);
             }}
             className="rounded-xl border px-6 py-3 text-sm font-medium text-white transition-all flex items-center gap-2 border-blue-500 bg-blue-500 hover:bg-blue-600 hover:shadow-md"
@@ -2409,7 +2439,7 @@ const BusinessPage: React.FC = () => {
 
           {/* Create/Edit modal */}
           {showModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm" onMouseDown={(e) => { if (e.target === e.currentTarget && !saving) { setShowModal(false); setFieldErrors({}); } }}>
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm" onMouseDown={(e) => { if (e.target === e.currentTarget && !saving) { setShowModal(false); setFieldErrors({}); setLastEdited(null); } }}>
               <div className="absolute inset-0 bg-black/50" />
               <div className="relative bg-white rounded-xl shadow-lg w-full max-w-4xl max-h-[95vh] flex flex-col">
                 {/* Header - Fixed */}
@@ -2448,6 +2478,7 @@ const BusinessPage: React.FC = () => {
                               // Tự động điền giá vào input đơn giá khi chọn phần cứng
                               if (price != null) {
                                 setUnitPrice(price);
+                                setLastEdited('price');
                               }
                             }).catch(() => {
                               setSelectedHardwarePrice(null);
@@ -3015,6 +3046,7 @@ const BusinessPage: React.FC = () => {
                             setShowModal(false); 
                             setEditingId(null); 
                             setFieldErrors({});
+                            setLastEdited(null);
                             // Reset flag khi đóng modal
                             setIsWarrantyEndDateManuallyEdited(false);
                             // Clear attachments when canceling create mode (not edit mode)
