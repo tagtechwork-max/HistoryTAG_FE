@@ -10,7 +10,7 @@ import {
 import { searchUsersForDeployment } from "../../../api/api";
 import { getUserAccount } from "../../../api/auth.api";
 
-/** Get current logged-in user id from storage (for default assignee) */
+/** Get current logged-in user dpl id from storage (for default assignee) */
 function getCurrentUserIdFromStorage(): number | null {
   if (typeof window === "undefined") return null;
   try {
@@ -229,7 +229,7 @@ export default function AddTaskPhaseImplementation({
               assigneeUserId: user.id,
             }));
           })
-          .catch(() => {});
+          .catch(() => { });
       }
     }
   }, [isOpen, editTask]);
@@ -276,17 +276,15 @@ export default function AddTaskPhaseImplementation({
   return (
     <>
       <div
-        className={`fixed inset-0 z-[9998] bg-slate-900/30 transition-opacity duration-200 ${
-          isOpen ? "opacity-100" : "pointer-events-none opacity-0"
-        }`}
+        className={`fixed inset-0 z-[9998] bg-slate-900/30 transition-opacity duration-200 ${isOpen ? "opacity-100" : "pointer-events-none opacity-0"
+          }`}
         onClick={onClose}
         aria-hidden="true"
       />
 
       <div
-        className={`fixed right-0 top-0 z-[9999] flex h-full w-full max-w-lg flex-col bg-white shadow-2xl transition-transform duration-300 ease-out dark:bg-slate-900 ${
-          isOpen ? "translate-x-0" : "translate-x-full"
-        }`}
+        className={`fixed right-0 top-0 z-[9999] flex h-full w-full max-w-lg flex-col bg-white shadow-2xl transition-transform duration-300 ease-out dark:bg-slate-900 ${isOpen ? "translate-x-0" : "translate-x-full"
+          }`}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
           <div className="flex items-center gap-3">
