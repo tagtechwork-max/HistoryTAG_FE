@@ -14,7 +14,7 @@ import {
 import { getUserAccount } from "../../../api/auth.api";
 import { isSuperAdmin } from "../../../utils/permission";
 
-/** Get current logged-in user id from storage (for default PM) dl */
+/** Get current logged-in user id from storage (for default PM)  */
 function getCurrentUserIdFromStorage(): number | null {
   if (typeof window === "undefined") return null;
   try {
