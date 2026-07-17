@@ -42,11 +42,12 @@ jobs:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}   
 
       - name: Debug Tailscale
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
         run: |
           tailscale status
-          tailscale ip -4
-          tailscale ping ${{ secrets.SERVER_HOST }}
-          nc -vz -w 10 ${{ secrets.SERVER_HOST }} 22
+          tailscale ping "$SERVER_HOST"
+          nc -vz -w 10 "$SERVER_HOST" 22
           
       - name: Deploy to Server via SSH
         uses: appleboy/ssh-action@v1.0.3
