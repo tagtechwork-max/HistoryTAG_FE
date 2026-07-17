@@ -10,7 +10,7 @@ import {
 import { searchUsersForDeployment } from "../../../api/api";
 import { getUserAccount } from "../../../api/auth.api";
 
-/** Get current logged-in user dpl id from storage (for default assignee) */
+/** Get current logged-in user dpl id from storage (for default dl assignee) */
 function getCurrentUserIdFromStorage(): number | null {
   if (typeof window === "undefined") return null;
   try {
