@@ -14,7 +14,7 @@ import {
 import { getUserAccount } from "../../../api/auth.api";
 import { isSuperAdmin } from "../../../utils/permission";
 
-/** Get current logged-in user id from storage (for default PM) */
+/** Get current logged-in user id from storage (for default PM) dl */
 function getCurrentUserIdFromStorage(): number | null {
   if (typeof window === "undefined") return null;
   try {
@@ -221,9 +221,8 @@ function SearchableSelect({
               options.map((opt, idx) => (
                 <div
                   key={opt.id}
-                  className={`cursor-pointer px-3 py-2 text-sm ${
-                    idx === highlight ? "bg-slate-100 dark:bg-slate-700" : ""
-                  }`}
+                  className={`cursor-pointer px-3 py-2 text-sm ${idx === highlight ? "bg-slate-100 dark:bg-slate-700" : ""
+                    }`}
                   onMouseEnter={() => setHighlight(idx)}
                   onMouseDown={(e) => {
                     e.preventDefault();
@@ -549,26 +548,23 @@ export default function AddHospitalImplementation({
   return (
     <>
       <div
-        className={`fixed inset-0 z-[9998] bg-slate-900/30 transition-opacity duration-200 ${
-          isOpen ? "opacity-100" : "pointer-events-none opacity-0"
-        }`}
+        className={`fixed inset-0 z-[9998] bg-slate-900/30 transition-opacity duration-200 ${isOpen ? "opacity-100" : "pointer-events-none opacity-0"
+          }`}
         onClick={onClose}
         aria-hidden="true"
       />
 
       <div
-        className={`fixed right-0 top-0 z-[9999] flex h-full w-full max-w-lg flex-col bg-white shadow-2xl transition-transform duration-300 ease-out dark:bg-slate-900 ${
-          isOpen && isEntered ? "translate-x-0" : "translate-x-full"
-        }`}
+        className={`fixed right-0 top-0 z-[9999] flex h-full w-full max-w-lg flex-col bg-white shadow-2xl transition-transform duration-300 ease-out dark:bg-slate-900 ${isOpen && isEntered ? "translate-x-0" : "translate-x-full"
+          }`}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
           <div className="flex items-center gap-3">
             <div
-              className={`flex size-9 items-center justify-center rounded-lg ${
-                isEditMode
+              className={`flex size-9 items-center justify-center rounded-lg ${isEditMode
                   ? "bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400"
                   : "bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400"
-              }`}
+                }`}
             >
               {isEditMode ? (
                 <PencilIcon className="size-5" />
@@ -676,11 +672,10 @@ export default function AddHospitalImplementation({
                       disabled={!canEditDeadlineFields}
                       readOnly={!canEditDeadlineFields}
                       title={!canEditDeadlineFields ? "Chỉ trưởng team hoặc Super Admin mới được chỉnh sửa" : undefined}
-                      className={`w-full rounded-lg border py-2 pl-9 pr-3 text-sm dark:text-slate-100 ${
-                        canEditDeadlineFields
+                      className={`w-full rounded-lg border py-2 pl-9 pr-3 text-sm dark:text-slate-100 ${canEditDeadlineFields
                           ? "border-slate-200 bg-white text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800"
                           : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400"
-                      }`}
+                        }`}
                     />
                     <CalenderIcon className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
                   </div>
@@ -697,11 +692,10 @@ export default function AddHospitalImplementation({
                       disabled={!canEditDeadlineFields}
                       readOnly={!canEditDeadlineFields}
                       title={!canEditDeadlineFields ? "Chỉ trưởng team hoặc Super Admin mới được chỉnh sửa" : undefined}
-                      className={`w-full rounded-lg border py-2 pl-9 pr-3 text-sm dark:text-slate-100 ${
-                        canEditDeadlineFields
+                      className={`w-full rounded-lg border py-2 pl-9 pr-3 text-sm dark:text-slate-100 ${canEditDeadlineFields
                           ? "border-slate-200 bg-white text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800"
                           : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400"
-                      }`}
+                        }`}
                     />
                     <CalenderIcon className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
                   </div>
