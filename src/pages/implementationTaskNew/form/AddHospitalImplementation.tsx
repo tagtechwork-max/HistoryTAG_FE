@@ -14,7 +14,7 @@ import {
 import { getUserAccount } from "../../../api/auth.api";
 import { isSuperAdmin } from "../../../utils/permission";
 
-/** Get current logged-in user id from storage (for default PM) dl */
+/** Get current logged-in user id from storage (for default PM) dl dl */
 function getCurrentUserIdFromStorage(): number | null {
   if (typeof window === "undefined") return null;
   try {
@@ -562,8 +562,8 @@ export default function AddHospitalImplementation({
           <div className="flex items-center gap-3">
             <div
               className={`flex size-9 items-center justify-center rounded-lg ${isEditMode
-                  ? "bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400"
-                  : "bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400"
+                ? "bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400"
+                : "bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400"
                 }`}
             >
               {isEditMode ? (
@@ -673,8 +673,8 @@ export default function AddHospitalImplementation({
                       readOnly={!canEditDeadlineFields}
                       title={!canEditDeadlineFields ? "Chỉ trưởng team hoặc Super Admin mới được chỉnh sửa" : undefined}
                       className={`w-full rounded-lg border py-2 pl-9 pr-3 text-sm dark:text-slate-100 ${canEditDeadlineFields
-                          ? "border-slate-200 bg-white text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800"
-                          : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400"
+                        ? "border-slate-200 bg-white text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800"
+                        : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400"
                         }`}
                     />
                     <CalenderIcon className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
@@ -693,8 +693,8 @@ export default function AddHospitalImplementation({
                       readOnly={!canEditDeadlineFields}
                       title={!canEditDeadlineFields ? "Chỉ trưởng team hoặc Super Admin mới được chỉnh sửa" : undefined}
                       className={`w-full rounded-lg border py-2 pl-9 pr-3 text-sm dark:text-slate-100 ${canEditDeadlineFields
-                          ? "border-slate-200 bg-white text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800"
-                          : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400"
+                        ? "border-slate-200 bg-white text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800"
+                        : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400"
                         }`}
                     />
                     <CalenderIcon className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
