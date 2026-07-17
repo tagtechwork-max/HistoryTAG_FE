@@ -40,14 +40,6 @@ jobs:
         uses: tailscale/github-action@v2
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}   
-
-      - name: Debug Tailscale
-        env:
-          SERVER_HOST: ${{ secrets.SERVER_HOST }}
-        run: |
-          tailscale status
-          tailscale ping "$SERVER_HOST"
-          nc -vz -w 10 "$SERVER_HOST" 22
           
       - name: Deploy to Server via SSH
         uses: appleboy/ssh-action@v1.0.3
