@@ -55,4 +55,8 @@ jobs:
             # Cập nhật lại container (không ảnh hưởng đến các service khác)
             docker compose up -d frontend
             # Dọn dẹp image cũ để tránh đầy ổ cứng server
-            docker image prune -f .
+            docker image prune -f     
+      - name: Debug Tailscale
+        run: |
+          tailscale status
+          tailscale ip      
