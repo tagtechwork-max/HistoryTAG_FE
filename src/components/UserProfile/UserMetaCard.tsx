@@ -7,7 +7,7 @@ export default function UserMetaCard() {
   const [user, setUser] = useState<UserResponseDTO | null>(null);
 
   const userId = useMemo(() => {
-    const stored = localStorage.getItem("userId");
+    const stored = localStorage.getItem("userId") || sessionStorage.getItem("userId");
     return stored ? Number(stored) : undefined;
   }, []);
 

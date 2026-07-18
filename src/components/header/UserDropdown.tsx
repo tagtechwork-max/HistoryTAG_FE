@@ -21,7 +21,7 @@ export default function UserDropdown() {
   const LOGOUT_URL = import.meta.env.VITE_LOGOUT_URL;
 
   const userId = useMemo(() => {
-    const s = localStorage.getItem("userId");
+    const s = localStorage.getItem("userId") || sessionStorage.getItem("userId");
     return s ? Number(s) : undefined;
   }, []);
 
@@ -88,6 +88,9 @@ export default function UserDropdown() {
       localStorage.removeItem("access_token");
       localStorage.removeItem("token");
       localStorage.removeItem("userId");
+      sessionStorage.removeItem("access_token");
+      sessionStorage.removeItem("token");
+      sessionStorage.removeItem("userId");
       navigate("/signin");
     }
   }

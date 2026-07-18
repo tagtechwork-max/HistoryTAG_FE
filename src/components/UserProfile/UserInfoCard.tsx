@@ -48,7 +48,7 @@ export default function UserInfoCard({ isSuperAdmin = false }: UserInfoCardProps
   const { isOpen: isPasswordModalOpen, openModal: openPasswordModal, closeModal: closePasswordModal } = useModal();
 
   const userId = useMemo(() => {
-    const s = localStorage.getItem("userId");
+    const s = localStorage.getItem("userId") || sessionStorage.getItem("userId");
     return s ? Number(s) : undefined;
   }, []);
 
