@@ -308,10 +308,12 @@ const AppSidebar: React.FC = () => {
     if (openSubmenu !== null) {
       const key = `${openSubmenu.type}-${openSubmenu.index}`;
       if (subMenuRefs.current[key]) {
-        setSubMenuHeight((prevHeights) => ({
-          ...prevHeights,
-          [key]: subMenuRefs.current[key]?.scrollHeight || 0,
-        }));
+        const nextHeight = subMenuRefs.current[key]?.scrollHeight || 0;
+        setSubMenuHeight((prevHeights) =>
+          prevHeights[key] === nextHeight
+            ? prevHeights
+            : { ...prevHeights, [key]: nextHeight }
+        );
       }
     }
   }, [openSubmenu]);

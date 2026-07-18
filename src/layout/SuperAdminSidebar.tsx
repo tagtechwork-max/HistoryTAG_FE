@@ -155,10 +155,12 @@ const SuperAdminSidebar: React.FC = () => {
     if (openSubmenu !== null) {
       const key = `main-${openSubmenu.index}`;
       if (subMenuRefs.current[key]) {
-        setSubMenuHeight((prevHeights) => ({
-          ...prevHeights,
-          [key]: subMenuRefs.current[key]?.scrollHeight || 0,
-        }));
+        const nextHeight = subMenuRefs.current[key]?.scrollHeight || 0;
+        setSubMenuHeight((prevHeights) =>
+          prevHeights[key] === nextHeight
+            ? prevHeights
+            : { ...prevHeights, [key]: nextHeight }
+        );
       }
     }
   }, [openSubmenu]);
@@ -370,4 +372,3 @@ const SuperAdminSidebar: React.FC = () => {
 };
 
 export default SuperAdminSidebar;
-
