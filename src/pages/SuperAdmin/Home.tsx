@@ -19,6 +19,21 @@ import WorkReportExportButton from "../../components/reports/WorkReportExportBut
 // C1: Max page size for dashboard APIs (no more size:10000 - server-side filter + pagination)
 const PAGE_SIZE = 500;
 
+function scheduleIdleTask(callback: () => void, timeoutMs: number) {
+  const idleWindow = window as Window & {
+    requestIdleCallback?: (cb: IdleRequestCallback, options?: IdleRequestOptions) => number;
+    cancelIdleCallback?: (id: number) => void;
+  };
+
+  if (idleWindow.requestIdleCallback) {
+    const id = idleWindow.requestIdleCallback(callback, { timeout: timeoutMs });
+    return () => idleWindow.cancelIdleCallback?.(id);
+  }
+
+  const id = window.setTimeout(callback, timeoutMs);
+  return () => window.clearTimeout(id);
+}
+
 function StatCard({ title, value, icon, color }: { title: string; value: string | number; icon?: React.ReactNode; color?: string }) {
   let display: React.ReactNode = value;
   if (typeof value === 'string' && value.endsWith(' ₫')) {
@@ -65,6 +80,10 @@ export default function SuperAdminHome() {
   const [hwTopN, setHwTopN] = useState<number>(8);
   const [hwRows, setHwRows] = useState<Array<{ key: string; label: string; revenue: number; quantity: number; taskCount: number; impl: number; dev: number; maint: number; image?: string }>>([]);
   const [hwLoading, setHwLoading] = useState(false);
+  const [shouldLoadHardwareReport, setShouldLoadHardwareReport] = useState(false);
+  const hardwareReportRef = useRef<HTMLElement | null>(null);
+  const [shouldRenderCSKHReport, setShouldRenderCSKHReport] = useState(false);
+  const cskhReportRef = useRef<HTMLElement | null>(null);
   // Employee Performance report states
   const API_ROOT = import.meta.env.VITE_API_URL || "";
   type EmployeePerf = {
@@ -91,7 +110,7 @@ export default function SuperAdminHome() {
   // load users ONCE on mount → extract departments, teams, and cache for reuse
   useEffect(() => {
     let mounted = true;
-    (async () => {
+    const cancel = scheduleIdleTask(() => void (async () => {
       try {
         const uResp = await getAllUsers({ page: 0, size: PAGE_SIZE });
         const uList = Array.isArray(uResp) ? (uResp as UserResponseDTO[]) : (uResp as any)?.content ?? [];
@@ -111,13 +130,13 @@ export default function SuperAdminHome() {
           setAllUsersCache([]);
         }
       }
-    })();
-    return () => { mounted = false; };
+    })(), 1500);
+    return () => { mounted = false; cancel(); };
   }, []);
   // Background: fetch hospital transfer map once on mount (non-blocking, with sessionStorage cache)
   useEffect(() => {
     let mounted = true;
-    (async () => {
+    const cancel = scheduleIdleTask(() => void (async () => {
       try {
         const hResp = await api.get('/api/v1/auth/hospitals', { params: { page: 0, size: PAGE_SIZE } });
         const hData = hResp.data;
@@ -138,8 +157,8 @@ export default function SuperAdminHome() {
       } catch (err) {
         console.warn('Background hospital transfer map load failed', err);
       }
-    })();
-    return () => { mounted = false; };
+    })(), 2500);
+    return () => { mounted = false; cancel(); };
   }, []);
 
   // Team profile states (changed from hospital to team)
@@ -377,8 +396,8 @@ export default function SuperAdminHome() {
 
   // load on mount (deferred by 2s to reduce initial connection contention)
   useEffect(() => {
-    const timer = setTimeout(() => { void loadBusinessReport(); }, 2000);
-    return () => clearTimeout(timer);
+    const cancel = scheduleIdleTask(() => { void loadBusinessReport(); }, 6000);
+    return () => cancel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -612,19 +631,61 @@ export default function SuperAdminHome() {
     }
   }, [hwGroupBy, hwTopN]);
 
-  // Defer hardware report: mount-time load delayed by 4s to free up browser connections for more critical data.
-  // Subsequent changes to groupBy/topN trigger immediately.
+  useEffect(() => {
+    const target = hardwareReportRef.current;
+    if (!target || shouldLoadHardwareReport) return;
+
+    if (!('IntersectionObserver' in window)) {
+      const cancel = scheduleIdleTask(() => setShouldLoadHardwareReport(true), 10000);
+      return () => cancel();
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setShouldLoadHardwareReport(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '600px 0px' }
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [shouldLoadHardwareReport]);
+
+  useEffect(() => {
+    const target = cskhReportRef.current;
+    if (!target || shouldRenderCSKHReport) return;
+
+    if (!('IntersectionObserver' in window)) {
+      const cancel = scheduleIdleTask(() => setShouldRenderCSKHReport(true), 8000);
+      return () => cancel();
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setShouldRenderCSKHReport(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '500px 0px' }
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [shouldRenderCSKHReport]);
+
+  // Load hardware only when its section is close to the viewport.
   const hwMountedRef = useRef(false);
   useEffect(() => {
+    if (!shouldLoadHardwareReport) return;
     if (!hwMountedRef.current) {
-      // First mount: delay to avoid hogging browser connection pool (max 6 per domain)
       hwMountedRef.current = true;
-      const timer = setTimeout(() => { void loadHardwareReport(); }, 4000);
-      return () => clearTimeout(timer);
+      const cancel = scheduleIdleTask(() => { void loadHardwareReport(); }, 1000);
+      return () => cancel();
     }
-    // Subsequent changes: load immediately
     void loadHardwareReport();
-  }, [hwGroupBy, hwTopN]);
+  }, [hwGroupBy, hwTopN, loadHardwareReport, shouldLoadHardwareReport]);
 
   // Load available teams
   // ← getAllUsers mount effect MERGED into the single effect above (line ~89) to avoid duplicate API call
@@ -2615,8 +2676,15 @@ export default function SuperAdminHome() {
         </section>
 
         {/* CSKH Report Section */}
-        <section id="section-cskh-report" className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100 w-full">
-          <CSKHReport />
+        <section ref={cskhReportRef} id="section-cskh-report" className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100 w-full">
+          {shouldRenderCSKHReport ? (
+            <CSKHReport />
+          ) : (
+            <div>
+              <h2 className="text-lg font-semibold text-blue-800">Báo cáo Chăm sóc Khách hàng</h2>
+              <p className="mt-1 text-sm text-gray-500">Báo cáo sẽ tự tải khi bạn cuộn tới khu vực này.</p>
+            </div>
+          )}
         </section>
 
         {/* Employee Performance Report */}
@@ -3548,7 +3616,7 @@ export default function SuperAdminHome() {
         </section>
 
         {/* Hardware report widget on dashboard */}
-        <section className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100 w-full">
+        <section ref={hardwareReportRef} className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100 w-full">
           <div className="max-w-full">
             <div className="flex items-center justify-between">
               <div>
@@ -3566,7 +3634,7 @@ export default function SuperAdminHome() {
                 <select value={String(hwTopN)} onChange={(e) => setHwTopN(Number(e.target.value))} className="rounded-md border px-3 py-2 text-sm bg-white">
                   {[5,8,10,20].map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
-                <button onClick={() => void loadHardwareReport()} disabled={hwLoading} className="rounded-md bg-indigo-600 text-white px-3 py-2 text-sm">Tải lại</button>
+                <button onClick={() => { if (!shouldLoadHardwareReport) setShouldLoadHardwareReport(true); else void loadHardwareReport(); }} disabled={hwLoading} className="rounded-md bg-indigo-600 text-white px-3 py-2 text-sm">Tải lại</button>
               </div>
             </div>
 

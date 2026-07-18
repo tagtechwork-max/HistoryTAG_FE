@@ -93,36 +93,45 @@ export default function SignInForm() {
 
       api.defaults.headers.common.Authorization = `Bearer ${data.accessToken}`;
       
-      try {
-        if (data.userId != null) {
-          const profile = await getUserAccount(Number(data.userId));
-          storage.setItem("user", JSON.stringify(profile));
-          // console.log("User profile fetched and stored:", profile.team, profile.roles);
-          await loadNotifications(20);
-        }
-      } catch (err) {
-        // console.warn("Could not fetch user profile after sign-in:", err);
-      }
-
       toast.success("Đăng nhập thành công!");
       
       const roles = normalizeRoles(data.roles);
       const isSuperAdmin = roles.some((role: string) => role === "SUPERADMIN" || role === "SUPER_ADMIN" || role === "Super Admin");
+      const loadPostLoginData = () => {
+        window.setTimeout(() => {
+          if (data.userId != null) {
+            void getUserAccount(Number(data.userId))
+              .then((profile) => {
+                storage.setItem("user", JSON.stringify(profile));
+              })
+              .catch(() => {
+                // Profile is not critical for entering the app.
+              });
+          }
+          void loadNotifications(20).catch(() => {
+            // Notifications should not block first paint after login.
+          });
+        }, 0);
+      };
       
       if (isSuperAdmin) {
+        loadPostLoginData();
         navigate("/superadmin/home");
       } else {
         // Team triển khai: sau đăng nhập chuyển thẳng tới Thống kê triển khai
-        const userJson = storage.getItem("user");
         let team: string | null = null;
-        if (userJson) {
-          try {
-            const user = JSON.parse(userJson) as { team?: string };
+        try {
+          if (data.userId != null) {
+            const user = await getUserAccount(Number(data.userId));
+            storage.setItem("user", JSON.stringify(user));
             team = user?.team ? String(user.team).toUpperCase() : null;
-          } catch {
-            // ignore
           }
+        } catch {
+          // ignore
         }
+        void loadNotifications(20).catch(() => {
+          // Notifications should not block first paint after login.
+        });
         if (team === "DEPLOYMENT") {
           navigate("/deployment-dashboard");
         } else {
