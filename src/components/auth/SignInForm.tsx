@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { EyeCloseIcon, EyeIcon } from "../../icons";
 import { signIn, normalizeRoles, pickErrMsg, getUserAccount } from "../../api/auth.api";
-import api from "../../api/client";
+import { AUTH_TOKEN_REFRESHED_EVENT, persistAccessToken } from "../../api/client";
 import toast from "react-hot-toast";
 
 type FormErrors = {
@@ -83,17 +83,25 @@ export default function SignInForm() {
       });
 
       const storage = remember ? localStorage : sessionStorage;
-      storage.setItem("access_token", data.accessToken);
+      persistAccessToken(data.accessToken, storage);
       storage.setItem("username", data.username);
       storage.setItem("roles", JSON.stringify(normalizeRoles(data.roles)));
       if (data.userId != null) storage.setItem("userId", String(data.userId));
 
-      api.defaults.headers.common.Authorization = `Bearer ${data.accessToken}`;
       
       toast.success("Đăng nhập thành công!");
       
       const roles = normalizeRoles(data.roles);
       const isSuperAdmin = roles.some((role: string) => role === "SUPERADMIN" || role === "SUPER_ADMIN" || role === "Super Admin");
+      const notifyAuthReady = () => {
+        window.setTimeout(() => {
+          window.dispatchEvent(
+            new CustomEvent(AUTH_TOKEN_REFRESHED_EVENT, {
+              detail: { accessToken: data.accessToken },
+            })
+          );
+        }, 100);
+      };
       const loadPostLoginData = () => {
         window.setTimeout(() => {
           if (data.userId != null) {
@@ -111,6 +119,7 @@ export default function SignInForm() {
       if (isSuperAdmin) {
         loadPostLoginData();
         navigate("/superadmin/home");
+        notifyAuthReady();
       } else {
         // Team triển khai: sau đăng nhập chuyển thẳng tới Thống kê triển khai
         let team: string | null = null;
@@ -125,8 +134,10 @@ export default function SignInForm() {
         }
         if (team === "DEPLOYMENT") {
           navigate("/deployment-dashboard");
+          notifyAuthReady();
         } else {
           navigate("/home");
+          notifyAuthReady();
         }
       }
     } catch (err: unknown) {

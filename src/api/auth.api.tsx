@@ -1,4 +1,4 @@
-import api, { persistAccessToken } from "./client";
+import api from "./client";
 
 export type LoginPayload = { username: string; password: string };
 
@@ -140,23 +140,7 @@ export function setCookie(
 // ==========================
 export const signIn = async (data: LoginPayload) => {
   const res = await api.post<LoginResponse>("/api/v1/public/sign-in", data);
-  const payload = res.data;
-
-  const token = payload?.accessToken;
-  if (token) {
-    persistAccessToken(token);
-    // Session dài hạn: refresh_token httpOnly (BE). Không set access_token cookie 7 ngày.
-  }
-
-  // 👉 Lưu userId
-  if (payload?.userId != null) {
-    localStorage.setItem("userId", String(payload.userId));
-  }
-
-  localStorage.setItem("username", payload?.username ?? "");
-  localStorage.setItem("roles", JSON.stringify(normalizeRoles(payload?.roles)));
-
-  return payload;
+  return res.data;
 };
 
 export const signUp = (data: RegisterPayload) =>

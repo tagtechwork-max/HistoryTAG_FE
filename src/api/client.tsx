@@ -82,7 +82,7 @@ function parseJwtPayload(token: string): Record<string, unknown> | null {
 }
 
 /** Sync roles from JWT v1/v2 into the same storage as access_token. */
-export function syncRolesFromAccessToken(token: string) {
+export function syncRolesFromAccessToken(token: string, preferredStorage?: Storage) {
   const payload = parseJwtPayload(token);
   if (!payload) return;
 
@@ -107,9 +107,9 @@ export function syncRolesFromAccessToken(token: string) {
   const unique = [...new Set(roles.map((r) => r.toUpperCase()))];
   if (unique.length === 0) return;
 
-  const storage = localStorage.getItem("access_token")
-    ? localStorage
-    : sessionStorage;
+  const storage =
+    preferredStorage ||
+    (localStorage.getItem("access_token") ? localStorage : sessionStorage);
   try {
     storage.setItem("roles", JSON.stringify(unique));
   } catch {
@@ -119,18 +119,20 @@ export function syncRolesFromAccessToken(token: string) {
 
 let isRedirecting = false;
 
-export function persistAccessToken(token: string) {
+export function persistAccessToken(token: string, preferredStorage?: Storage) {
   clearRefreshFailureCooldown();
   isRedirecting = false;
 
-  const storage = localStorage.getItem("access_token")
-    ? localStorage
-    : sessionStorage.getItem("access_token")
-      ? sessionStorage
-      : localStorage;
+  const storage =
+    preferredStorage ||
+    (localStorage.getItem("access_token")
+      ? localStorage
+      : sessionStorage.getItem("access_token")
+        ? sessionStorage
+        : localStorage);
 
   storage.setItem("access_token", token);
-  syncRolesFromAccessToken(token);
+  syncRolesFromAccessToken(token, storage);
   api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
 
   // Legacy: remove stale access_token cookie so it cannot shadow storage after refresh

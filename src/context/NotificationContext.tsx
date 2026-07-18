@@ -38,6 +38,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [authToken, setAuthToken] = useState<string | null>(getAuthToken());
+  const [authEventVersion, setAuthEventVersion] = useState(0);
   const MAX_NOTIFICATIONS = 200;
 
   const esRef = useRef<EventSource | null>(null);
@@ -179,7 +180,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     syncToken();
     const checkTokenChange = setInterval(syncToken, 2000);
-    const onTokenRefreshed = () => syncToken();
+    const onTokenRefreshed = () => {
+      syncToken();
+      setAuthEventVersion((version) => version + 1);
+    };
     window.addEventListener(AUTH_TOKEN_REFRESHED_EVENT, onTokenRefreshed);
 
     return () => {
@@ -651,7 +655,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (pollInterval) window.clearInterval(pollInterval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authToken]); // Re-run when authToken changes
+  }, [authToken, authEventVersion]); // Re-run when auth changes or login navigation completes
 
   const value: NotificationContextValue = {
     notifications,
