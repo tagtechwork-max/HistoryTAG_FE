@@ -4,7 +4,6 @@ import { EyeCloseIcon, EyeIcon } from "../../icons";
 import { signIn, normalizeRoles, pickErrMsg, getUserAccount } from "../../api/auth.api";
 import api from "../../api/client";
 import toast from "react-hot-toast";
-import { useNotification } from "../../context/NotificationContext";
 
 type FormErrors = {
   username?: string | null;
@@ -13,7 +12,6 @@ type FormErrors = {
 
 export default function SignInForm() {
   const navigate = useNavigate();
-  const { clearNotifications, loadNotifications } = useNotification();
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(false);
   const [form, setForm] = useState({ username: "", password: "" });
@@ -64,7 +62,6 @@ export default function SignInForm() {
 
     setLoading(true);
     try {
-      clearNotifications();
       localStorage.removeItem("access_token");
       localStorage.removeItem("token");
       localStorage.removeItem("accessToken");
@@ -108,10 +105,7 @@ export default function SignInForm() {
                 // Profile is not critical for entering the app.
               });
           }
-          void loadNotifications(20).catch(() => {
-            // Notifications should not block first paint after login.
-          });
-        }, 0);
+        }, 1500);
       };
       
       if (isSuperAdmin) {
@@ -129,9 +123,6 @@ export default function SignInForm() {
         } catch {
           // ignore
         }
-        void loadNotifications(20).catch(() => {
-          // Notifications should not block first paint after login.
-        });
         if (team === "DEPLOYMENT") {
           navigate("/deployment-dashboard");
         } else {

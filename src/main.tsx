@@ -1,4 +1,3 @@
-import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import "swiper/swiper-bundle.css";
@@ -11,17 +10,15 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { WebSocketProvider } from "./contexts/WebSocketContext";
 
 createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <ThemeProvider>
-      <AuthProvider>
-        <WebSocketProvider>
-          <NotificationProvider>
-            <AppWrapper>
-              <App />
-            </AppWrapper>
-          </NotificationProvider>
-        </WebSocketProvider>
-      </AuthProvider>
-    </ThemeProvider>
-  </StrictMode>,
+  <ThemeProvider>
+    <AuthProvider>
+      <WebSocketProvider>
+        <NotificationProvider>
+          <AppWrapper>
+            <App />
+          </AppWrapper>
+        </NotificationProvider>
+      </WebSocketProvider>
+    </AuthProvider>
+  </ThemeProvider>,
 );

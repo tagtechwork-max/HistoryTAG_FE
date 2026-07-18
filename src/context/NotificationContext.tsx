@@ -42,6 +42,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const esRef = useRef<EventSource | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const lastNotificationsLoadAtRef = useRef(0);
+  const lastUnreadLoadAtRef = useRef(0);
 
   const clampList = (list: Notification[]) => {
     if (!Array.isArray(list)) return [];
@@ -62,6 +64,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   const loadNotifications = async (limit = 50) => {
+    const now = Date.now();
+    if (now - lastNotificationsLoadAtRef.current < 1500) return;
+    lastNotificationsLoadAtRef.current = now;
+
     const currentPath = window.location.pathname;
     const isAuthPage =
       currentPath === "/signin" ||
@@ -86,6 +92,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   const loadUnread = async () => {
+    const now = Date.now();
+    if (now - lastUnreadLoadAtRef.current < 1500) return;
+    lastUnreadLoadAtRef.current = now;
+
     const currentPath = window.location.pathname;
     const isAuthPage =
       currentPath === "/signin" ||
@@ -168,7 +178,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     };
 
     syncToken();
-    const checkTokenChange = setInterval(syncToken, 500);
+    const checkTokenChange = setInterval(syncToken, 2000);
     const onTokenRefreshed = () => syncToken();
     window.addEventListener(AUTH_TOKEN_REFRESHED_EVENT, onTokenRefreshed);
 
@@ -254,9 +264,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
     
     // ✅ Chỉ gọi API khi có token VÀ không ở trang auth
-    // initial load
-    loadUnread();
-    loadNotifications(20);
+    // Defer so login navigation and dashboard first paint do not compete with notifications.
+    const initialLoadTimer = window.setTimeout(() => {
+      loadUnread();
+      loadNotifications(20);
+    }, 1200);
 
     // choose connection strategy: STOMP (preferred) -> SSE -> WebSocket -> polling
     const stompUrlRaw = import.meta.env.VITE_NOTIFICATION_STOMP_URL as string | undefined;
@@ -560,6 +572,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     // prefer STOMP -> SSE -> WS -> polling
     let connected = false;
     let pollInterval: number | null = null;
+    let setupTimer: number | null = null;
 
     const setupConnections = async () => {
       // console.log("[NotificationContext] setupConnections started");
@@ -616,9 +629,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
     };
 
-    setupConnections();
+    setupTimer = window.setTimeout(() => {
+      void setupConnections();
+    }, 1500);
 
     return () => {
+      window.clearTimeout(initialLoadTimer);
+      if (setupTimer) window.clearTimeout(setupTimer);
       if (esRef.current) {
         try { esRef.current.close(); } catch { /* ignore */ }
         esRef.current = null;

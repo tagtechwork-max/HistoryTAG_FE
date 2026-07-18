@@ -30,6 +30,10 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const clientRef = useRef<Client | null>(null);
   const subscriptionsRef = useRef<{ [key: string]: ((message: any) => void)[] }>({});
 
+  const hasActiveSubscriptions = useCallback(() => {
+    return Object.values(subscriptionsRef.current).some((callbacks) => callbacks.length > 0);
+  }, []);
+
   const disconnect = useCallback(() => {
     if (clientRef.current) {
       try {
@@ -117,13 +121,12 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [disconnect]);
 
   const reconnect = useCallback(() => {
+    if (!hasActiveSubscriptions()) return;
     disconnect();
     connect();
-  }, [disconnect, connect]);
+  }, [disconnect, connect, hasActiveSubscriptions]);
 
   useEffect(() => {
-    connect();
-
     const onTokenRefreshed = () => {
       reconnect();
     };
@@ -147,6 +150,8 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         const payload = JSON.parse(message.body);
         callback(payload);
       });
+    } else {
+      connect();
     }
 
     return () => {
@@ -156,8 +161,11 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       if (subscription) {
         subscription.unsubscribe();
       }
+      if (!hasActiveSubscriptions()) {
+        disconnect();
+      }
     };
-  }, []);
+  }, [connect, disconnect, hasActiveSubscriptions]);
 
   const publish = useCallback((destination: string, body: string | object) => {
     const client = clientRef.current;

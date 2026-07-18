@@ -25,13 +25,19 @@ function scheduleIdleTask(callback: () => void, timeoutMs: number) {
     cancelIdleCallback?: (id: number) => void;
   };
 
-  if (idleWindow.requestIdleCallback) {
-    const id = idleWindow.requestIdleCallback(callback, { timeout: timeoutMs });
-    return () => idleWindow.cancelIdleCallback?.(id);
-  }
+  let idleId: number | null = null;
+  const timerId = window.setTimeout(() => {
+    if (idleWindow.requestIdleCallback) {
+      idleId = idleWindow.requestIdleCallback(callback, { timeout: 1000 });
+      return;
+    }
+    callback();
+  }, timeoutMs);
 
-  const id = window.setTimeout(callback, timeoutMs);
-  return () => window.clearTimeout(id);
+  return () => {
+    window.clearTimeout(timerId);
+    if (idleId != null) idleWindow.cancelIdleCallback?.(idleId);
+  };
 }
 
 function StatCard({ title, value, icon, color }: { title: string; value: string | number; icon?: React.ReactNode; color?: string }) {
