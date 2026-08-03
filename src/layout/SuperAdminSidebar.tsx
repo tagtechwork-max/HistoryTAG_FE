@@ -72,6 +72,7 @@ const navItems: NavItem[] = [
     subItems: [
       { name: "Hợp đồng kinh doanh", path: "/superadmin/business", pro: false },
       { name: "Hợp đồng bảo trì", path: "/superadmin/maintain-contracts", pro: false },
+      { name: "Quản lý PO", path: "/superadmin/purchase-orders", pro: false },
 
     ],
   },

@@ -48,6 +48,7 @@ import MaintenanceSuperTaskPage from "./pages/SuperAdmin/maintenacesuper-task";
 import AllNotificationsPage from "./pages/Notifications/AllNotificationsPage";
 import BusinessPage from "./pages/Admin/Business";
 import MaintainContractsPage from "./pages/CustomerCare/MaintainContracts";
+import PurchaseOrders from "./pages/Admin/PurchaseOrders";
 import HospitalCareList from "./pages/CustomerCare/HospitalCareList";
 import HospitalDetailView from "./pages/CustomerCare/View/HospitalDetailView";
 import HospitalDetail from "./pages/CustomerCare/HospitalDetail";
@@ -170,6 +171,7 @@ export default function App() {
             {/* SuperAdmin notifications - keep layout consistent for superadmin users */}
             {/* SuperAdmin Business (reuse Admin Business page) */}
             <Route path="/superadmin/business" element={<BusinessPage />} />
+            <Route path="/superadmin/purchase-orders" element={<PurchaseOrders />} />
             <Route path="/superadmin/maintain-contracts" element={<MaintainContractsPage />} />
             <Route path="/superadmin/notifications" element={<AllNotificationsPage />} />
             <Route path="/superadmin/calendar" element={<Calendar />} />
@@ -193,6 +195,7 @@ export default function App() {
 
             {/* Admin - Business department */}
             <Route path="/admin/business" element={<BusinessPage />} />
+            <Route path="/admin/purchase-orders" element={<PurchaseOrders />} />
             <Route path="/admin/maintain-contracts" element={<MaintainContractsPage />} />
             <Route path="/admin/hospital-care" element={<HospitalCareList />} />
             <Route path="/admin/hospital-care/:id" element={<HospitalDetail />} />

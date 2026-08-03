@@ -1,0 +1,10 @@
+import api from './client';
+export type PO = {id:number; poCode:string; supplier:string; totalQuantity:number; usedQuantity:number; remainingQuantity:number; status:string};
+export type Allocation = {poId:number; quantity:number};
+export const getPOs = () => api.get<PO[]>('/api/v1/admin/purchase-orders');
+export const createPO = (body: unknown) => api.post('/api/v1/admin/purchase-orders', body);
+export const updatePO = (id: number, body: unknown) => api.put(`/api/v1/admin/purchase-orders/${id}`, body);
+export const deletePO = (id: number) => api.delete(`/api/v1/admin/purchase-orders/${id}`);
+export const getDeliveryContracts = () => api.get('/api/v1/admin/purchase-orders/contracts');
+export const createDeliveryContract = (body: unknown) => api.post('/api/v1/admin/purchase-orders/contracts', body);
+export const updateDeliveryContract = (id: number, body: unknown) => api.put(`/api/v1/admin/purchase-orders/contracts/${id}`, body);
