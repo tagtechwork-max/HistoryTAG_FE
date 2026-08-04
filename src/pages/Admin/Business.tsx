@@ -33,8 +33,8 @@ import { useAuth } from '../../contexts/AuthContext';
 const BusinessPage: React.FC = () => {
   // ✅ Use AuthContext hook - Performance optimized với useMemo, reactive với token changes
   const { roles, isAdmin, isSuperAdmin } = useAuth();
-  
-  // Read stored user (may contain team information)
+
+  // Read stored user dl (may contain team information)
   const storedUserRaw = localStorage.getItem('user') || sessionStorage.getItem('user');
   let storedUser: Record<string, any> | null = null;
   try {
@@ -130,7 +130,7 @@ const BusinessPage: React.FC = () => {
       const dd = d.getDate();
       const mm = d.getMonth() + 1;
       const yyyy = d.getFullYear();
-      return `${dd.toString().padStart(2,'0')}/${mm.toString().padStart(2,'0')}/${yyyy}`;
+      return `${dd.toString().padStart(2, '0')}/${mm.toString().padStart(2, '0')}/${yyyy}`;
     } catch {
       return '—';
     }
@@ -312,10 +312,10 @@ const BusinessPage: React.FC = () => {
 
   async function loadList(page = currentPage, size = itemsPerPage) {
     try {
-  const usePicFilter = Boolean(filterPicId);
-  const effectivePage = page;
-  const effectiveSize = size;
-  const params: Record<string, unknown> = { page: effectivePage, size: effectiveSize };
+      const usePicFilter = Boolean(filterPicId);
+      const effectivePage = page;
+      const effectiveSize = size;
+      const params: Record<string, unknown> = { page: effectivePage, size: effectiveSize };
       const startFromParam = normalizeDateForStart(filterStartFrom);
       const startToParam = normalizeDateForEnd(filterStartTo);
       if (startFromParam) params.startDateFrom = startFromParam;
@@ -379,10 +379,10 @@ const BusinessPage: React.FC = () => {
       const locallyFiltered = applyLocalDateFilter(normalized);
       const filteredByPic = filterPicId
         ? locallyFiltered.filter((item) => {
-            const rawId = item.picUser?.id;
-            const numericId = rawId != null ? Number(rawId) : null;
-            return numericId != null && Number.isFinite(numericId) && numericId === filterPicId;
-          })
+          const rawId = item.picUser?.id;
+          const numericId = rawId != null ? Number(rawId) : null;
+          return numericId != null && Number.isFinite(numericId) && numericId === filterPicId;
+        })
         : locallyFiltered;
       const finalList = sortBusinessItems(filteredByPic);
       setItems(finalList);
@@ -427,10 +427,10 @@ const BusinessPage: React.FC = () => {
         const withPhonesFiltered = applyLocalDateFilter(withPhones);
         const withPhonesPicFiltered = filterPicId
           ? withPhonesFiltered.filter((item) => {
-              const rawId = item.picUser?.id;
-              const numericId = rawId != null ? Number(rawId) : null;
-              return numericId != null && Number.isFinite(numericId) && numericId === filterPicId;
-            })
+            const rawId = item.picUser?.id;
+            const numericId = rawId != null ? Number(rawId) : null;
+            return numericId != null && Number.isFinite(numericId) && numericId === filterPicId;
+          })
           : withPhonesFiltered;
         const finalWithPhones = sortBusinessItems(withPhonesPicFiltered);
         setItems(finalWithPhones);
@@ -467,40 +467,40 @@ const BusinessPage: React.FC = () => {
   // Parse duration string để lấy số năm và số tháng
   function parseWarrantyDuration(duration: string): { years: number; months: number } {
     if (!duration || !duration.trim()) return { years: 0, months: 0 };
-    
+
     // Tìm số năm: "1 năm", "2 năm", etc.
     const yearMatch = duration.match(/(\d+)\s*năm/i);
     const years = yearMatch ? parseInt(yearMatch[1], 10) : 0;
-    
+
     // Tìm số tháng: "6 tháng", "3 tháng", etc.
     const monthMatch = duration.match(/(\d+)\s*tháng/i);
     const months = monthMatch ? parseInt(monthMatch[1], 10) : 0;
-    
+
     return { years, months };
   }
 
   // Helper: Tính ngày kết thúc từ ngày bắt đầu + duration string
   function calculateWarrantyEndDate(startDate: string, duration: string): string {
     if (!startDate || !duration || !duration.trim()) return '';
-    
+
     const { years, months } = parseWarrantyDuration(duration);
     if (years === 0 && months === 0) return '';
-    
+
     try {
       const start = new Date(startDate);
       if (isNaN(start.getTime())) return '';
-      
+
       const end = new Date(start);
       end.setFullYear(start.getFullYear() + years);
       end.setMonth(start.getMonth() + months);
-      
+
       // Format về datetime-local format (YYYY-MM-DDTHH:mm)
       const yyyy = end.getFullYear();
       const mm = String(end.getMonth() + 1).padStart(2, '0');
       const dd = String(end.getDate()).padStart(2, '0');
       const hh = String(start.getHours()).padStart(2, '0');
       const min = String(start.getMinutes()).padStart(2, '0');
-      
+
       return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
     } catch {
       return '';
@@ -511,7 +511,7 @@ const BusinessPage: React.FC = () => {
   useEffect(() => {
     // Chỉ tự động tính nếu người dùng chưa chỉnh sửa endDate thủ công
     if (isWarrantyEndDateManuallyEdited) return;
-    
+
     if (warrantyEnabled && warrantyStartDateValue && warrantyDuration && warrantyDuration.trim()) {
       const calculatedEndDate = calculateWarrantyEndDate(warrantyStartDateValue, warrantyDuration);
       if (calculatedEndDate) {
@@ -532,45 +532,45 @@ const BusinessPage: React.FC = () => {
       const list = await getBusinessPicOptions();
       const baseOptions = Array.isArray(list)
         ? list.map((item: any) => ({
-            id: Number(item?.id ?? 0),
-            label: String(item?.label ?? ''),
-            subLabel: item?.subLabel ? String(item.subLabel) : undefined,
-            phone: item?.phone ? String(item.phone) : null,
-          }))
+          id: Number(item?.id ?? 0),
+          label: String(item?.label ?? ''),
+          subLabel: item?.subLabel ? String(item.subLabel) : undefined,
+          phone: item?.phone ? String(item.phone) : null,
+        }))
         : [];
 
       // ✅ Lấy tất cả users và filter SUPERADMIN - CHỈ GỌI KHI USER LÀ SUPERADMIN
       let superAdminOptions: Array<{ id: number; label: string; subLabel?: string }> = [];
       // ✅ Guard: chỉ gọi getAllUsers() nếu user là SUPERADMIN
       if (isSuperAdmin) {
-      try {
-        const res = await getAllUsers({ page: 0, size: 200 });
-        const content = Array.isArray(res?.content)
-          ? res.content
-          : Array.isArray(res)
-          ? res
-          : [];
-        superAdminOptions = content
-          .filter((user: any) => {
-            const roles = user?.roles;
-            if (!roles) return false;
-            const roleArr = Array.isArray(roles) ? roles : [];
-            return roleArr.some((r: any) => {
-              if (!r) return false;
-              if (typeof r === 'string') return r.toUpperCase() === 'SUPERADMIN';
-              const roleName = r.roleName ?? r.role_name ?? r.role;
-              return typeof roleName === 'string' && roleName.toUpperCase() === 'SUPERADMIN';
-            });
-          })
-          .map((user: any) => ({
-            id: Number(user?.id ?? 0),
-            label: String(user?.fullname ?? user?.fullName ?? user?.username ?? user?.email ?? `User #${user?.id ?? ''}`),
-            subLabel: user?.email ? String(user.email) : undefined,
-            phone: user?.phone ? String(user.phone).trim() : null,
-          }));
-      } catch (err) {
-        // ignore if superadmin endpoint not accessible
-        // console.warn('Failed to fetch superadmin users for PIC options', err);
+        try {
+          const res = await getAllUsers({ page: 0, size: 200 });
+          const content = Array.isArray(res?.content)
+            ? res.content
+            : Array.isArray(res)
+              ? res
+              : [];
+          superAdminOptions = content
+            .filter((user: any) => {
+              const roles = user?.roles;
+              if (!roles) return false;
+              const roleArr = Array.isArray(roles) ? roles : [];
+              return roleArr.some((r: any) => {
+                if (!r) return false;
+                if (typeof r === 'string') return r.toUpperCase() === 'SUPERADMIN';
+                const roleName = r.roleName ?? r.role_name ?? r.role;
+                return typeof roleName === 'string' && roleName.toUpperCase() === 'SUPERADMIN';
+              });
+            })
+            .map((user: any) => ({
+              id: Number(user?.id ?? 0),
+              label: String(user?.fullname ?? user?.fullName ?? user?.username ?? user?.email ?? `User #${user?.id ?? ''}`),
+              subLabel: user?.email ? String(user.email) : undefined,
+              phone: user?.phone ? String(user.phone).trim() : null,
+            }));
+        } catch (err) {
+          // ignore if superadmin endpoint not accessible
+          // console.warn('Failed to fetch superadmin users for PIC options', err);
         }
       }
 
@@ -739,13 +739,13 @@ const BusinessPage: React.FC = () => {
   async function handleSubmit(e?: React.FormEvent) {
     if (e) e.preventDefault();
     if (!canManage) return setToast({ message: 'Bạn không có quyền thực hiện thao tác này', type: 'error' });
-    
+
     // Clear previous errors
     const errors: Record<string, string> = {};
-    
+
     // validation
     if (!name || name.trim().length === 0) errors.name = 'Mã hợp đồng là bắt buộc';
-    
+
     // Check duplicate contract code (name) - check in current items first
     if (name && name.trim().length > 0) {
       const trimmedName = name.trim();
@@ -770,7 +770,7 @@ const BusinessPage: React.FC = () => {
       if (duplicate) {
         errors.name = 'Mã hợp đồng đã được sử dụng';
       }
-      
+
       // If no duplicate found in current items, check via API with search (optimized: only fetch first 100 matches)
       if (!duplicate) {
         try {
@@ -791,7 +791,7 @@ const BusinessPage: React.FC = () => {
         }
       }
     }
-    
+
     if (!selectedHospitalId) errors.selectedHospitalId = 'Vui lòng chọn bệnh viện';
     // if (!selectedHardwareId) errors.selectedHardwareId = 'Vui lòng chọn phần cứng';
     if (businessPicOptionsState.length > 0 && !selectedPicId) errors.selectedPicId = 'Vui lòng chọn người phụ trách';
@@ -907,7 +907,7 @@ const BusinessPage: React.FC = () => {
     }
 
     const isUpdate = Boolean(editingId);
-    
+
     // Check nếu đang tạo mới (không phải edit) và bệnh viện đã có hợp đồng
     // Optimized: Only fetch first page to check if hospital has any existing business
     if (!isUpdate && selectedHospitalId) {
@@ -918,7 +918,7 @@ const BusinessPage: React.FC = () => {
         const hasExisting = allItems.some((item: BusinessItem) => {
           return item.hospital?.id === selectedHospitalId;
         });
-        
+
         if (hasExisting) {
           // Tìm tên bệnh viện từ các nguồn
           let hospitalName = "bệnh viện này";
@@ -950,7 +950,7 @@ const BusinessPage: React.FC = () => {
         // console.warn("Failed to check existing business contracts, proceeding anyway", e);
       }
     }
-    
+
     const requireConfirm = statusValue === 'CONTRACTED' && originalStatus !== 'CONTRACTED';
     if (requireConfirm && !statusConfirmOpen) {
       setPendingSubmit({ payload, isUpdate, successMessage: 'Chuyển trạng thái thành công' });
@@ -1013,24 +1013,24 @@ const BusinessPage: React.FC = () => {
       console.error('Error saving business:', err);
       console.error('Error response:', err?.response);
       console.error('Error response data:', err?.response?.data);
-      
+
       // Lấy message lỗi từ API response - thử nhiều cách
       let errorMessage = 'Lỗi khi lưu dữ liệu';
-      
+
       if (err?.response?.data) {
         const data = err.response.data;
         // Thử các trường có thể chứa message
-        errorMessage = data.message 
-          || data.data 
-          || data.error 
+        errorMessage = data.message
+          || data.data
+          || data.error
           || (typeof data === 'string' ? data : JSON.stringify(data));
       } else if (err?.message) {
         errorMessage = err.message;
       }
-      
+
       // Log để debug
       console.log('Extracted error message:', errorMessage);
-      
+
       // Hiển thị toast notification ở góc phải trên để không bị che bởi modal
       // Sử dụng hotToast.error với position top-right và z-index cao
       hotToast.error(errorMessage, {
@@ -1049,7 +1049,7 @@ const BusinessPage: React.FC = () => {
         },
         className: 'business-error-toast',
       });
-      
+
       // Giữ lại toast cũ để tương thích (nếu có UI hiển thị toast cũ)
       setToast({ message: errorMessage, type: 'error' });
     } finally {
@@ -1064,7 +1064,7 @@ const BusinessPage: React.FC = () => {
   const handleQuantityChange = (qtyVal: number | '') => {
     setQuantity(qtyVal);
     clearFieldError('quantity');
-    
+
     const q = qtyVal !== '' ? Number(qtyVal) : 0;
     if (qtyVal === '' || q === 0) {
       setUnitPrice('');
@@ -1094,7 +1094,7 @@ const BusinessPage: React.FC = () => {
     setUnitPrice(priceVal);
     setLastEdited('price');
     clearFieldError('unitPrice');
-    
+
     const q = quantity !== '' ? Number(quantity) : 0;
     if (priceVal !== '') {
       setTotalContractValue(priceVal * q);
@@ -1109,7 +1109,7 @@ const BusinessPage: React.FC = () => {
     setTotalContractValue(totalVal);
     setLastEdited('total');
     clearFieldError('totalContractValue');
-    
+
     const q = quantity !== '' ? Number(quantity) : 0;
     if (totalVal !== '' && q > 0) {
       setUnitPrice(Math.round(Number(totalVal) / q));
@@ -1392,12 +1392,12 @@ const BusinessPage: React.FC = () => {
 
     const allowedExtensions = ['.doc', '.docx', '.xls', '.xlsx'];
     const maxSize = 50 * 1024 * 1024; // 50MB per file
-    
+
     // Validate all files first
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-      
+
       if (!allowedExtensions.includes(fileExtension)) {
         setToast({ message: `File "${file.name}": Chỉ hỗ trợ Word (.doc, .docx) hoặc Excel (.xls, .xlsx)`, type: 'error' });
         event.target.value = '';
@@ -1431,8 +1431,8 @@ const BusinessPage: React.FC = () => {
           method: 'POST',
           headers: token
             ? {
-                Authorization: `Bearer ${token}`,
-              }
+              Authorization: `Bearer ${token}`,
+            }
             : undefined,
           credentials: 'include',
           body: formData,
@@ -1462,7 +1462,7 @@ const BusinessPage: React.FC = () => {
       event.target.value = ''; // Reset input
     }
   }
-  
+
   // Remove attachment
   function handleRemoveAttachment(index: number) {
     setAttachments(prev => prev.filter((_, i) => i !== index));
@@ -1505,14 +1505,14 @@ const BusinessPage: React.FC = () => {
     setPendingCreateSubmit(null);
     const hospitalName = hospitalNameForConfirm;
     setHospitalNameForConfirm("");
-    
+
     const requireConfirm = statusValue === 'CONTRACTED' && originalStatus !== 'CONTRACTED';
     if (requireConfirm && !statusConfirmOpen) {
       setPendingSubmit({ ...submission });
       setStatusConfirmOpen(true);
       return;
     }
-    
+
     await submitBusiness(submission.payload, submission.isUpdate, submission.successMessage);
   }
 
@@ -1547,27 +1547,27 @@ const BusinessPage: React.FC = () => {
     try {
       const endDate = new Date(warrantyEndDate);
       if (isNaN(endDate.getTime())) return null;
-      
+
       // Normalize về đầu ngày (00:00:00) để so sánh chính xác theo ngày
       endDate.setHours(0, 0, 0, 0);
-      
+
       const now = new Date();
       now.setHours(0, 0, 0, 0);
-      
+
       const oneMonthFromNow = new Date();
       oneMonthFromNow.setMonth(oneMonthFromNow.getMonth() + 1);
       oneMonthFromNow.setHours(0, 0, 0, 0);
-      
+
       // Hết hạn: đã đến hoặc quá ngày hết hạn (cùng ngày hoặc quá ngày)
       if (endDate <= now) {
         return 'expired';
       }
-      
+
       // Sắp hết hạn: trong vòng 1 tháng tới (còn <= 30 ngày)
       if (endDate <= oneMonthFromNow) {
         return 'expiring-soon';
       }
-      
+
       return null;
     } catch {
       return null;
@@ -1578,7 +1578,7 @@ const BusinessPage: React.FC = () => {
   function renderWarrantyStatusBadge(warrantyEndDate?: string | null) {
     const status = getWarrantyStatus(warrantyEndDate);
     if (!status) return null;
-    
+
     if (status === 'expired') {
       return (
         <span className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
@@ -1586,7 +1586,7 @@ const BusinessPage: React.FC = () => {
         </span>
       );
     }
-    
+
     if (status === 'expiring-soon') {
       return (
         <span className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-orange-100 text-orange-800">
@@ -1594,7 +1594,7 @@ const BusinessPage: React.FC = () => {
         </span>
       );
     }
-    
+
     return null;
   }
 
@@ -1661,7 +1661,7 @@ const BusinessPage: React.FC = () => {
         setCommissionDisplay(formatNumber(Number(res.commission)));
       } else {
         setCommission('');
-      setCommissionDisplay('');
+        setCommissionDisplay('');
       }
       setQuantity(res.quantity != null ? Number(String(res.quantity)) : 0);
       setTotalContractValue(res.totalPrice != null ? Number(res.totalPrice) : '');
@@ -1861,9 +1861,8 @@ const BusinessPage: React.FC = () => {
               <>
                 {/* Option "Tất cả" */}
                 <div
-                  className={`px-3 py-2 text-sm cursor-pointer hover:bg-gray-100 border-b border-gray-100 ${
-                    !value ? "bg-blue-50" : ""
-                  }`}
+                  className={`px-3 py-2 text-sm cursor-pointer hover:bg-gray-100 border-b border-gray-100 ${!value ? "bg-blue-50" : ""
+                    }`}
                   onMouseDown={(e) => {
                     e.preventDefault();
                     onChange("");
@@ -1876,9 +1875,8 @@ const BusinessPage: React.FC = () => {
                 {displayOptions.map((opt, idx) => (
                   <div
                     key={opt.id}
-                    className={`px-3 py-2 text-sm cursor-pointer hover:bg-gray-100 ${
-                      idx === highlight ? "bg-gray-100" : ""
-                    } ${String(opt.id) === value ? "bg-blue-50" : ""}`}
+                    className={`px-3 py-2 text-sm cursor-pointer hover:bg-gray-100 ${idx === highlight ? "bg-gray-100" : ""
+                      } ${String(opt.id) === value ? "bg-blue-50" : ""}`}
                     onMouseEnter={() => setHighlight(idx)}
                     onMouseDown={(e) => {
                       e.preventDefault();
@@ -1904,9 +1902,8 @@ const BusinessPage: React.FC = () => {
                   filteredOptions.slice(7).map((opt, idx) => (
                     <div
                       key={opt.id}
-                      className={`px-3 py-2 text-sm cursor-pointer hover:bg-gray-100 ${
-                        idx + 7 === highlight ? "bg-gray-100" : ""
-                      } ${String(opt.id) === value ? "bg-blue-50" : ""}`}
+                      className={`px-3 py-2 text-sm cursor-pointer hover:bg-gray-100 ${idx + 7 === highlight ? "bg-gray-100" : ""
+                        } ${String(opt.id) === value ? "bg-blue-50" : ""}`}
                       onMouseEnter={() => setHighlight(idx + 7)}
                       onMouseDown={(e) => {
                         e.preventDefault();
@@ -1937,14 +1934,12 @@ const BusinessPage: React.FC = () => {
       {toast && (
         <div className="fixed top-6 right-6 z-50">
           <div
-            className={`flex min-w-[220px] items-center gap-3 rounded-2xl border px-4 py-3 shadow-lg bg-white ${
-              toast.type === 'success' ? 'border-green-200' : 'border-red-200'
-            }`}
+            className={`flex min-w-[220px] items-center gap-3 rounded-2xl border px-4 py-3 shadow-lg bg-white ${toast.type === 'success' ? 'border-green-200' : 'border-red-200'
+              }`}
           >
             <span
-              className={`flex h-9 w-9 items-center justify-center rounded-full ${
-                toast.type === 'success' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
-              }`}
+              className={`flex h-9 w-9 items-center justify-center rounded-full ${toast.type === 'success' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+                }`}
             >
               {toast.type === 'success' ? <FiCheckCircle size={20} /> : <FiXCircle size={20} />}
             </span>
@@ -2121,7 +2116,7 @@ const BusinessPage: React.FC = () => {
               setWarrantyEndDateValue('');
               setWarrantyDuration('');
               setCommission('');
-        setCommissionDisplay('');
+              setCommissionDisplay('');
               setFieldErrors({});
               setPendingSubmit(null);
               setStatusConfirmOpen(false);
@@ -2450,601 +2445,598 @@ const BusinessPage: React.FC = () => {
                 <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-6">
                   <form id="business-form" onSubmit={handleSubmit} className="space-y-3">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Mã hợp đồng</label>
-                      <input 
-                        value={name} 
-                        onChange={(e) => {
-                          setName(e.target.value);
-                          clearFieldError('name');
-                        }} 
-                        className={`w-full rounded border px-3 py-2 ${fieldErrors.name ? 'border-red-500' : ''}`}
-                      />
-                      {fieldErrors.name && <div className="mt-1 text-sm text-red-600">{fieldErrors.name}</div>}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Phần cứng</label>
-                      <select 
-                        value={selectedHardwareId ?? ''} 
-                        onChange={(e) => {
-                          const v = e.target.value; 
-                          setSelectedHardwareId(v ? Number(v) : null);
-                          clearFieldError('selectedHardwareId');
-                          const found = hardwareOptions.find(h => String(h.id) === v);
-                          if (found) {
-                            getHardwareById(found.id).then(r => {
-                              const price = r && r.price != null ? Number(r.price) : null;
-                              setSelectedHardwarePrice(price);
-                              // Tự động điền giá vào input đơn giá khi chọn phần cứng
-                              if (price != null) {
-                                setUnitPrice(price);
-                                setLastEdited('price');
-                              }
-                            }).catch(() => {
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Mã hợp đồng</label>
+                        <input
+                          value={name}
+                          onChange={(e) => {
+                            setName(e.target.value);
+                            clearFieldError('name');
+                          }}
+                          className={`w-full rounded border px-3 py-2 ${fieldErrors.name ? 'border-red-500' : ''}`}
+                        />
+                        {fieldErrors.name && <div className="mt-1 text-sm text-red-600">{fieldErrors.name}</div>}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Phần cứng</label>
+                        <select
+                          value={selectedHardwareId ?? ''}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setSelectedHardwareId(v ? Number(v) : null);
+                            clearFieldError('selectedHardwareId');
+                            const found = hardwareOptions.find(h => String(h.id) === v);
+                            if (found) {
+                              getHardwareById(found.id).then(r => {
+                                const price = r && r.price != null ? Number(r.price) : null;
+                                setSelectedHardwarePrice(price);
+                                // Tự động điền giá vào input đơn giá khi chọn phần cứng
+                                if (price != null) {
+                                  setUnitPrice(price);
+                                  setLastEdited('price');
+                                }
+                              }).catch(() => {
+                                setSelectedHardwarePrice(null);
+                                setUnitPrice('');
+                              });
+                            } else {
                               setSelectedHardwarePrice(null);
                               setUnitPrice('');
-                            });
-                          } else {
-                            setSelectedHardwarePrice(null);
-                            setUnitPrice('');
-                          }
-                        }} 
-                        className={`w-full rounded border px-3 py-2 ${fieldErrors.selectedHardwareId ? 'border-red-500' : ''}`}
-                      >
-                        <option value="">— Chọn phần cứng —</option>
-                        {hardwareOptions.map(h => <option key={h.id} value={h.id}>{h.label} {h.subLabel ? `— ${h.subLabel}` : ''}</option>)}
-                      </select>
-                      {fieldErrors.selectedHardwareId && <div className="mt-1 text-sm text-red-600">{fieldErrors.selectedHardwareId}</div>}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Người phụ trách</label>
-                      <div className="relative" ref={picDropdownRef}>
-                        <input
-                          type="text"
-                          value={picDropdownOpen ? picSearchInput : (selectedPicOption?.label ?? '')}
-                          placeholder="Tìm người phụ trách..."
-                          onFocus={() => {
-                            setPicDropdownOpen(true);
-                            setPicSearchInput('');
+                            }
                           }}
-                          onChange={(e) => {
-                            setPicDropdownOpen(true);
-                            setPicSearchInput(e.target.value);
-                            clearFieldError('selectedPicId');
-                          }}
-                          className={`w-full rounded border px-3 py-2 ${fieldErrors.selectedPicId ? 'border-red-500' : ''}`}
-                        />
-                        {selectedPicOption && !picDropdownOpen && (
-                          <button
-                            type="button"
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
-                            onClick={() => {
-                              setSelectedPicId(null);
-                              setPicSearchInput('');
-                              clearFieldError('selectedPicId');
-                            }}
-                            aria-label="Clear PIC"
-                          >
-                            ✕
-                          </button>
-                        )}
-                        {picDropdownOpen && (
-                          <div className="absolute z-50 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg max-h-52 overflow-auto">
-                            {filteredBusinessPicOptions.length === 0 ? (
-                              <div className="px-4 py-3 text-sm text-gray-500">Không tìm thấy người phù hợp</div>
-                            ) : (
-                              filteredBusinessPicOptions.map((opt) => {
-                                const isSelected = opt.id === selectedPicId;
-                                return (
-                                  <div
-                                    key={opt.id}
-                                    className={`px-4 py-2 text-sm cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
-                                    onMouseDown={(e) => {
-                                      e.preventDefault();
-                                      setSelectedPicId(opt.id);
-                                      setPicDropdownOpen(false);
-                                      setPicSearchInput('');
-                                      clearFieldError('selectedPicId');
-                                    }}
-                                  >
-                                    <div className="font-medium text-gray-800">{opt.label}</div>
-                                    {(opt as any).phone && (
-                                      <div className="text-xs text-gray-500">
-                                        {(opt as any).phone}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })
-                            )}
-                          </div>
-                        )}
+                          className={`w-full rounded border px-3 py-2 ${fieldErrors.selectedHardwareId ? 'border-red-500' : ''}`}
+                        >
+                          <option value="">— Chọn phần cứng —</option>
+                          {hardwareOptions.map(h => <option key={h.id} value={h.id}>{h.label} {h.subLabel ? `— ${h.subLabel}` : ''}</option>)}
+                        </select>
+                        {fieldErrors.selectedHardwareId && <div className="mt-1 text-sm text-red-600">{fieldErrors.selectedHardwareId}</div>}
                       </div>
-                      {fieldErrors.selectedPicId && <div className="mt-1 text-sm text-red-600">{fieldErrors.selectedPicId}</div>}
-                    </div>
-                    <div className="relative">
-                      <label className="block text-sm font-medium mb-1">Bệnh viện</label>
-                      <div className="relative hospital-dropdown-container">
-                        <input
-                          type="text"
-                          value={hospitalSearchInput}
-                          onChange={(e) => {
-                            setHospitalSearchInput(e.target.value);
-                            setHospitalDropdownOpen(true);
-                            clearFieldError('selectedHospitalId');
-                          }}
-                          onFocus={() => {
-                            setHospitalDropdownOpen(true);
-                            // Không load tất cả khi focus - chỉ load khi user nhập ít nhất 2 ký tự
-                            // if (!hospitalSearchInput) {
-                            //   fetchHospitalOptions('');
-                            // }
-                          }}
-                          placeholder="Tìm kiếm bệnh viện..."
-                          className={`w-full rounded border px-3 py-2 ${fieldErrors.selectedHospitalId ? 'border-red-500' : ''}`}
-                        />
-                        {hospitalDropdownOpen && (
-                          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg">
-                            {hospitalOptions.length === 0 ? (
-                              <div className="px-4 py-2 text-sm text-gray-500">
-                                {hospitalSearchInput.trim().length < 2 ? "Nhập ít nhất 2 ký tự để tìm kiếm" : "Không tìm thấy bệnh viện"}
-                              </div>
-                            ) : (
-                              <div className="max-h-[200px] overflow-y-auto">
-                                {hospitalOptions.map((hospital) => (
-                                  <div
-                                    key={hospital.id}
-                                    onClick={() => {
-                                      setSelectedHospitalId(hospital.id);
-                                      setHospitalSearchInput(hospital.label);
-                                      setHospitalDropdownOpen(false);
-                                      clearFieldError('selectedHospitalId');
-                                      api.get(`/api/v1/auth/hospitals/${hospital.id}`).then(r => {
-                                        const d = r.data || {};
-                                        const phone = d.contactNumber || d.contact_number || d.contactPhone || d.contact_phone || null;
-                                        setSelectedHospitalPhone(phone);
-                                      }).catch(() => setSelectedHospitalPhone(null));
-                                    }}
-                                    className={`px-4 py-2 cursor-pointer hover:bg-blue-50 ${
-                                      selectedHospitalId === hospital.id ? 'bg-blue-100' : ''
-                                    }`}
-                                  >
-                                    <div className="text-sm text-gray-900">{hospital.label}</div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      {fieldErrors.selectedHospitalId && <div className="mt-1 text-sm text-red-600">{fieldErrors.selectedHospitalId}</div>}
-                      {selectedHospitalPhone && !fieldErrors.selectedHospitalId && <div className="mt-1 text-sm text-gray-700">Số điện thoại bệnh viện: <span className="font-medium">{selectedHospitalPhone}</span></div>}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Trạng thái</label>
-                      <select value={statusValue} onChange={handleStatusChange} className="w-full rounded border px-3 py-2">
-                        <option value="CARING">Đang chăm sóc</option>
-                        <option value="CONTRACTED">Ký hợp đồng</option>
-                        <option value="CANCELLED">Hủy</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Số lượng Kiosk</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={quantity === '' ? '' : quantity}
-                        onChange={(e) => {
-                          const val = e.target.value ? Number(e.target.value) : '';
-                          handleQuantityChange(val);
-                        }}
-                        className={`w-full rounded border px-3 py-2 ${fieldErrors.quantity ? 'border-red-500' : ''}`}
-                      />
-                      {fieldErrors.quantity && <div className="mt-1 text-sm text-red-600">{fieldErrors.quantity}</div>}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Chăm sóc khách hàng</label>
-                      {canManage ? (
-                        <input 
-                          type="text" 
-                          value={commissionDisplay || formatNumber(commission)} 
-                          onChange={(e) => {
-                            const inputValue = e.target.value;
-                            // Parse giá trị số từ input (loại bỏ dấu chấm và ký tự không phải số)
-                            const parsed = parseFormattedNumber(inputValue);
-                            // Lưu giá trị số
-                            setCommission(parsed);
-                            // Format lại ngay lập tức với dấu chấm phân cách hàng nghìn
-                            if (parsed !== '') {
-                              const formatted = formatNumber(parsed);
-                              setCommissionDisplay(formatted);
-                            } else {
-                              setCommissionDisplay('');
-                            }
-                            clearFieldError('commission');
-                          }}
-                          onBlur={() => {
-                            // Đảm bảo format đúng khi blur
-                            if (commission !== '') {
-                              setCommissionDisplay(formatNumber(commission));
-                            } else {
-                              setCommissionDisplay('');
-                            }
-                          }}
-                          onFocus={() => {
-                            // Khi focus, hiển thị giá trị đã format
-                            if (commission !== '') {
-                              setCommissionDisplay(formatNumber(commission));
-                            } else {
-                              setCommissionDisplay('');
-                            }
-                          }}
-                          className="w-full rounded border px-3 py-2" 
-                          placeholder="Nhập số tiền hoa hồng "
-                        />
-                      ) : (
-                        <div className="p-2 text-gray-700">{commission !== '' ? formatNumber(commission) + ' ₫' : '—'}</div>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Đơn vị tài trợ</label>
-                      <input
-                        type="text"
-                        value={bankName}
-                        onChange={(e) => setBankName(e.target.value)}
-                        className="w-full rounded border px-3 py-2"
-                        placeholder="Nhập đơn vị tài trợ"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Liên hệ đơn vị tài trợ</label>
-                      <input
-                        type="text"
-                        value={bankContactPerson}
-                        onChange={(e) => setBankContactPerson(e.target.value)}
-                        className="w-full rounded border px-3 py-2"
-                        placeholder="Nhập người liên hệ"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Đơn giá 1 sản phẩm</label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={formatNumber(unitPrice)}
-                          onChange={(e) => {
-                            const parsed = parseFormattedNumber(e.target.value);
-                            handleUnitPriceChange(parsed);
-                          }}
-                          onBlur={(e) => {
-                            const parsed = parseFormattedNumber(e.target.value);
-                            handleUnitPriceChange(parsed);
-                          }}
-                          placeholder={selectedHardwarePrice != null ? `Giá mặc định: ${formatNumber(selectedHardwarePrice)} ₫` : 'Nhập đơn giá 1 sản phẩm'}
-                          className=" w-full flex-1 rounded border px-3 py-2"
-                        />
-                      </div>
-                      {fieldErrors.unitPrice && <div className="mt-1 text-sm text-red-600">{fieldErrors.unitPrice}</div>}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold mb-1 text-blue-600">Tổng tiền hợp đồng</label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={formatNumber(totalContractValue)}
-                          onChange={(e) => {
-                            const parsed = parseFormattedNumber(e.target.value);
-                            handleTotalContractValueChange(parsed);
-                          }}
-                          onBlur={(e) => {
-                            const parsed = parseFormattedNumber(e.target.value);
-                            handleTotalContractValueChange(parsed);
-                          }}
-                          placeholder="Nhập tổng tiền hợp đồng"
-                          className={`w-full flex-1 rounded border px-3 py-2 ${fieldErrors.totalContractValue ? 'border-red-500' : 'border-blue-400'}`}
-                        />
-                      </div>
-                      {fieldErrors.totalContractValue && <div className="mt-1 text-sm text-red-600">{fieldErrors.totalContractValue}</div>}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Đơn giá (NET)</label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={formatNumber(unitPriceNet)}
-                          onChange={(e) => {
-                            const parsed = parseFormattedNumber(e.target.value);
-                            setUnitPriceNet(parsed);
-                            clearFieldError('unitPriceNet');
-                          }}
-                          onBlur={(e) => {
-                            // Format lại khi blur
-                            const parsed = parseFormattedNumber(e.target.value);
-                            setUnitPriceNet(parsed);
-                          }}
-                          placeholder="Nhập đơn giá (NET)"
-                          className=" w-full flex-1 rounded border px-3 py-2"
-                        />
-                      </div>
-                      {fieldErrors.unitPriceNet && <div className="mt-1 text-sm text-red-600">{fieldErrors.unitPriceNet}</div>}
-                    </div>
-
-                    {/* Trạng thái thanh toán */}
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Trạng thái thanh toán</label>
-                      <select
-                        value={paymentStatusValue}
-                        onChange={(e) => {
-                          const next = e.target.value as 'CHUA_THANH_TOAN' | 'DA_THANH_TOAN' | 'THANH_TOAN_HET';
-                          setPaymentStatusValue(next);
-                          if (next === 'THANH_TOAN_HET') {
-                            // Auto-fill paidAmount = totalPrice (unitPrice * quantity)
-                            const total = computeTotal();
-                            setPaidAmount(total > 0 ? total : '');
-                            setPaidAmountDisplay(total > 0 ? formatNumber(total) : '');
-                            if (!paymentDateValue) {
-                              setPaymentDateValue(nowDateTimeLocal());
-                            }
-                          } else if (next === 'DA_THANH_TOAN') {
-                            // Keep current paidAmount or reset
-                            if (paidAmount === '') {
-                              setPaidAmountDisplay('');
-                            }
-                            if (!paymentDateValue) {
-                              setPaymentDateValue(nowDateTimeLocal());
-                            }
-                          } else {
-                            setPaidAmount('');
-                            setPaidAmountDisplay('');
-                            setPaymentDateValue('');
-                          }
-                        }}
-                        className="w-full rounded border px-3 py-2"
-                      >
-                        <option value="CHUA_THANH_TOAN">Chưa thanh toán</option>
-                        <option value="DA_THANH_TOAN">Đã thanh toán</option>
-                        <option value="THANH_TOAN_HET">Thanh toán hết</option>
-                      </select>
-                    </div>
-
-                    {/* Số tiền thanh toán - chỉ hiện khi DA_THANH_TOAN hoặc THANH_TOAN_HET */}
-                    {(paymentStatusValue === 'DA_THANH_TOAN' || paymentStatusValue === 'THANH_TOAN_HET') && (
-                      <>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">
-                            {paymentStatusValue === 'THANH_TOAN_HET' ? 'Số tiền thanh toán (= Thành tiền)' : 'Số tiền thanh toán*'}
-                          </label>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Người phụ trách</label>
+                        <div className="relative" ref={picDropdownRef}>
                           <input
                             type="text"
-                            required={paymentStatusValue === 'DA_THANH_TOAN'}
-                            disabled={paymentStatusValue === 'THANH_TOAN_HET'}
-                            value={paidAmountDisplay || (paidAmount !== '' ? formatNumber(paidAmount) : '')}
+                            value={picDropdownOpen ? picSearchInput : (selectedPicOption?.label ?? '')}
+                            placeholder="Tìm người phụ trách..."
+                            onFocus={() => {
+                              setPicDropdownOpen(true);
+                              setPicSearchInput('');
+                            }}
                             onChange={(e) => {
-                              const parsed = parseFormattedNumber(e.target.value);
-                              setPaidAmount(parsed);
+                              setPicDropdownOpen(true);
+                              setPicSearchInput(e.target.value);
+                              clearFieldError('selectedPicId');
+                            }}
+                            className={`w-full rounded border px-3 py-2 ${fieldErrors.selectedPicId ? 'border-red-500' : ''}`}
+                          />
+                          {selectedPicOption && !picDropdownOpen && (
+                            <button
+                              type="button"
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
+                              onClick={() => {
+                                setSelectedPicId(null);
+                                setPicSearchInput('');
+                                clearFieldError('selectedPicId');
+                              }}
+                              aria-label="Clear PIC"
+                            >
+                              ✕
+                            </button>
+                          )}
+                          {picDropdownOpen && (
+                            <div className="absolute z-50 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg max-h-52 overflow-auto">
+                              {filteredBusinessPicOptions.length === 0 ? (
+                                <div className="px-4 py-3 text-sm text-gray-500">Không tìm thấy người phù hợp</div>
+                              ) : (
+                                filteredBusinessPicOptions.map((opt) => {
+                                  const isSelected = opt.id === selectedPicId;
+                                  return (
+                                    <div
+                                      key={opt.id}
+                                      className={`px-4 py-2 text-sm cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        setSelectedPicId(opt.id);
+                                        setPicDropdownOpen(false);
+                                        setPicSearchInput('');
+                                        clearFieldError('selectedPicId');
+                                      }}
+                                    >
+                                      <div className="font-medium text-gray-800">{opt.label}</div>
+                                      {(opt as any).phone && (
+                                        <div className="text-xs text-gray-500">
+                                          {(opt as any).phone}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        {fieldErrors.selectedPicId && <div className="mt-1 text-sm text-red-600">{fieldErrors.selectedPicId}</div>}
+                      </div>
+                      <div className="relative">
+                        <label className="block text-sm font-medium mb-1">Bệnh viện</label>
+                        <div className="relative hospital-dropdown-container">
+                          <input
+                            type="text"
+                            value={hospitalSearchInput}
+                            onChange={(e) => {
+                              setHospitalSearchInput(e.target.value);
+                              setHospitalDropdownOpen(true);
+                              clearFieldError('selectedHospitalId');
+                            }}
+                            onFocus={() => {
+                              setHospitalDropdownOpen(true);
+                              // Không load tất cả khi focus - chỉ load khi user nhập ít nhất 2 ký tự
+                              // if (!hospitalSearchInput) {
+                              //   fetchHospitalOptions('');
+                              // }
+                            }}
+                            placeholder="Tìm kiếm bệnh viện..."
+                            className={`w-full rounded border px-3 py-2 ${fieldErrors.selectedHospitalId ? 'border-red-500' : ''}`}
+                          />
+                          {hospitalDropdownOpen && (
+                            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg">
+                              {hospitalOptions.length === 0 ? (
+                                <div className="px-4 py-2 text-sm text-gray-500">
+                                  {hospitalSearchInput.trim().length < 2 ? "Nhập ít nhất 2 ký tự để tìm kiếm" : "Không tìm thấy bệnh viện"}
+                                </div>
+                              ) : (
+                                <div className="max-h-[200px] overflow-y-auto">
+                                  {hospitalOptions.map((hospital) => (
+                                    <div
+                                      key={hospital.id}
+                                      onClick={() => {
+                                        setSelectedHospitalId(hospital.id);
+                                        setHospitalSearchInput(hospital.label);
+                                        setHospitalDropdownOpen(false);
+                                        clearFieldError('selectedHospitalId');
+                                        api.get(`/api/v1/auth/hospitals/${hospital.id}`).then(r => {
+                                          const d = r.data || {};
+                                          const phone = d.contactNumber || d.contact_number || d.contactPhone || d.contact_phone || null;
+                                          setSelectedHospitalPhone(phone);
+                                        }).catch(() => setSelectedHospitalPhone(null));
+                                      }}
+                                      className={`px-4 py-2 cursor-pointer hover:bg-blue-50 ${selectedHospitalId === hospital.id ? 'bg-blue-100' : ''
+                                        }`}
+                                    >
+                                      <div className="text-sm text-gray-900">{hospital.label}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        {fieldErrors.selectedHospitalId && <div className="mt-1 text-sm text-red-600">{fieldErrors.selectedHospitalId}</div>}
+                        {selectedHospitalPhone && !fieldErrors.selectedHospitalId && <div className="mt-1 text-sm text-gray-700">Số điện thoại bệnh viện: <span className="font-medium">{selectedHospitalPhone}</span></div>}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Trạng thái</label>
+                        <select value={statusValue} onChange={handleStatusChange} className="w-full rounded border px-3 py-2">
+                          <option value="CARING">Đang chăm sóc</option>
+                          <option value="CONTRACTED">Ký hợp đồng</option>
+                          <option value="CANCELLED">Hủy</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Số lượng Kiosk</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={quantity === '' ? '' : quantity}
+                          onChange={(e) => {
+                            const val = e.target.value ? Number(e.target.value) : '';
+                            handleQuantityChange(val);
+                          }}
+                          className={`w-full rounded border px-3 py-2 ${fieldErrors.quantity ? 'border-red-500' : ''}`}
+                        />
+                        {fieldErrors.quantity && <div className="mt-1 text-sm text-red-600">{fieldErrors.quantity}</div>}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Chăm sóc khách hàng</label>
+                        {canManage ? (
+                          <input
+                            type="text"
+                            value={commissionDisplay || formatNumber(commission)}
+                            onChange={(e) => {
+                              const inputValue = e.target.value;
+                              // Parse giá trị số từ input (loại bỏ dấu chấm và ký tự không phải số)
+                              const parsed = parseFormattedNumber(inputValue);
+                              // Lưu giá trị số
+                              setCommission(parsed);
+                              // Format lại ngay lập tức với dấu chấm phân cách hàng nghìn
                               if (parsed !== '') {
-                                setPaidAmountDisplay(formatNumber(parsed));
+                                const formatted = formatNumber(parsed);
+                                setCommissionDisplay(formatted);
                               } else {
-                                setPaidAmountDisplay('');
+                                setCommissionDisplay('');
                               }
-                              clearFieldError('paidAmount');
+                              clearFieldError('commission');
                             }}
                             onBlur={() => {
-                              if (paidAmount !== '') {
-                                setPaidAmountDisplay(formatNumber(paidAmount));
+                              // Đảm bảo format đúng khi blur
+                              if (commission !== '') {
+                                setCommissionDisplay(formatNumber(commission));
                               } else {
-                                setPaidAmountDisplay('');
+                                setCommissionDisplay('');
                               }
                             }}
                             onFocus={() => {
-                              if (paidAmount !== '') {
-                                setPaidAmountDisplay(formatNumber(paidAmount));
+                              // Khi focus, hiển thị giá trị đã format
+                              if (commission !== '') {
+                                setCommissionDisplay(formatNumber(commission));
+                              } else {
+                                setCommissionDisplay('');
                               }
                             }}
-                            placeholder="Nhập số tiền đã thanh toán"
-                            className={`w-full rounded border px-3 py-2 ${
-                              fieldErrors.paidAmount ? 'border-red-500' : paymentStatusValue === 'THANH_TOAN_HET' ? 'border-green-400 bg-green-50' : ''
-                            }`}
+                            className="w-full rounded border px-3 py-2"
+                            placeholder="Nhập số tiền hoa hồng "
                           />
-                          {fieldErrors.paidAmount && <div className="mt-1 text-sm text-red-600">{fieldErrors.paidAmount}</div>}
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Ngày thanh toán*</label>
-                          <input
-                            type="datetime-local"
-                            required
-                            value={paymentDateValue}
-                            onChange={(e) => {
-                              setPaymentDateValue(e.target.value);
-                              clearFieldError('paymentDateValue');
-                            }}
-                            className={`w-full rounded border px-3 py-2 ${
-                              fieldErrors.paymentDateValue ? 'border-red-500' : ''
-                            }`}
-                          />
-                          {fieldErrors.paymentDateValue && <div className="mt-1 text-sm text-red-600">{fieldErrors.paymentDateValue}</div>}
-                        </div>
-                      </>
-                    )}
-
-                    <div className="col-span-2 grid grid-cols-2 gap-4">
+                        ) : (
+                          <div className="p-2 text-gray-700">{commission !== '' ? formatNumber(commission) + ' ₫' : '—'}</div>
+                        )}
+                      </div>
                       <div>
-                        <label className="block text-sm font-medium mb-1">Ngày bắt đầu</label>
+                        <label className="block text-sm font-medium mb-1">Đơn vị tài trợ</label>
                         <input
-                          type="datetime-local"
-                          value={startDateValue}
-                          onChange={(e) => setStartDateValue(e.target.value)}
+                          type="text"
+                          value={bankName}
+                          onChange={(e) => setBankName(e.target.value)}
                           className="w-full rounded border px-3 py-2"
+                          placeholder="Nhập đơn vị tài trợ"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium mb-1">Ngày ký hợp đồng</label>
-                        <input 
-                          type="datetime-local" 
-                          value={completionDateValue} 
-                          onChange={(e) => {
-                            setCompletionDateValue(e.target.value);
-                            clearFieldError('completionDateValue');
-                          }} 
-                          min={startDateValue || undefined} 
-                          className={`w-full rounded border px-3 py-2 ${fieldErrors.completionDateValue ? 'border-red-500' : ''}`}
-                        />
-                        {fieldErrors.completionDateValue && <div className="mt-1 text-sm text-red-600">{fieldErrors.completionDateValue}</div>}
-                      </div>
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block text-sm font-medium mb-1">Ghi chú</label>
-                      <textarea
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        className="w-full rounded border px-3 py-2 min-h-[100px] resize-y"
-                        placeholder="Nhập ghi chú (nếu có)"
-                        rows={4}
-                      />
-                    </div>
-
-                    <div className="col-span-2">
-                      <label className="block text-sm font-medium mb-1">File đính kèm (Word/Excel)</label>
-                      <div className="space-y-2">
+                        <label className="block text-sm font-medium mb-1">Liên hệ đơn vị tài trợ</label>
                         <input
-                          type="file"
-                          accept=".doc,.docx,.xls,.xlsx"
-                          multiple
-                          onChange={handleFileUpload}
-                          disabled={uploadingFile || saving}
-                          className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                          type="text"
+                          value={bankContactPerson}
+                          onChange={(e) => setBankContactPerson(e.target.value)}
+                          className="w-full rounded border px-3 py-2"
+                          placeholder="Nhập người liên hệ"
                         />
-                        {uploadingFile && (
-                          <div className="text-sm text-gray-600">Đang upload file...</div>
-                        )}
-                        {attachments.length > 0 && (
-                          <div className="space-y-2">
-                            {attachments.map((attachment, index) => (
-                              <div key={index} className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded">
-                                <svg className="w-5 h-5 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                                <span className="flex-1 text-sm text-gray-700 truncate" title={attachment.fileName}>
-                                  {attachment.fileName}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => window.open(attachment.url, '_blank')}
-                                  className="text-sm text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap"
-                                  title="Mở file trong tab mới"
-                                >
-                                  Mở
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveAttachment(index)}
-                                  className="text-sm text-red-600 hover:text-red-800 font-medium whitespace-nowrap"
-                                  title="Xóa file"
-                                  disabled={uploadingFile || saving}
-                                >
-                                  Xóa
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        <p className="text-xs text-gray-500">Hỗ trợ nhiều file Word (.doc, .docx) hoặc Excel (.xls, .xlsx), mỗi file tối đa 50MB</p>
                       </div>
-                    </div>
 
-                    <div className="col-span-2">
-                      <label className="inline-flex items-center gap-2 text-sm font-medium">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4"
-                          checked={warrantyEnabled}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            setWarrantyEnabled(checked);
-                            if (!checked) {
-                              setWarrantyStartDateValue('');
-                              setWarrantyEndDateValue('');
-                              setWarrantyDuration('');
-                              clearFieldError('warrantyStartDateValue');
-                              clearFieldError('warrantyEndDateValue');
-                            }
-                          }}
-                        />
-                        <span>Bảo hành</span>
-                      </label>
-                      <p className="text-xs text-gray-500 mt-1">Chỉ bật khi hợp đồng có bảo hành riêng.</p>
-                    </div>
-
-                    {warrantyEnabled && (
-                      <>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Ngày bắt đầu bảo hành</label>
-                          <input
-                            type="datetime-local"
-                            value={warrantyStartDateValue}
-                            onChange={(e) => {
-                              setWarrantyStartDateValue(e.target.value);
-                              clearFieldError('warrantyStartDateValue');
-                              // Reset flag khi ngày bắt đầu thay đổi để tự động tính lại
-                              setIsWarrantyEndDateManuallyEdited(false);
-                            }}
-                            className={`w-full rounded border px-3 py-2 ${fieldErrors.warrantyStartDateValue ? 'border-red-500' : ''}`}
-                          />
-                          {fieldErrors.warrantyStartDateValue && <div className="mt-1 text-sm text-red-600">{fieldErrors.warrantyStartDateValue}</div>}
-                        </div>
-                        <div className="col-span-2">
-                          <label className="block text-sm font-medium mb-1">Thời hạn bảo hành</label>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Đơn giá 1 sản phẩm</label>
+                        <div className="flex items-center gap-2">
                           <input
                             type="text"
-                            value={warrantyDuration}
+                            value={formatNumber(unitPrice)}
                             onChange={(e) => {
-                              setWarrantyDuration(e.target.value);
-                              clearFieldError('warrantyEndDateValue');
-                              // Reset flag khi thời hạn thay đổi để tự động tính lại
-                              setIsWarrantyEndDateManuallyEdited(false);
+                              const parsed = parseFormattedNumber(e.target.value);
+                              handleUnitPriceChange(parsed);
                             }}
-                            placeholder="Ví dụ: 1 năm 6 tháng ..."
-                            className="w-50% rounded border px-3 py-2"
+                            onBlur={(e) => {
+                              const parsed = parseFormattedNumber(e.target.value);
+                              handleUnitPriceChange(parsed);
+                            }}
+                            placeholder={selectedHardwarePrice != null ? `Giá mặc định: ${formatNumber(selectedHardwarePrice)} ₫` : 'Nhập đơn giá 1 sản phẩm'}
+                            className=" w-full flex-1 rounded border px-3 py-2"
                           />
-                          <p className="text-xs text-gray-500 mt-1">Nhập thời hạn để tự động tính ngày kết thúc</p>
                         </div>
+                        {fieldErrors.unitPrice && <div className="mt-1 text-sm text-red-600">{fieldErrors.unitPrice}</div>}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold mb-1 text-blue-600">Tổng tiền hợp đồng</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={formatNumber(totalContractValue)}
+                            onChange={(e) => {
+                              const parsed = parseFormattedNumber(e.target.value);
+                              handleTotalContractValueChange(parsed);
+                            }}
+                            onBlur={(e) => {
+                              const parsed = parseFormattedNumber(e.target.value);
+                              handleTotalContractValueChange(parsed);
+                            }}
+                            placeholder="Nhập tổng tiền hợp đồng"
+                            className={`w-full flex-1 rounded border px-3 py-2 ${fieldErrors.totalContractValue ? 'border-red-500' : 'border-blue-400'}`}
+                          />
+                        </div>
+                        {fieldErrors.totalContractValue && <div className="mt-1 text-sm text-red-600">{fieldErrors.totalContractValue}</div>}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Đơn giá (NET)</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={formatNumber(unitPriceNet)}
+                            onChange={(e) => {
+                              const parsed = parseFormattedNumber(e.target.value);
+                              setUnitPriceNet(parsed);
+                              clearFieldError('unitPriceNet');
+                            }}
+                            onBlur={(e) => {
+                              // Format lại khi blur
+                              const parsed = parseFormattedNumber(e.target.value);
+                              setUnitPriceNet(parsed);
+                            }}
+                            placeholder="Nhập đơn giá (NET)"
+                            className=" w-full flex-1 rounded border px-3 py-2"
+                          />
+                        </div>
+                        {fieldErrors.unitPriceNet && <div className="mt-1 text-sm text-red-600">{fieldErrors.unitPriceNet}</div>}
+                      </div>
+
+                      {/* Trạng thái thanh toán */}
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Trạng thái thanh toán</label>
+                        <select
+                          value={paymentStatusValue}
+                          onChange={(e) => {
+                            const next = e.target.value as 'CHUA_THANH_TOAN' | 'DA_THANH_TOAN' | 'THANH_TOAN_HET';
+                            setPaymentStatusValue(next);
+                            if (next === 'THANH_TOAN_HET') {
+                              // Auto-fill paidAmount = totalPrice (unitPrice * quantity)
+                              const total = computeTotal();
+                              setPaidAmount(total > 0 ? total : '');
+                              setPaidAmountDisplay(total > 0 ? formatNumber(total) : '');
+                              if (!paymentDateValue) {
+                                setPaymentDateValue(nowDateTimeLocal());
+                              }
+                            } else if (next === 'DA_THANH_TOAN') {
+                              // Keep current paidAmount or reset
+                              if (paidAmount === '') {
+                                setPaidAmountDisplay('');
+                              }
+                              if (!paymentDateValue) {
+                                setPaymentDateValue(nowDateTimeLocal());
+                              }
+                            } else {
+                              setPaidAmount('');
+                              setPaidAmountDisplay('');
+                              setPaymentDateValue('');
+                            }
+                          }}
+                          className="w-full rounded border px-3 py-2"
+                        >
+                          <option value="CHUA_THANH_TOAN">Chưa thanh toán</option>
+                          <option value="DA_THANH_TOAN">Đã thanh toán</option>
+                          <option value="THANH_TOAN_HET">Thanh toán hết</option>
+                        </select>
+                      </div>
+
+                      {/* Số tiền thanh toán - chỉ hiện khi DA_THANH_TOAN hoặc THANH_TOAN_HET */}
+                      {(paymentStatusValue === 'DA_THANH_TOAN' || paymentStatusValue === 'THANH_TOAN_HET') && (
+                        <>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">
+                              {paymentStatusValue === 'THANH_TOAN_HET' ? 'Số tiền thanh toán (= Thành tiền)' : 'Số tiền thanh toán*'}
+                            </label>
+                            <input
+                              type="text"
+                              required={paymentStatusValue === 'DA_THANH_TOAN'}
+                              disabled={paymentStatusValue === 'THANH_TOAN_HET'}
+                              value={paidAmountDisplay || (paidAmount !== '' ? formatNumber(paidAmount) : '')}
+                              onChange={(e) => {
+                                const parsed = parseFormattedNumber(e.target.value);
+                                setPaidAmount(parsed);
+                                if (parsed !== '') {
+                                  setPaidAmountDisplay(formatNumber(parsed));
+                                } else {
+                                  setPaidAmountDisplay('');
+                                }
+                                clearFieldError('paidAmount');
+                              }}
+                              onBlur={() => {
+                                if (paidAmount !== '') {
+                                  setPaidAmountDisplay(formatNumber(paidAmount));
+                                } else {
+                                  setPaidAmountDisplay('');
+                                }
+                              }}
+                              onFocus={() => {
+                                if (paidAmount !== '') {
+                                  setPaidAmountDisplay(formatNumber(paidAmount));
+                                }
+                              }}
+                              placeholder="Nhập số tiền đã thanh toán"
+                              className={`w-full rounded border px-3 py-2 ${fieldErrors.paidAmount ? 'border-red-500' : paymentStatusValue === 'THANH_TOAN_HET' ? 'border-green-400 bg-green-50' : ''
+                                }`}
+                            />
+                            {fieldErrors.paidAmount && <div className="mt-1 text-sm text-red-600">{fieldErrors.paidAmount}</div>}
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">Ngày thanh toán*</label>
+                            <input
+                              type="datetime-local"
+                              required
+                              value={paymentDateValue}
+                              onChange={(e) => {
+                                setPaymentDateValue(e.target.value);
+                                clearFieldError('paymentDateValue');
+                              }}
+                              className={`w-full rounded border px-3 py-2 ${fieldErrors.paymentDateValue ? 'border-red-500' : ''
+                                }`}
+                            />
+                            {fieldErrors.paymentDateValue && <div className="mt-1 text-sm text-red-600">{fieldErrors.paymentDateValue}</div>}
+                          </div>
+                        </>
+                      )}
+
+                      <div className="col-span-2 grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium mb-1">Ngày hết hạn bảo hành</label>
+                          <label className="block text-sm font-medium mb-1">Ngày bắt đầu</label>
                           <input
                             type="datetime-local"
-                            value={warrantyEndDateValue}
-                            onChange={(e) => {
-                              setWarrantyEndDateValue(e.target.value);
-                              clearFieldError('warrantyEndDateValue');
-                              // Đánh dấu là người dùng đã chỉnh sửa thủ công
-                              setIsWarrantyEndDateManuallyEdited(true);
-                            }}
-                            min={warrantyStartDateValue || undefined}
-                            className={`w-full rounded border px-3 py-2 ${fieldErrors.warrantyEndDateValue ? 'border-red-500' : ''}`}
+                            value={startDateValue}
+                            onChange={(e) => setStartDateValue(e.target.value)}
+                            className="w-full rounded border px-3 py-2"
                           />
-                          {fieldErrors.warrantyEndDateValue && <div className="mt-1 text-sm text-red-600">{fieldErrors.warrantyEndDateValue}</div>}
-                          {!isWarrantyEndDateManuallyEdited && warrantyStartDateValue && warrantyDuration && warrantyDuration.trim() && (
-                            <p className="mt-1 text-xs text-gray-500">Tự động tính từ ngày bắt đầu và thời hạn</p>
-                          )}
                         </div>
-                      </>
-                    )}
-                  </div>
-                </form>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Ngày ký hợp đồng</label>
+                          <input
+                            type="datetime-local"
+                            value={completionDateValue}
+                            onChange={(e) => {
+                              setCompletionDateValue(e.target.value);
+                              clearFieldError('completionDateValue');
+                            }}
+                            min={startDateValue || undefined}
+                            className={`w-full rounded border px-3 py-2 ${fieldErrors.completionDateValue ? 'border-red-500' : ''}`}
+                          />
+                          {fieldErrors.completionDateValue && <div className="mt-1 text-sm text-red-600">{fieldErrors.completionDateValue}</div>}
+                        </div>
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-sm font-medium mb-1">Ghi chú</label>
+                        <textarea
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                          className="w-full rounded border px-3 py-2 min-h-[100px] resize-y"
+                          placeholder="Nhập ghi chú (nếu có)"
+                          rows={4}
+                        />
+                      </div>
+
+                      <div className="col-span-2">
+                        <label className="block text-sm font-medium mb-1">File đính kèm (Word/Excel)</label>
+                        <div className="space-y-2">
+                          <input
+                            type="file"
+                            accept=".doc,.docx,.xls,.xlsx"
+                            multiple
+                            onChange={handleFileUpload}
+                            disabled={uploadingFile || saving}
+                            className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                          />
+                          {uploadingFile && (
+                            <div className="text-sm text-gray-600">Đang upload file...</div>
+                          )}
+                          {attachments.length > 0 && (
+                            <div className="space-y-2">
+                              {attachments.map((attachment, index) => (
+                                <div key={index} className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded">
+                                  <svg className="w-5 h-5 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                  <span className="flex-1 text-sm text-gray-700 truncate" title={attachment.fileName}>
+                                    {attachment.fileName}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => window.open(attachment.url, '_blank')}
+                                    className="text-sm text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap"
+                                    title="Mở file trong tab mới"
+                                  >
+                                    Mở
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveAttachment(index)}
+                                    className="text-sm text-red-600 hover:text-red-800 font-medium whitespace-nowrap"
+                                    title="Xóa file"
+                                    disabled={uploadingFile || saving}
+                                  >
+                                    Xóa
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <p className="text-xs text-gray-500">Hỗ trợ nhiều file Word (.doc, .docx) hoặc Excel (.xls, .xlsx), mỗi file tối đa 50MB</p>
+                        </div>
+                      </div>
+
+                      <div className="col-span-2">
+                        <label className="inline-flex items-center gap-2 text-sm font-medium">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={warrantyEnabled}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setWarrantyEnabled(checked);
+                              if (!checked) {
+                                setWarrantyStartDateValue('');
+                                setWarrantyEndDateValue('');
+                                setWarrantyDuration('');
+                                clearFieldError('warrantyStartDateValue');
+                                clearFieldError('warrantyEndDateValue');
+                              }
+                            }}
+                          />
+                          <span>Bảo hành</span>
+                        </label>
+                        <p className="text-xs text-gray-500 mt-1">Chỉ bật khi hợp đồng có bảo hành riêng.</p>
+                      </div>
+
+                      {warrantyEnabled && (
+                        <>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">Ngày bắt đầu bảo hành</label>
+                            <input
+                              type="datetime-local"
+                              value={warrantyStartDateValue}
+                              onChange={(e) => {
+                                setWarrantyStartDateValue(e.target.value);
+                                clearFieldError('warrantyStartDateValue');
+                                // Reset flag khi ngày bắt đầu thay đổi để tự động tính lại
+                                setIsWarrantyEndDateManuallyEdited(false);
+                              }}
+                              className={`w-full rounded border px-3 py-2 ${fieldErrors.warrantyStartDateValue ? 'border-red-500' : ''}`}
+                            />
+                            {fieldErrors.warrantyStartDateValue && <div className="mt-1 text-sm text-red-600">{fieldErrors.warrantyStartDateValue}</div>}
+                          </div>
+                          <div className="col-span-2">
+                            <label className="block text-sm font-medium mb-1">Thời hạn bảo hành</label>
+                            <input
+                              type="text"
+                              value={warrantyDuration}
+                              onChange={(e) => {
+                                setWarrantyDuration(e.target.value);
+                                clearFieldError('warrantyEndDateValue');
+                                // Reset flag khi thời hạn thay đổi để tự động tính lại
+                                setIsWarrantyEndDateManuallyEdited(false);
+                              }}
+                              placeholder="Ví dụ: 1 năm 6 tháng ..."
+                              className="w-50% rounded border px-3 py-2"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Nhập thời hạn để tự động tính ngày kết thúc</p>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">Ngày hết hạn bảo hành</label>
+                            <input
+                              type="datetime-local"
+                              value={warrantyEndDateValue}
+                              onChange={(e) => {
+                                setWarrantyEndDateValue(e.target.value);
+                                clearFieldError('warrantyEndDateValue');
+                                // Đánh dấu là người dùng đã chỉnh sửa thủ công
+                                setIsWarrantyEndDateManuallyEdited(true);
+                              }}
+                              min={warrantyStartDateValue || undefined}
+                              className={`w-full rounded border px-3 py-2 ${fieldErrors.warrantyEndDateValue ? 'border-red-500' : ''}`}
+                            />
+                            {fieldErrors.warrantyEndDateValue && <div className="mt-1 text-sm text-red-600">{fieldErrors.warrantyEndDateValue}</div>}
+                            {!isWarrantyEndDateManuallyEdited && warrantyStartDateValue && warrantyDuration && warrantyDuration.trim() && (
+                              <p className="mt-1 text-xs text-gray-500">Tự động tính từ ngày bắt đầu và thời hạn</p>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </form>
                 </div>
                 {/* Footer - Fixed */}
                 <div className="flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 justify-between">
                     <div className="text-sm text-gray-600">Thành tiền: <span className="font-semibold">{computeTotal() > 0 ? computeTotal().toLocaleString() + ' ₫' : '—'}</span></div>
                     <div className="flex items-center gap-3">
-                      <button 
-                        type="button" 
-                        onClick={() => { 
-                          if (!saving) { 
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!saving) {
                             const wasEditing = Boolean(editingId);
-                            setShowModal(false); 
-                            setEditingId(null); 
+                            setShowModal(false);
+                            setEditingId(null);
                             setFieldErrors({});
                             setLastEdited(null);
                             // Reset flag khi đóng modal
@@ -3054,8 +3046,8 @@ const BusinessPage: React.FC = () => {
                             if (!wasEditing) {
                               setAttachments([]);
                             }
-                          } 
-                        }} 
+                          }
+                        }}
                         className="px-4 py-2 border rounded hover:bg-gray-50 transition"
                       >
                         Hủy
@@ -3223,7 +3215,7 @@ const BusinessPage: React.FC = () => {
                                   )}
                                 </div>
                               </td>
-                              
+
                               {/* Bảo hành */}
                               <td className="whitespace-nowrap px-4 py-3">
                                 <div className="flex flex-col gap-1">
@@ -3309,8 +3301,8 @@ const BusinessPage: React.FC = () => {
                     <DetailField label="Bệnh viện" value={viewItem.hospital?.label} />
                     {viewItem.hospitalPhone && <DetailField label="Điện thoại" value={viewItem.hospitalPhone} />}
                     {viewItem.hardware?.label && <DetailField label="Phần cứng" value={viewItem.hardware.label} />}
-                    <DetailField 
-                      label="Người phụ trách" 
+                    <DetailField
+                      label="Người phụ trách"
                       value={viewItem.picUser?.label ? (
                         <div>
                           <div className="font-medium text-gray-900">{viewItem.picUser.label}</div>
@@ -3320,14 +3312,13 @@ const BusinessPage: React.FC = () => {
                         </div>
                       ) : null}
                     />
-                    <DetailField 
-                      label="Trạng thái" 
+                    <DetailField
+                      label="Trạng thái"
                       value={viewItem.status ? (
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          viewItem.status === 'CONTRACTED' ? 'bg-green-100 text-green-800' :
-                          viewItem.status === 'CARING' ? 'bg-blue-100 text-blue-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${viewItem.status === 'CONTRACTED' ? 'bg-green-100 text-green-800' :
+                            viewItem.status === 'CARING' ? 'bg-blue-100 text-blue-800' :
+                              'bg-gray-100 text-gray-800'
+                          }`}>
                           {statusLabel(viewItem.status)}
                         </span>
                       ) : null}
@@ -3346,49 +3337,48 @@ const BusinessPage: React.FC = () => {
                       <DetailField label="Số lượng Kiosk" value={<span className="font-semibold text-gray-900">{viewItem.quantity}</span>} />
                     )}
                     {viewItem.unitPrice != null && (
-                      <DetailField 
-                        label="Đơn giá 1 sản phẩm" 
-                        value={<span className="font-semibold text-gray-900">{viewItem.unitPrice.toLocaleString()} VND</span>} 
+                      <DetailField
+                        label="Đơn giá 1 sản phẩm"
+                        value={<span className="font-semibold text-gray-900">{viewItem.unitPrice.toLocaleString()} VND</span>}
                       />
                     )}
                     {viewItem.unitPriceNet != null && (
-                      <DetailField 
-                        label="Đơn giá (NET)" 
-                        value={<span className="font-semibold text-gray-900">{viewItem.unitPriceNet.toLocaleString()} VND</span>} 
+                      <DetailField
+                        label="Đơn giá (NET)"
+                        value={<span className="font-semibold text-gray-900">{viewItem.unitPriceNet.toLocaleString()} VND</span>}
                       />
                     )}
                     {viewItem.totalPrice != null && (
-                      <DetailField 
-                        label="Thành tiền" 
-                        value={<span className="font-semibold text-lg text-gray-900">{viewItem.totalPrice.toLocaleString()} VND</span>} 
+                      <DetailField
+                        label="Thành tiền"
+                        value={<span className="font-semibold text-lg text-gray-900">{viewItem.totalPrice.toLocaleString()} VND</span>}
                       />
                     )}
                     {viewItem.commission != null && (
-                      <DetailField 
-                        label="Chăm sóc khách hàng" 
+                      <DetailField
+                        label="Chăm sóc khách hàng"
                         value={
                           <div>
                             <span className="font-semibold text-gray-900">{Math.round(Number(viewItem.commission)).toLocaleString()} VND</span>
                           </div>
-                        } 
+                        }
                       />
                     )}
-                    <DetailField 
-                      label="Trạng thái thanh toán" 
+                    <DetailField
+                      label="Trạng thái thanh toán"
                       value={
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          viewItem.paymentStatus === 'THANH_TOAN_HET' ? 'bg-emerald-100 text-emerald-800' :
-                          viewItem.paymentStatus === 'DA_THANH_TOAN' ? 'bg-green-100 text-green-700' :
-                          'bg-gray-100 text-gray-700'
-                        }`}>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${viewItem.paymentStatus === 'THANH_TOAN_HET' ? 'bg-emerald-100 text-emerald-800' :
+                            viewItem.paymentStatus === 'DA_THANH_TOAN' ? 'bg-green-100 text-green-700' :
+                              'bg-gray-100 text-gray-700'
+                          }`}>
                           {viewItem.paymentStatus === 'THANH_TOAN_HET' ? 'Thanh toán hết' :
-                           viewItem.paymentStatus === 'DA_THANH_TOAN' ? 'Đã thanh toán' : 'Chưa thanh toán'}
+                            viewItem.paymentStatus === 'DA_THANH_TOAN' ? 'Đã thanh toán' : 'Chưa thanh toán'}
                         </span>
                       }
                     />
                     {typeof viewItem.paidAmount === 'number' && viewItem.paidAmount > 0 && (
-                      <DetailField 
-                        label="Đã thanh toán" 
+                      <DetailField
+                        label="Đã thanh toán"
                         value={<span className="font-semibold text-gray-900">{viewItem.paidAmount.toLocaleString('vi-VN')} ₫</span>}
                       />
                     )}
@@ -3403,8 +3393,8 @@ const BusinessPage: React.FC = () => {
                       const paid = typeof viewItem.paidAmount === 'number' ? viewItem.paidAmount : 0;
                       const remaining = total - paid;
                       return (
-                        <DetailField 
-                          label="Còn lại" 
+                        <DetailField
+                          label="Còn lại"
                           value={
                             <span className={`font-semibold ${remaining <= 0 ? 'text-green-600' : 'text-red-600'}`}>
                               {remaining <= 0 ? '0 ₫' : remaining.toLocaleString('vi-VN') + ' ₫'}
