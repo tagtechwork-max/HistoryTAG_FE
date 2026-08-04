@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Client } from '@stomp/stompjs';
+import type { StompSubscription } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import {
   AUTH_TOKEN_REFRESHED_EVENT,
@@ -29,12 +30,22 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [isConnected, setIsConnected] = useState(false);
   const clientRef = useRef<Client | null>(null);
   const subscriptionsRef = useRef<{ [key: string]: ((message: any) => void)[] }>({});
+  const brokerSubscriptionsRef = useRef<Record<string, StompSubscription>>({});
+  const disconnectTimerRef = useRef<number | null>(null);
 
   const hasActiveSubscriptions = useCallback(() => {
     return Object.values(subscriptionsRef.current).some((callbacks) => callbacks.length > 0);
   }, []);
 
   const disconnect = useCallback(() => {
+    if (disconnectTimerRef.current !== null) {
+      window.clearTimeout(disconnectTimerRef.current);
+      disconnectTimerRef.current = null;
+    }
+    Object.values(brokerSubscriptionsRef.current).forEach((subscription) => {
+      try { subscription.unsubscribe(); } catch { /* connection may already be closed */ }
+    });
+    brokerSubscriptionsRef.current = {};
     if (clientRef.current) {
       try {
         clientRef.current.deactivate();
@@ -78,13 +89,15 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         connectHeaders: { Authorization: `Bearer ${token}` },
         reconnectDelay: 5000,
         onConnect: () => {
+          if (clientRef.current !== client) return;
           setIsConnected(true);
           Object.keys(subscriptionsRef.current).forEach((dest) => {
+            if (subscriptionsRef.current[dest].length === 0 || brokerSubscriptionsRef.current[dest]) return;
             try {
-              client.subscribe(dest, (message) => {
+              brokerSubscriptionsRef.current[dest] = client.subscribe(dest, (message) => {
                 try {
                   const payload = JSON.parse(message.body);
-                  subscriptionsRef.current[dest].forEach((cb) => {
+                  [...(subscriptionsRef.current[dest] ?? [])].forEach((cb) => {
                     try {
                       cb(payload);
                     } catch (err) {
@@ -101,6 +114,8 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           });
         },
         onDisconnect: () => {
+          if (clientRef.current !== client) return;
+          brokerSubscriptionsRef.current = {};
           setIsConnected(false);
         },
         onStompError: (frame) => {
@@ -108,6 +123,8 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           setIsConnected(false);
         },
         onWebSocketClose: () => {
+          if (clientRef.current !== client) return;
+          brokerSubscriptionsRef.current = {};
           setIsConnected(false);
         },
       });
@@ -139,16 +156,24 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [connect, disconnect, reconnect]);
 
   const subscribe = useCallback((destination: string, callback: (message: any) => void) => {
+    if (disconnectTimerRef.current !== null) {
+      window.clearTimeout(disconnectTimerRef.current);
+      disconnectTimerRef.current = null;
+    }
     if (!subscriptionsRef.current[destination]) {
       subscriptionsRef.current[destination] = [];
     }
     subscriptionsRef.current[destination].push(callback);
 
-    let subscription: { unsubscribe: () => void } | null = null;
-    if (clientRef.current?.connected) {
-      subscription = clientRef.current.subscribe(destination, (message) => {
-        const payload = JSON.parse(message.body);
-        callback(payload);
+    const client = clientRef.current;
+    if (client?.connected && !brokerSubscriptionsRef.current[destination]) {
+      brokerSubscriptionsRef.current[destination] = client.subscribe(destination, (message) => {
+        try {
+          const payload = JSON.parse(message.body);
+          [...(subscriptionsRef.current[destination] ?? [])].forEach((cb) => cb(payload));
+        } catch (err) {
+          console.error('Error parsing WebSocket message:', err);
+        }
       });
     } else {
       connect();
@@ -158,11 +183,21 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       subscriptionsRef.current[destination] = subscriptionsRef.current[destination].filter(
         (cb) => cb !== callback
       );
-      if (subscription) {
-        subscription.unsubscribe();
+      if (subscriptionsRef.current[destination].length === 0) {
+        const brokerSubscription = brokerSubscriptionsRef.current[destination];
+        if (brokerSubscription) {
+          try { brokerSubscription.unsubscribe(); } catch { /* connection may already be closed */ }
+          delete brokerSubscriptionsRef.current[destination];
+        }
+        delete subscriptionsRef.current[destination];
       }
       if (!hasActiveSubscriptions()) {
-        disconnect();
+        // React effects commonly unsubscribe and subscribe again in the same render cycle.
+        // A short grace period prevents a full SockJS/STOMP reconnect storm.
+        disconnectTimerRef.current = window.setTimeout(() => {
+          disconnectTimerRef.current = null;
+          if (!hasActiveSubscriptions()) disconnect();
+        }, 1000);
       }
     };
   }, [connect, disconnect, hasActiveSubscriptions]);
@@ -174,8 +209,13 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     client.publish({ destination, body: bodyStr });
   }, []);
 
+  const contextValue = useMemo(
+    () => ({ subscribe, publish, isConnected }),
+    [subscribe, publish, isConnected]
+  );
+
   return (
-    <WebSocketContext.Provider value={{ subscribe, publish, isConnected }}>
+    <WebSocketContext.Provider value={contextValue}>
       {children}
     </WebSocketContext.Provider>
   );
