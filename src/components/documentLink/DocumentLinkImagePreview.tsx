@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { fetchDocumentImagePreviewBlob, isHttpImageUrl } from "../../api/documentLinks.api";
+import { normalizeSecureUrl } from "../../utils/secureUrl";
 
 type Props = {
   linkId: number;
@@ -19,7 +20,7 @@ export default function DocumentLinkImagePreview({ linkId, imageId, imageUrl, al
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const raw = imageUrl?.trim() ?? "";
+    const raw = normalizeSecureUrl(imageUrl?.trim() ?? "");
     if (!raw || isHttpImageUrl(raw)) {
       setBlobUrl(null);
       setError(false);
@@ -52,7 +53,7 @@ export default function DocumentLinkImagePreview({ linkId, imageId, imageUrl, al
     };
   }, [linkId, imageId, imageUrl]);
 
-  const raw = imageUrl?.trim() ?? "";
+  const raw = normalizeSecureUrl(imageUrl?.trim() ?? "");
   if (!raw) {
     return <span className="text-xs text-gray-400">—</span>;
   }

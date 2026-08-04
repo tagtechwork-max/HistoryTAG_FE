@@ -12,7 +12,7 @@ import TaskNotes from "../../components/TaskNotes";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import TicketsTab from "../../pages/CustomerCare/SubCustomerCare/TicketsTab";
-import { getHospitalTickets } from "../../api/ticket.api";
+import { getHospitalTickets, isValidHospitalId } from "../../api/ticket.api";
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchWithAuth } from "../../api/client";
 import { VIETNAM_PROVINCE_LABELS } from "../../utils/vietnamProvinceCenters";
@@ -899,8 +899,8 @@ const MaintenanceSuperTaskPage: React.FC = () => {
       setHospitalTaskStatusMap(taskStatusMap);
 
       // ✅ Map summary - dùng taskCount từ summary, không cần aggregate từ tasks
-      const normalized = summaries.map((item: any, idx: number) => {
-        const hospitalId = Number(item?.hospitalId ?? -(idx + 1));
+      const normalized = summaries.filter((item: any) => isValidHospitalId(item?.hospitalId)).map((item: any) => {
+        const hospitalId = Number(item.hospitalId);
         const hospitalName = String(item?.hospitalName ?? "—");
         const acceptedCount = acceptedCountsMap.get(hospitalName) ?? 0;
         const dueStats = nearDueOverdueMap.get(hospitalName) || { nearDueCount: 0, overdueCount: 0 };
