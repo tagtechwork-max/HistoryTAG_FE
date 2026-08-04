@@ -34,7 +34,7 @@ const BusinessPage: React.FC = () => {
   // ✅ Use AuthContext hook - Performance optimized với useMemo, reactive với token changes
   const { roles, isAdmin, isSuperAdmin } = useAuth();
 
-  // Read stored user (may contain team information)
+  // Read stored user dl (may contain team information)
   const storedUserRaw = localStorage.getItem('user') || sessionStorage.getItem('user');
   let storedUser: Record<string, any> | null = null;
   try {
