@@ -34,7 +34,7 @@ const BusinessPage: React.FC = () => {
   // ✅ Use AuthContext hook - Performance optimized với useMemo, reactive với token changes
   const { roles, isAdmin, isSuperAdmin } = useAuth();
 
-  // Read stored user dl (may contain team information)
+  // Read stored user (may contain team information)
   const storedUserRaw = localStorage.getItem('user') || sessionStorage.getItem('user');
   let storedUser: Record<string, any> | null = null;
   try {
@@ -3316,8 +3316,8 @@ const BusinessPage: React.FC = () => {
                       label="Trạng thái"
                       value={viewItem.status ? (
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${viewItem.status === 'CONTRACTED' ? 'bg-green-100 text-green-800' :
-                            viewItem.status === 'CARING' ? 'bg-blue-100 text-blue-800' :
-                              'bg-gray-100 text-gray-800'
+                          viewItem.status === 'CARING' ? 'bg-blue-100 text-blue-800' :
+                            'bg-gray-100 text-gray-800'
                           }`}>
                           {statusLabel(viewItem.status)}
                         </span>
@@ -3368,8 +3368,8 @@ const BusinessPage: React.FC = () => {
                       label="Trạng thái thanh toán"
                       value={
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${viewItem.paymentStatus === 'THANH_TOAN_HET' ? 'bg-emerald-100 text-emerald-800' :
-                            viewItem.paymentStatus === 'DA_THANH_TOAN' ? 'bg-green-100 text-green-700' :
-                              'bg-gray-100 text-gray-700'
+                          viewItem.paymentStatus === 'DA_THANH_TOAN' ? 'bg-green-100 text-green-700' :
+                            'bg-gray-100 text-gray-700'
                           }`}>
                           {viewItem.paymentStatus === 'THANH_TOAN_HET' ? 'Thanh toán hết' :
                             viewItem.paymentStatus === 'DA_THANH_TOAN' ? 'Đã thanh toán' : 'Chưa thanh toán'}
