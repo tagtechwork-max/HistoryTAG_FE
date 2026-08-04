@@ -21,6 +21,7 @@ import {
   createHospitalTicket,
   updateHospitalTicket,
   deleteHospitalTicket,
+  isValidHospitalId,
   type TicketResponseDTO,
   type TicketRequestDTO
 } from "../../../api/ticket.api";
@@ -149,7 +150,7 @@ export default function TicketsTab({
   const applyLocalTickets = React.useCallback((updated: Ticket[]) => {
     setLocalTickets(updated);
     onTicketsChange?.(updated);
-    if (hospitalId) {
+    if (isValidHospitalId(hospitalId)) {
       ticketsCache.set(hospitalId, updated);
       ticketsCacheUpdatedAt.set(hospitalId, Date.now());
     }
@@ -157,13 +158,11 @@ export default function TicketsTab({
 
   // Load tickets function - wrap in useCallback để tránh recreate mỗi lần render
   const loadTickets = React.useCallback(async () => {
-    if (!hospitalId) {
-      console.warn("TicketsTab: hospitalId is missing");
+    if (!isValidHospitalId(hospitalId)) {
       setLocalTickets([]);
       return;
     }
     
-    console.log("TicketsTab: Loading tickets for hospitalId:", hospitalId, "Type:", typeof hospitalId);
     const cached = ticketsCache.get(hospitalId);
     const cachedAt = ticketsCacheUpdatedAt.get(hospitalId) ?? 0;
     const isStale = Date.now() - cachedAt > TICKETS_CACHE_TTL_MS;
@@ -178,7 +177,6 @@ export default function TicketsTab({
     setError(null);
     try {
       const data = await getHospitalTickets(hospitalId);
-      console.log("TicketsTab: Received tickets data:", data, "Length:", data?.length);
       // Convert API response to Ticket format và sắp xếp theo createdAt giảm dần (mới nhất trước)
       const convertedTickets: Ticket[] = data.map((item: TicketResponseDTO) => ({
         id: item.ticketCode || `#TK-${item.id}`,
@@ -198,7 +196,6 @@ export default function TicketsTab({
         const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return dateB - dateA;
       });
-      console.log("TicketsTab: Converted tickets:", convertedTickets);
       setLocalTickets(convertedTickets);
       ticketsCache.set(hospitalId, convertedTickets);
       ticketsCacheUpdatedAt.set(hospitalId, Date.now());
@@ -224,26 +221,21 @@ export default function TicketsTab({
   // - Nếu useTicketsProp = true: dùng tickets prop (không load từ API)
   // - Nếu useTicketsProp = false/undefined và có hospitalId: load từ API
   useEffect(() => {
-    console.log("TicketsTab: useEffect triggered, hospitalId:", hospitalId, "useTicketsProp:", useTicketsProp, "tickets.length:", tickets.length);
     
     // Nếu useTicketsProp = true, dùng tickets prop (không load từ API)
     if (useTicketsProp) {
-      console.log("TicketsTab: Using tickets prop, syncing with localTickets");
       const ticketsStr = JSON.stringify(tickets);
       const localStr = JSON.stringify(localTickets);
       if (ticketsStr !== localStr) {
-        console.log("TicketsTab: Syncing localTickets with tickets prop");
         setLocalTickets(tickets);
       }
       return; // Không load từ API
     }
     
     // Nếu useTicketsProp = false/undefined và có hospitalId, load từ API
-    if (hospitalId) {
-      console.log("TicketsTab: hospitalId is valid, calling loadTickets()");
-      loadTickets();
+    if (isValidHospitalId(hospitalId)) {
+      void loadTickets();
     } else {
-      console.log("TicketsTab: hospitalId is missing or invalid, clearing tickets");
       setLocalTickets([]);
       setLoading(false);
     }
@@ -255,7 +247,6 @@ export default function TicketsTab({
       const ticketsStr = JSON.stringify(tickets);
       const localStr = JSON.stringify(localTickets);
       if (ticketsStr !== localStr) {
-        console.log("TicketsTab: Syncing localTickets with tickets prop (separate effect)");
         setLocalTickets(tickets);
       }
     }

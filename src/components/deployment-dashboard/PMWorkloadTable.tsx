@@ -1,3 +1,5 @@
+import { normalizeSecureUrl } from "../../utils/secureUrl";
+
 export type PMWorkloadRow = {
   pmUserId: number;
   pmName: string;
@@ -31,7 +33,7 @@ export default function PMWorkloadTable({ rows }: PMWorkloadTableProps) {
               <div className="flex h-12 w-12 shrink-0 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
                 {row.avatarUrl ? (
                   <img
-                    src={row.avatarUrl}
+                    src={normalizeSecureUrl(row.avatarUrl)}
                     alt=""
                     className="h-full w-full object-cover"
                   />

@@ -5,6 +5,7 @@ import PageMeta from "../../components/common/PageMeta";
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import Chart from "react-apexcharts";
 import { ApexOptions } from "apexcharts";
+import { normalizeSecureUrl } from "../../utils/secureUrl";
 import { getSummaryReport, type SuperAdminSummaryDTO, HardwareAPI, getAllImplementationTasks, getAllDevTasks, getAllMaintenanceTasks, getAllUsers, UserResponseDTO, ImplementationTaskResponseDTO, DevTaskResponseDTO, MaintenanceTaskResponseDTO } from "../../api/superadmin.api";
 import { getBusinesses } from "../../api/business.api";
 import api, { getAuthToken } from "../../api/client";
@@ -626,7 +627,7 @@ export default function SuperAdminHome() {
         } catch {
           // ignore
         }
-        return { key: k, label: v.label, revenue: v.revenue, quantity: v.quantity, taskCount: v.taskCount, impl: v.impl, dev: v.dev, maint: v.maint, image };
+        return { key: k, label: v.label, revenue: v.revenue, quantity: v.quantity, taskCount: v.taskCount, impl: v.impl, dev: v.dev, maint: v.maint, image: normalizeSecureUrl(image) };
       });
       out.sort((a, b) => b.revenue - a.revenue);
       setHwRows(out.slice(0, hwTopN));

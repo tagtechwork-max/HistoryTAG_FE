@@ -228,13 +228,9 @@ export default function ListTicketPage() {
     setError(null);
     try {
       const params: TicketFilterParams = {
-        page,
         size: 1000, // Load all for now, filter on client side
       };
-      
-      console.log("Loading all tickets...");
       const data = await getAllTickets(params);
-      console.log("Loaded tickets:", data.length);
       setTickets(data);
     } catch (err: any) {
       console.error("Error loading tickets:", err);
@@ -243,14 +239,15 @@ export default function ListTicketPage() {
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, []);
 
   useEffect(() => {
-    loadTickets();
-    loadHospitalsList();
-    loadItUsers();
-    loadUserProfile();
+    void loadTickets();
   }, [loadTickets]);
+
+  useEffect(() => {
+    void Promise.all([loadHospitalsList(), loadItUsers(), loadUserProfile()]);
+  }, []);
   
   // Close dropdown when clicking outside
   useEffect(() => {

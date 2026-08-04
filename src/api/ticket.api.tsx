@@ -1,36 +1,22 @@
-import api, { getAuthToken } from './client';
+import api from './client';
 import { isSuperAdmin as isSuperAdminPermission } from '../utils/permission';
 
-// ✅ Helper để check xem user có phải SUPERADMIN không (từ JWT token - source of truth)
 function isSuperAdmin(): boolean {
   if (typeof window === 'undefined') return false;
   try {
-    if (window.location.pathname.startsWith('/superadmin')) return true;
-    return isSuperAdminPermission();
+    return window.location.pathname.startsWith('/superadmin') || isSuperAdminPermission();
   } catch {
     return false;
   }
 }
 
 function getBase(method: string = 'GET', canManage: boolean = false) {
-  // ✅ GET requests: luôn dùng admin API (admin thường có thể xem)
-  if (method === 'GET') {
-    return '/api/v1/admin';
+  if (method === 'GET') return '/api/v1/admin';
+  if (canManage && ['POST', 'PUT', 'DELETE'].includes(method) && isSuperAdmin()) {
+    return '/api/v1/superadmin';
   }
-  // ✅ Write operations (POST, PUT, DELETE): chỉ dùng superadmin API nếu canManage = true
-  if (canManage && (method === 'POST' || method === 'PUT' || method === 'DELETE')) {
-    // Double check: chỉ dùng superadmin API nếu thực sự là superadmin
-    if (isSuperAdmin()) {
-      return '/api/v1/superadmin';
-    }
-  }
-  // Fallback: dùng admin API
   return '/api/v1/admin';
 }
-
-// =======================================================
-// TYPES
-// =======================================================
 
 export type TicketResponseDTO = {
   id: number;
@@ -42,9 +28,9 @@ export type TicketResponseDTO = {
   pic: string | null;
   picUserId: number | null;
   hospitalId: number;
-  hospitalName?: string | null; // Tên bệnh viện (cho getAllTickets)
-  createdBy: string | null; // Tên người tạo ticket
-  createdById: number | null; // ID của User tạo ticket
+  hospitalName?: string | null;
+  createdBy: string | null;
+  createdById: number | null;
   createdAt: string | null;
   updatedAt: string | null;
 };
@@ -68,132 +54,92 @@ export type TicketFilterParams = {
   size?: number;
 };
 
-// =======================================================
-// CRUD APIs
-// =======================================================
+const CACHE_TTL_MS = 60_000;
+const pendingReads = new Map<string, Promise<TicketResponseDTO[]>>();
+const readCache = new Map<string, { data: TicketResponseDTO[]; expiresAt: number }>();
 
-/**
- * Lấy toàn bộ danh sách tickets từ tất cả bệnh viện (với filter)
- * Fallback implementation: Load hospitals summary rồi merge tickets
- */
-export async function getAllTickets(params?: TicketFilterParams): Promise<TicketResponseDTO[]> {
-  try {
-    // Try the direct endpoint first
-    const base = getBase('GET', false);
+export function isValidHospitalId(value: unknown): value is number {
+  const id = Number(value);
+  return Number.isInteger(id) && id > 0;
+}
+
+function readOnce(key: string, request: () => Promise<TicketResponseDTO[]>): Promise<TicketResponseDTO[]> {
+  const cached = readCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.data);
+  const pending = pendingReads.get(key);
+  if (pending) return pending;
+
+  const promise = request()
+    .then((data) => {
+      readCache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
+      return data;
+    })
+    .finally(() => pendingReads.delete(key));
+  pendingReads.set(key, promise);
+  return promise;
+}
+
+function invalidateReads(hospitalId?: number) {
+  readCache.delete('all');
+  if (hospitalId) readCache.delete(`hospital:${hospitalId}`);
+}
+
+/** One aggregate request; the backend owns filtering/pagination when supplied. */
+export function getAllTickets(params?: TicketFilterParams): Promise<TicketResponseDTO[]> {
+  return readOnce('all', async () => {
     const queryParams = new URLSearchParams();
-    
-    if (params?.hospitalId) queryParams.append('hospitalId', params.hospitalId.toString());
-    if (params?.status) queryParams.append('status', params.status);
-    if (params?.priority) queryParams.append('priority', params.priority);
-    if (params?.ticketType) queryParams.append('ticketType', params.ticketType);
-    if (params?.search) queryParams.append('search', params.search);
-    if (params?.page !== undefined) queryParams.append('page', params.page.toString());
-    if (params?.size !== undefined) queryParams.append('size', params.size.toString());
-    
-    const queryString = queryParams.toString();
-    const url = `${base}/tickets${queryString ? '?' + queryString : ''}`;
-    
-    const res = await api.get(url);
+    if (isValidHospitalId(params?.hospitalId)) queryParams.set('hospitalId', String(params?.hospitalId));
+    if (params?.status) queryParams.set('status', params.status);
+    if (params?.priority) queryParams.set('priority', params.priority);
+    if (params?.ticketType) queryParams.set('ticketType', params.ticketType);
+    if (params?.search) queryParams.set('search', params.search);
+    if (params?.page !== undefined) queryParams.set('page', String(params.page));
+    if (params?.size !== undefined) queryParams.set('size', String(params.size));
+    const query = queryParams.toString();
+    const res = await api.get(`/api/v1/admin/tickets${query ? `?${query}` : ''}`);
     return Array.isArray(res.data) ? res.data : [];
-  } catch (error: any) {
-    // If endpoint doesn't exist (404), use fallback approach
-    if (error.response?.status === 404) {
-      console.log('Tickets endpoint not found, using fallback approach...');
-      return await getAllTicketsFallback();
-    }
-    throw error;
+  });
+}
+
+export function getHospitalTickets(hospitalId: number): Promise<TicketResponseDTO[]> {
+  if (!isValidHospitalId(hospitalId)) {
+    return Promise.reject(new TypeError(`Invalid hospitalId: ${String(hospitalId)}`));
   }
+  return readOnce(`hospital:${hospitalId}`, async () => {
+    const res = await api.get(`${getBase('GET')}/hospitals/${hospitalId}/tickets`);
+    return Array.isArray(res.data) ? res.data : [];
+  });
 }
 
-/**
- * Fallback: Load tickets từ tất cả hospitals bằng cách:
- * 1. Lấy danh sách hospitals từ summary API
- * 2. Load tickets cho từng hospital
- * 3. Merge tất cả lại
- */
-async function getAllTicketsFallback(): Promise<TicketResponseDTO[]> {
-  try {
-    // Get hospitals summary
-    const summaryRes = await api.get('/api/v1/admin/maintenance/hospitals/summary');
-    const hospitals = Array.isArray(summaryRes.data) ? summaryRes.data : [];
-    
-    if (hospitals.length === 0) {
-      return [];
-    }
-    
-    // Load tickets for all hospitals in parallel
-    const ticketPromises = hospitals.map(async (hospital: any) => {
-      try {
-        const hospitalId = hospital.hospitalId || hospital.id;
-        if (!hospitalId) return [];
-        
-        const tickets = await getHospitalTickets(hospitalId);
-        
-        // Add hospitalName to each ticket
-        return tickets.map(ticket => ({
-          ...ticket,
-          hospitalName: hospital.hospitalName || hospital.name || `Hospital ${hospitalId}`
-        }));
-      } catch (err) {
-        console.error(`Error loading tickets for hospital ${hospital.hospitalId}:`, err);
-        return [];
-      }
-    });
-    
-    const ticketArrays = await Promise.all(ticketPromises);
-    const allTickets = ticketArrays.flat();
-    
-    return allTickets;
-  } catch (error) {
-    console.error('Error in getAllTicketsFallback:', error);
-    return [];
-  }
-}
-
-/**
- * Lấy danh sách tickets của một hospital
- */
-export async function getHospitalTickets(hospitalId: number): Promise<TicketResponseDTO[]> {
-  const base = getBase('GET', false);
-  const res = await api.get(`${base}/hospitals/${hospitalId}/tickets`);
-  return Array.isArray(res.data) ? res.data : [];
-}
-
-/**
- * Tạo ticket mới cho hospital
- */
 export async function createHospitalTicket(
   hospitalId: number,
   payload: TicketRequestDTO,
   canManage: boolean = false
 ): Promise<TicketResponseDTO> {
-  const base = getBase('POST', canManage);
-  const res = await api.post(`${base}/hospitals/${hospitalId}/tickets`, payload);
+  if (!isValidHospitalId(hospitalId)) throw new TypeError(`Invalid hospitalId: ${String(hospitalId)}`);
+  const res = await api.post(`${getBase('POST', canManage)}/hospitals/${hospitalId}/tickets`, payload);
+  invalidateReads(hospitalId);
   return res.data;
 }
 
-/**
- * Cập nhật ticket
- */
 export async function updateHospitalTicket(
   hospitalId: number,
   ticketId: number,
   payload: TicketRequestDTO,
   canManage: boolean = false
 ): Promise<TicketResponseDTO> {
-  const base = getBase('PUT', canManage);
-  const res = await api.put(`${base}/hospitals/${hospitalId}/tickets/${ticketId}`, payload);
+  if (!isValidHospitalId(hospitalId)) throw new TypeError(`Invalid hospitalId: ${String(hospitalId)}`);
+  const res = await api.put(`${getBase('PUT', canManage)}/hospitals/${hospitalId}/tickets/${ticketId}`, payload);
+  invalidateReads(hospitalId);
   return res.data;
 }
 
-/**
- * Xóa ticket
- */
 export async function deleteHospitalTicket(
   hospitalId: number,
   ticketId: number,
   canManage: boolean = false
 ): Promise<void> {
-  const base = getBase('DELETE', canManage);
-  await api.delete(`${base}/hospitals/${hospitalId}/tickets/${ticketId}`);
+  if (!isValidHospitalId(hospitalId)) throw new TypeError(`Invalid hospitalId: ${String(hospitalId)}`);
+  await api.delete(`${getBase('DELETE', canManage)}/hospitals/${hospitalId}/tickets/${ticketId}`);
+  invalidateReads(hospitalId);
 }

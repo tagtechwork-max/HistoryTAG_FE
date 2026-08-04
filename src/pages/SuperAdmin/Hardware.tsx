@@ -10,6 +10,7 @@ import ComponentCard from "../../components/common/ComponentCard";
 import PageMeta from "../../components/common/PageMeta";
 import Pagination from "../../components/common/Pagination";
 import { HardwareAPI, HardwareRequestDTO, HardwareResponseDTO } from "../../api/superadmin.api";
+import { normalizeSecureUrl } from "../../utils/secureUrl";
 
 type Hardware = HardwareResponseDTO;
 
@@ -594,7 +595,7 @@ export default function HardwarePage() {
                   <div className="flex items-center gap-4 w-full md:w-2/3">
                     <div className="flex-shrink-0">
                       {h.imageUrl ? (
-                        <img src={h.imageUrl} alt={h.name} className="h-12 w-12 rounded-lg object-cover ring-2 ring-gray-100" />
+                        <img src={normalizeSecureUrl(h.imageUrl)} alt={h.name} className="h-12 w-12 rounded-lg object-cover ring-2 ring-gray-100" />
                       ) : (
                         <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 ring-2 ring-gray-100" />
                       )}
@@ -1024,4 +1025,3 @@ export default function HardwarePage() {
     </>
   );
 }
-

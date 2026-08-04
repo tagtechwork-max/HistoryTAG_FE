@@ -12,8 +12,17 @@ import {
   tryRefreshAccessToken,
 } from "../api/client";
 import { stripUrlFragmentForWebSocket } from "../utils/sockJsUrl";
+import { normalizeSecureUrl } from "../utils/secureUrl";
 
 type Notification = any;
+
+const normalizeNotification = (notification: Notification): Notification => {
+  if (!notification || typeof notification !== "object") return notification;
+  return {
+    ...notification,
+    actorAvatar: normalizeSecureUrl(notification.actorAvatar),
+  };
+};
 
 type NotificationContextValue = {
   notifications: Notification[];
@@ -48,17 +57,18 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const clampList = (list: Notification[]) => {
     if (!Array.isArray(list)) return [];
-    return list.slice(0, MAX_NOTIFICATIONS);
+    return list.slice(0, MAX_NOTIFICATIONS).map(normalizeNotification);
   };
 
   const upsertNotification = (incoming: Notification): boolean => {
     if (!incoming) return false;
     let inserted = false;
+    const normalizedIncoming = normalizeNotification(incoming);
     setNotifications((prev) => {
       const safePrev = Array.isArray(prev) ? prev : [];
-      const filtered = safePrev.filter((n) => !n || n.id !== incoming.id);
+      const filtered = safePrev.filter((n) => !n || n.id !== normalizedIncoming.id);
       inserted = filtered.length === safePrev.length;
-      const next = [incoming, ...filtered];
+      const next = [normalizedIncoming, ...filtered];
       return clampList(next);
     });
     return inserted;
@@ -538,7 +548,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const isNotification = detectedType === "notification" || looksLikeNotification(finalData) || looksLikeNotification(payloadObj);
 
       if (isNotification) {
-        const notificationContent = (finalData && (finalData.title || finalData.message)) ? finalData : payloadObj;
+        const notificationContent = normalizeNotification((finalData && (finalData.title || finalData.message)) ? finalData : payloadObj);
         upsertNotification(notificationContent);
         try { showTransientNotification(notificationContent); } catch {}
         // console.log("[NotificationContext] Realtime notification received and applied");
