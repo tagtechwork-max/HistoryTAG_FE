@@ -452,18 +452,20 @@ const MaintenanceSuperTaskPage: React.FC = () => {
       if (isInitialLoad) setIsInitialLoad(false);
     }
   }
+  const fetchListRef = useRef(fetchList);
+  fetchListRef.current = fetchList;
 
   // ✅ WebSocket subscription: Cập nhật danh sách chờ khi có thông báo
   useEffect(() => {
     const unsubscribe = subscribe("/topic/maintenance/pending-changed", (payload) => {
       console.log("WebSocket: Pending maintenance tasks changed", payload);
-      fetchPendingTasks();
+      void fetchPendingTasksRef.current();
       if (!showHospitalList && selectedHospital) {
-        fetchList();
+        void fetchListRef.current();
       }
     });
     return () => unsubscribe();
-  }, [subscribe, fetchPendingTasks, fetchList, showHospitalList, selectedHospital]);
+  }, [subscribe, showHospitalList, selectedHospital]);
 
   // Initial: load hospital list instead of tasks
   useEffect(() => {
@@ -573,6 +575,8 @@ const MaintenanceSuperTaskPage: React.FC = () => {
       setLoadingPending(false);
     }
   }
+  const fetchPendingTasksRef = useRef(fetchPendingTasks);
+  fetchPendingTasksRef.current = fetchPendingTasks;
 
   const acceptPendingHospitalCore = async (group: PendingTransferGroup) => {
     if (!group || !group.hospitalId) {

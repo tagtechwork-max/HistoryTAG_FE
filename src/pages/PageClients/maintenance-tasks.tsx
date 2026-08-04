@@ -2327,6 +2327,8 @@ const ImplementationTasksPage: React.FC = () => {
             if (isInitialLoad) setIsInitialLoad(false);
         }
     }
+    const fetchListRef = useRef(fetchList);
+    fetchListRef.current = fetchList;
     const fetchPendingTasks = useCallback(async () => {
         setLoadingPending(true);
         try {
@@ -2449,11 +2451,11 @@ const ImplementationTasksPage: React.FC = () => {
             console.log("WebSocket: Pending maintenance tasks changed", payload);
             fetchPendingTasks();
             if (!showHospitalList && selectedHospital) {
-                fetchList();
+                void fetchListRef.current();
             }
         });
         return () => unsubscribe();
-    }, [subscribe, fetchPendingTasks, fetchList, showHospitalList, selectedHospital]);
+    }, [subscribe, fetchPendingTasks, showHospitalList, selectedHospital]);
 
     // when page or size changes, refetch
     useEffect(() => {
