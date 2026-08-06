@@ -1,0 +1,30 @@
+{
+  "generatedAt": "2026-08-06T04:06:44.215Z",
+  "baseline": {
+    "rawBytes": 2267678,
+    "gzipBytes": 658959
+  },
+  "budget": {
+    "initialGzipBytes": 665549,
+    "tolerancePercent": 1
+  },
+  "current": {
+    "rawBytes": 2268047,
+    "gzipBytes": 659124
+  },
+  "delta": {
+    "rawBytes": 369,
+    "gzipBytes": 165,
+    "gzipPercent": 0.03
+  },
+  "initialUrls": [
+    "/assets/index-C-M7wT0_.js",
+    "/assets/vendor-Cri_ztVU.js"
+  ],
+  "forbiddenInitialChunks": [],
+  "checks": {
+    "initialGzipWithinOnePercentBudget": true,
+    "heavyRouteChunksNotPreloaded": true
+  },
+  "passed": true
+}

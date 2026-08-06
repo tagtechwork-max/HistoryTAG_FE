@@ -1,0 +1,1 @@
+timestamp,frontend_commit,backend_commit,cache_mode,scenario,run,lag_reproduced,click_to_interactive_ms,long_task_count,longest_task_ms,total_blocking_time_ms,app_request_count,transferred_bytes,size_500_request_count,hhh90003004_count,dominant_long_task,trace_file,har_file,notes

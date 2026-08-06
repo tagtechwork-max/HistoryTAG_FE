@@ -139,23 +139,23 @@ const getBase = () => {
   return '/api/v1/admin/reports/cskh';
 };
 
-export async function getCSKHSummary(): Promise<CSKHSummaryDTO> {
-  const res = await api.get(`${getBase()}/summary`);
+export async function getCSKHSummary(signal?: AbortSignal): Promise<CSKHSummaryDTO> {
+  const res = await api.get(`${getBase()}/summary`, { signal });
   return res.data;
 }
 
-export async function getContractsByStatus(): Promise<ContractStatusReportDTO> {
-  const res = await api.get(`${getBase()}/contracts-by-status`);
+export async function getContractsByStatus(signal?: AbortSignal): Promise<ContractStatusReportDTO> {
+  const res = await api.get(`${getBase()}/contracts-by-status`, { signal });
   return res.data;
 }
 
-export async function getContractsByPayment(): Promise<PaymentStatusReportDTO> {
-  const res = await api.get(`${getBase()}/contracts-by-payment`);
+export async function getContractsByPayment(signal?: AbortSignal): Promise<PaymentStatusReportDTO> {
+  const res = await api.get(`${getBase()}/contracts-by-payment`, { signal });
   return res.data;
 }
 
-export async function getCasesByType(): Promise<CareTypeReportDTO> {
-  const res = await api.get(`${getBase()}/cases-by-type`);
+export async function getCasesByType(signal?: AbortSignal): Promise<CareTypeReportDTO> {
+  const res = await api.get(`${getBase()}/cases-by-type`, { signal });
   return res.data;
 }
 
@@ -172,8 +172,7 @@ export async function getEmployeePerformance(
   return res.data;
 }
 
-export async function getDebtReport(): Promise<DebtReportDTO> {
-  const res = await api.get(`${getBase()}/debt`);
+export async function getDebtReport(signal?: AbortSignal): Promise<DebtReportDTO> {
+  const res = await api.get(`${getBase()}/debt`, { signal });
   return res.data;
 }
-

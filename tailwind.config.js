@@ -4,8 +4,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["'Inter'", "-apple-system", "BlinkMacSystemFont", "'Segoe UI'", "Roboto", "'Helvetica Neue'", "Arial", "sans-serif"],
-        outfit: ["'Outfit'", "sans-serif"],
+        sans: ["'Be Vietnam Pro'", "system-ui", "sans-serif"],
+        outfit: ["'Be Vietnam Pro'", "system-ui", "sans-serif"],
       },
     },
   },

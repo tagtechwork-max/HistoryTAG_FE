@@ -5,7 +5,7 @@ export default function BarChartOne() {
   const options: ApexOptions = {
     colors: ["#465fff"],
     chart: {
-      fontFamily: "Outfit, sans-serif",
+      fontFamily: "Be Vietnam Pro, sans-serif",
       type: "bar",
       height: 180,
       toolbar: {
@@ -54,7 +54,7 @@ export default function BarChartOne() {
       show: true,
       position: "top",
       horizontalAlign: "left",
-      fontFamily: "Outfit",
+      fontFamily: "Be Vietnam Pro",
     },
     yaxis: {
       title: {

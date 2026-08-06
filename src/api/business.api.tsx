@@ -85,7 +85,7 @@ export async function updateBusiness(id: number, payload: Record<string, unknown
   return res.data;
 }
 
-export async function getBusinesses(params = {}) {
+export async function getBusinesses(params = {}, signal?: AbortSignal) {
   // ✅ GET request: luôn dùng admin API
   const base = getBase('GET', false);
   const query = new URLSearchParams();
@@ -97,7 +97,7 @@ export async function getBusinesses(params = {}) {
   const qs = query.toString();
   const url = qs ? `${base}/business?${qs}` : `${base}/business`;
   console.debug('[Business API] GET', url);
-  const res = await api.get(url);
+  const res = await api.get(url, { signal });
   return res.data;
 }
 

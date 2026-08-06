@@ -76,7 +76,7 @@ export default function MonthlySalesChart() {
   const options: ApexOptions = {
     colors: ["#e75050ff", "#469cffff"], // Light blue for Expected, Dark blue for Actual
     chart: {
-      fontFamily: "Outfit, sans-serif",
+      fontFamily: "Be Vietnam Pro, sans-serif",
       type: "bar",
       height: 350,
       toolbar: {
@@ -125,7 +125,7 @@ export default function MonthlySalesChart() {
       show: true,
       position: "top",
       horizontalAlign: "left",
-      fontFamily: "Outfit",
+      fontFamily: "Be Vietnam Pro",
     },
     yaxis: {
       title: {

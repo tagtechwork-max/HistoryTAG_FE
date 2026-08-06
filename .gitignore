@@ -12,6 +12,15 @@ dist
 dist-ssr
 *.local
 
+# Performance baseline captures may contain auth headers or application data
+performance-baseline/environment.md
+performance-baseline/*.har
+performance-baseline/*.har.gz
+performance-baseline/*.trace.json
+performance-baseline/*.trace.json.gz
+performance-baseline/traces/
+performance-baseline/hars/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

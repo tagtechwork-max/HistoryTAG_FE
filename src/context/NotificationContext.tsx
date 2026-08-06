@@ -297,16 +297,22 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     let reconnectAttempts = 0;
     let stompClientInstance: any = null;
+    let disposed = false;
+    const reconnectTimers = new Set<number>();
 
     const attemptReconnect = () => {
+      if (disposed) return;
       reconnectAttempts += 1;
       const wait = Math.min(30000, 1000 * Math.pow(2, Math.min(reconnectAttempts, 6)));
-      window.setTimeout(() => {
+      const timer = window.setTimeout(() => {
+        reconnectTimers.delete(timer);
+        if (disposed) return;
         if (esRef.current || wsRef.current || stompClientInstance) return;
         if (sseUrl) trySSE();
         if (wsUrl) tryWS();
         if (stompUrl) tryStomp();
       }, wait);
+      reconnectTimers.add(timer);
     };
 
     const trySSE = () => {
@@ -648,8 +654,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }, 1500);
 
     return () => {
+      disposed = true;
       window.clearTimeout(initialLoadTimer);
       if (setupTimer) window.clearTimeout(setupTimer);
+      reconnectTimers.forEach((timer) => window.clearTimeout(timer));
+      reconnectTimers.clear();
       if (esRef.current) {
         try { esRef.current.close(); } catch { /* ignore */ }
         esRef.current = null;
