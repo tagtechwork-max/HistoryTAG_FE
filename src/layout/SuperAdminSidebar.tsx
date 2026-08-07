@@ -63,6 +63,7 @@ const navItems: NavItem[] = [
       { name: "Đơn vị HIS", path: "/superadmin/his-systems", pro: false },
       { name: "Cơ sở hành chính công", path: "/superadmin/hcc-facilities", pro: false },
       { name: "Đại lý", path: "/superadmin/agencies", pro: false },
+      { name: "Nhà cung cấp", path: "/superadmin/suppliers", pro: false },
       { name: "Phần cứng", path: "/superadmin/hardware", pro: false },
     ],
   },
@@ -255,6 +256,7 @@ const SuperAdminSidebar: React.FC = () => {
                               case "Đơn vị HIS":
                                 return <PlugInIcon className="w-4 h-4" />;
                               case "Đại lý":
+                              case "Nhà cung cấp":
                                 return <DollarLineIcon className="w-4 h-4" />;
                               case "Phần cứng":
                                 return <BoltIcon className="w-4 h-4" />;

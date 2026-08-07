@@ -1,67 +1,70 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
 import { Toaster } from "react-hot-toast";
-import SignIn from "./pages/AuthPages/SignIn";
-import SignUp from "./pages/AuthPages/SignUp";
-import ForgotPassword from "./pages/AuthPages/ForgotPassword";
-import ResetPassword from "./pages/AuthPages/ResetPassword";
-import NotFound from "./pages/OtherPage/NotFound";
-import UserProfiles from "./pages/UserProfiles";
-import Videos from "./pages/UiElements/Videos";
-import Images from "./pages/UiElements/Images";
-import Alerts from "./pages/UiElements/Alerts";
-import Badges from "./pages/UiElements/Badges";
-import Avatars from "./pages/UiElements/Avatars";
-import Buttons from "./pages/UiElements/Buttons";
-import LineChart from "./pages/Charts/LineChart";
-import BarChart from "./pages/Charts/BarChart";
-import FormElements from "./pages/Forms/FormElements";
 import AppLayout from "./layout/AppLayout";
 import SuperAdminLayout from "./layout/SuperAdminLayout";
 import { ScrollToTop } from "./components/common/ScrollToTop";
-import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { useAuth } from "./contexts/AuthContext";
 import { getAuthToken, getStoredAccessToken, isTokenExpired } from "./api/client";
 import { isSuperAdmin as checkIsSuperAdminFromToken } from "./utils/permission";
+import { lazyWithRetry } from "./utils/lazyWithRetry";
 
-const Calendar = lazy(() => import("./pages/Calendar"));
-const BusinessCalendar = lazy(() => import("./pages/Calendar/BusinessCalendar"));
-const DeploymentCalendar = lazy(() => import("./pages/Calendar/DeploymentCalendar"));
-const MaintenanceCalendar = lazy(() => import("./pages/Calendar/MaintenanceCalendar"));
-const Home = lazy(() => import("./pages/Dashboard/Home"));
-const DeploymentDashboard = lazy(() => import("./pages/Dashboard/DeploymentDashboard"));
-const TicketStatistics = lazy(() => import("./pages/Dashboard/TicketStatistics"));
-const ImplementationTasksPage = lazy(() => import("./pages/PageClients/implementation-tasks"));
-const DevTasksPage = lazy(() => import("./pages/PageClients/dev-tasks"));
-const MaintenanceTasksPage = lazy(() => import("./pages/PageClients/maintenance-tasks"));
-const OtherTasksPage = lazy(() => import("./pages/PageClients/other-tasks"));
-const TicketSentDevPage = lazy(() => import("./pages/PageClients/ticket-sent-dev"));
-const Hospitals = lazy(() => import("./pages/Page/Hospitals"));
-const HisSystemPage = lazy(() => import("./pages/Page/HisSystem"));
-const HccFacilitiesPage = lazy(() => import("./pages/Page/HccFacilities"));
-const SuperAdminHome = lazy(() => import("./pages/SuperAdmin/Home"));
-const SuperAdminUsers = lazy(() => import("./pages/SuperAdmin/Users"));
-const ListActivity = lazy(() => import("./pages/UserAnalytics/ListActivity"));
-const Agencies = lazy(() => import("./pages/SuperAdmin/Agencies"));
-const Hardware = lazy(() => import("./pages/SuperAdmin/Hardware"));
-const SuperAdminProfile = lazy(() => import("./pages/SuperAdmin/Profile"));
-const ImplementSuperTaskPage = lazy(() => import("./pages/SuperAdmin/implementsuper-task"));
-const ListHospitalImplementation = lazy(() => import("./pages/implementationTaskNew/ListHospitalImplementation"));
-const PhaseImplementation = lazy(() => import("./pages/implementationTaskNew/SubImplementationTask/PhaseImplementation"));
-const TaskPhaseImplementation = lazy(() => import("./pages/implementationTaskNew/SubImplementationTask/TaskPhaseImplementation"));
-const DevSuperTaskPage = lazy(() => import("./pages/SuperAdmin/devsupertask"));
-const MaintenanceSuperTaskPage = lazy(() => import("./pages/SuperAdmin/maintenacesuper-task"));
-const AllNotificationsPage = lazy(() => import("./pages/Notifications/AllNotificationsPage"));
-const BusinessPage = lazy(() => import("./pages/Admin/Business"));
-const MaintainContractsPage = lazy(() => import("./pages/CustomerCare/MaintainContracts"));
-const PurchaseOrders = lazy(() => import("./pages/Admin/PurchaseOrders"));
-const HospitalCareList = lazy(() => import("./pages/CustomerCare/HospitalCareList"));
-const HospitalDetail = lazy(() => import("./pages/CustomerCare/HospitalDetail"));
-const LogOT = lazy(() => import("./pages/PageClients/LogOT"));
-const SuperAdminLogOT = lazy(() => import("./pages/SuperAdmin/LogOT"));
-const MapHospitals = lazy(() => import("./pages/Utility/MapHospitals"));
-const DocumentLinksPage = lazy(() => import("./pages/Utility/DocumentLinksPage"));
-const ListTicketPage = lazy(() => import("./pages/Ticket/listticket"));
-const ToolEncryption = lazy(() => import("./pages/Tool/ToolEncryption"));
+const route = lazyWithRetry;
+const SignIn = route("signin", () => import("./pages/AuthPages/SignIn"));
+const SignUp = route("signup", () => import("./pages/AuthPages/SignUp"));
+const ForgotPassword = route("forgot-password", () => import("./pages/AuthPages/ForgotPassword"));
+const ResetPassword = route("reset-password", () => import("./pages/AuthPages/ResetPassword"));
+const NotFound = route("not-found", () => import("./pages/OtherPage/NotFound"));
+const UserProfiles = route("user-profiles", () => import("./pages/UserProfiles"));
+const Videos = route("videos", () => import("./pages/UiElements/Videos"));
+const Images = route("images", () => import("./pages/UiElements/Images"));
+const Alerts = route("alerts", () => import("./pages/UiElements/Alerts"));
+const Badges = route("badges", () => import("./pages/UiElements/Badges"));
+const Avatars = route("avatars", () => import("./pages/UiElements/Avatars"));
+const Buttons = route("buttons", () => import("./pages/UiElements/Buttons"));
+const LineChart = route("line-chart", () => import("./pages/Charts/LineChart"));
+const BarChart = route("bar-chart", () => import("./pages/Charts/BarChart"));
+const FormElements = route("form-elements", () => import("./pages/Forms/FormElements"));
+const Calendar = route("calendar", () => import("./pages/Calendar"));
+const BusinessCalendar = route("business-calendar", () => import("./pages/Calendar/BusinessCalendar"));
+const DeploymentCalendar = route("deployment-calendar", () => import("./pages/Calendar/DeploymentCalendar"));
+const MaintenanceCalendar = route("maintenance-calendar", () => import("./pages/Calendar/MaintenanceCalendar"));
+const Home = route("home", () => import("./pages/Dashboard/Home"));
+const DeploymentDashboard = route("deployment-dashboard", () => import("./pages/Dashboard/DeploymentDashboard"));
+const TicketStatistics = route("ticket-statistics", () => import("./pages/Dashboard/TicketStatistics"));
+const ImplementationTasksPage = route("implementation-tasks", () => import("./pages/PageClients/implementation-tasks"));
+const DevTasksPage = route("dev-tasks", () => import("./pages/PageClients/dev-tasks"));
+const MaintenanceTasksPage = route("maintenance-tasks", () => import("./pages/PageClients/maintenance-tasks"));
+const OtherTasksPage = route("other-tasks", () => import("./pages/PageClients/other-tasks"));
+const TicketSentDevPage = route("ticket-sent-dev", () => import("./pages/PageClients/ticket-sent-dev"));
+const Hospitals = route("hospitals", () => import("./pages/Page/Hospitals"));
+const HisSystemPage = route("his-system", () => import("./pages/Page/HisSystem"));
+const HccFacilitiesPage = route("hcc-facilities", () => import("./pages/Page/HccFacilities"));
+const SuperAdminHome = route("superadmin-home", () => import("./pages/SuperAdmin/Home"));
+const SuperAdminUsers = route("superadmin-users", () => import("./pages/SuperAdmin/Users"));
+const ListActivity = route("list-activity", () => import("./pages/UserAnalytics/ListActivity"));
+const Agencies = route("agencies", () => import("./pages/SuperAdmin/Agencies"));
+const Suppliers = route("suppliers", () => import("./pages/SuperAdmin/Suppliers"));
+const Hardware = route("hardware", () => import("./pages/SuperAdmin/Hardware"));
+const SuperAdminProfile = route("superadmin-profile", () => import("./pages/SuperAdmin/Profile"));
+const ImplementSuperTaskPage = route("implement-super-task", () => import("./pages/SuperAdmin/implementsuper-task"));
+const ListHospitalImplementation = route("list-hospital-implementation", () => import("./pages/implementationTaskNew/ListHospitalImplementation"));
+const PhaseImplementation = route("phase-implementation", () => import("./pages/implementationTaskNew/SubImplementationTask/PhaseImplementation"));
+const TaskPhaseImplementation = route("task-phase-implementation", () => import("./pages/implementationTaskNew/SubImplementationTask/TaskPhaseImplementation"));
+const DevSuperTaskPage = route("dev-super-task", () => import("./pages/SuperAdmin/devsupertask"));
+const MaintenanceSuperTaskPage = route("maintenance-super-task", () => import("./pages/SuperAdmin/maintenacesuper-task"));
+const AllNotificationsPage = route("all-notifications", () => import("./pages/Notifications/AllNotificationsPage"));
+const BusinessPage = route("business", () => import("./pages/Admin/Business"));
+const MaintainContractsPage = route("maintain-contracts", () => import("./pages/CustomerCare/MaintainContracts"));
+const PurchaseOrders = route("purchase-orders", () => import("./pages/Admin/PurchaseOrders"));
+const HospitalCareList = route("hospital-care-list", () => import("./pages/CustomerCare/HospitalCareList"));
+const HospitalDetail = route("hospital-detail", () => import("./pages/CustomerCare/HospitalDetail"));
+const LogOT = route("log-ot", () => import("./pages/PageClients/LogOT"));
+const SuperAdminLogOT = route("superadmin-log-ot", () => import("./pages/SuperAdmin/LogOT"));
+const MapHospitals = route("map-hospitals", () => import("./pages/Utility/MapHospitals"));
+const DocumentLinksPage = route("document-links", () => import("./pages/Utility/DocumentLinksPage"));
+const ListTicketPage = route("tickets", () => import("./pages/Ticket/listticket"));
+const ToolEncryption = route("tool-encryption", () => import("./pages/Tool/ToolEncryption"));
 
 // Profile Route - redirect based on role BEFORE rendering any layout
 const ProfileRoute = () => {
@@ -92,16 +95,6 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 export default function App() {
-  // Check if user is authenticated
-  // @ts-ignore
-  const isAuthenticated = () => {
-    const token = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
-    return !!token;
-  };
-
-  // ✅ Note: getUserRoles và isSuperAdmin functions giữ lại để backward compatibility
-  // ✅ Nhưng trong components, nên dùng useAuth() hook từ AuthContext
-
   return (
     <div className="font-outfit overflow-x-hidden w-full max-w-full">
           <Toaster
@@ -159,6 +152,7 @@ export default function App() {
             <Route path="/superadmin/his-systems" element={<HisSystemPage />} />
             <Route path="/superadmin/hcc-facilities" element={<HccFacilitiesPage />} />
             <Route path="/superadmin/agencies" element={<Agencies />} />
+            <Route path="/superadmin/suppliers" element={<Suppliers />} />
             <Route path="/superadmin/hardware" element={<Hardware />} />
             {/* SuperAdmin-specific task pages */}
             <Route path="/superadmin/implementation-tasks" element={<ImplementSuperTaskPage />} />

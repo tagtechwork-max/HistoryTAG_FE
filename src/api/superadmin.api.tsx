@@ -79,8 +79,8 @@ export async function getAllUsers(params: {
   sortBy?: string;
   sortDir?: string;
   search?: string;
-}) {
-  const { data } = await api.get("/api/v1/superadmin/users", { params });
+}, signal?: AbortSignal) {
+  const { data } = await api.get("/api/v1/superadmin/users", { params, signal });
   return data;
 }
 
@@ -169,8 +169,59 @@ export type SuperAdminSummaryDTO = {
   totalAgencies: number;
 };
 
-export async function getSummaryReport() {
-  const { data } = await api.get<SuperAdminSummaryDTO>(`/api/v1/superadmin/reports/summary`);
+export async function getSummaryReport(signal?: AbortSignal) {
+  const { data } = await api.get<SuperAdminSummaryDTO>(`/api/v1/superadmin/reports/summary`, { signal });
+  return data;
+}
+
+export type DashboardFilterOptionsDTO = { teams: string[]; departments: string[] };
+export type DashboardBusinessOverviewDTO = {
+  totalExpected: number;
+  totalActual: number;
+  totalCommission: number;
+  totalCount: number;
+  contractedCount: number;
+  conversionRate: number;
+  series: Array<{ label: string; expected: number; actual: number; commission: number }>;
+};
+export type DashboardHardwareOverviewDTO = {
+  groupBy: "hardware" | "type" | "supplier";
+  topN: number;
+  rows: Array<{
+    key: string; label: string; revenue: number; quantity: number; taskCount: number;
+    implementationCount: number; developmentCount: number; maintenanceCount: number; image?: string;
+  }>;
+};
+
+export async function getDashboardOverview(signal?: AbortSignal) {
+  const { data } = await api.get<SuperAdminSummaryDTO>("/api/v1/superadmin/dashboard/overview", { signal });
+  return data;
+}
+
+export async function getDashboardFilterOptions(signal?: AbortSignal) {
+  const { data } = await api.get<DashboardFilterOptionsDTO>("/api/v1/superadmin/dashboard/filter-options", { signal });
+  return data;
+}
+
+export async function getDashboardHospitalTransferOptions(signal?: AbortSignal) {
+  const { data } = await api.get<Array<{ id: number; name: string; transferred: boolean; transferredAt: string | null }>>(
+    "/api/v1/superadmin/dashboard/hospital-transfer-options",
+    { signal },
+  );
+  return data;
+}
+
+export async function getDashboardBusinessOverview(params: {
+  from?: string; to?: string; status?: string; groupBy?: "day" | "month" | "year";
+}, signal?: AbortSignal) {
+  const { data } = await api.get<DashboardBusinessOverviewDTO>("/api/v1/superadmin/dashboard/business-overview", { params, signal });
+  return data;
+}
+
+export async function getDashboardHardwareOverview(params: {
+  groupBy: "hardware" | "type" | "supplier"; topN: number;
+}, signal?: AbortSignal) {
+  const { data } = await api.get<DashboardHardwareOverviewDTO>("/api/v1/superadmin/dashboard/hardware-overview", { params, signal });
   return data;
 }
 
@@ -223,8 +274,8 @@ export async function getAllHardware(params: {
   size?: number;
   sortBy?: string;
   sortDir?: "asc" | "desc";
-}) {
-  const { data } = await api.get("/api/v1/superadmin/hardware", { params });
+}, signal?: AbortSignal) {
+  const { data } = await api.get("/api/v1/superadmin/hardware", { params, signal });
   return data as { content: HardwareResponseDTO[]; totalElements: number } | HardwareResponseDTO[];
 }
 
@@ -348,8 +399,8 @@ export async function getAllImplementationTasks(params: {
   size?: number;
   sortBy?: string;
   sortDir?: string;
-}) {
-  const { data } = await api.get("/api/v1/superadmin/implementation/tasks", { params });
+}, signal?: AbortSignal) {
+  const { data } = await api.get("/api/v1/superadmin/implementation/tasks", { params, signal });
   return data;
 }
 
@@ -436,8 +487,8 @@ export async function getAllDevTasks(params: {
   size?: number;
   sortBy?: string;
   sortDir?: string;
-}) {
-  const { data } = await api.get("/api/v1/superadmin/dev/tasks", { params });
+}, signal?: AbortSignal) {
+  const { data } = await api.get("/api/v1/superadmin/dev/tasks", { params, signal });
   return data;
 }
 
@@ -528,8 +579,8 @@ export async function getAllMaintenanceTasks(params: {
   size?: number;
   sortBy?: string;
   sortDir?: string;
-}) {
-  const { data } = await api.get("/api/v1/superadmin/maintenance/tasks", { params });
+}, signal?: AbortSignal) {
+  const { data } = await api.get("/api/v1/superadmin/maintenance/tasks", { params, signal });
   return data;
 }
 
@@ -557,4 +608,3 @@ export async function searchMaintenanceTasks(params: { search?: string; status?:
   const { data } = await api.get<MaintenanceTaskResponseDTO[]>("/api/v1/superadmin/maintenance/tasks/search", { params });
   return data;
 }
-

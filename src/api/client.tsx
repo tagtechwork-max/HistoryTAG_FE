@@ -5,6 +5,12 @@ import { refreshAccessToken } from "./tokenRefresh";
 const REFRESH_FAIL_COOLDOWN_MS = 120_000;
 const REFRESH_COOLDOWN_KEY = "tagweb_refresh_cooldown_until";
 
+export function isRequestCanceled(error: unknown): boolean {
+  return axios.isCancel(error) ||
+    (error instanceof DOMException && error.name === "AbortError") ||
+    (error instanceof Error && (error.name === "AbortError" || error.name === "CanceledError"));
+}
+
 function refreshCooldownUntil(): number {
   if (typeof window === "undefined") return 0;
   return Number(sessionStorage.getItem(REFRESH_COOLDOWN_KEY) || "0");
@@ -454,6 +460,10 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const config = error.config as RetryConfig | undefined;
     const status = error.response?.status;
+
+    if (isRequestCanceled(error) || config?.signal?.aborted) {
+      return Promise.reject(error);
+    }
 
     if (status === 401 && config && !config._retry && !isAuthRefreshExcludedUrl(config.url)) {
       config._retry = true;

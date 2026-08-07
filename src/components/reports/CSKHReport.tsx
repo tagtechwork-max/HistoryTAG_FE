@@ -11,6 +11,7 @@ import {
   type CareTypeReportDTO,
   type DebtReportDTO,
 } from "../../api/cskh-report.api";
+import { isRequestCanceled } from "../../api/client";
 import {
   FiUsers,
   FiClock,
@@ -140,31 +141,35 @@ export default function CSKHReport() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
     async function fetchData() {
       setLoading(true);
       setError(null);
       try {
         const [summaryData, contractData, paymentData, casesData, debtData] =
           await Promise.all([
-            getCSKHSummary(),
-            getContractsByStatus(),
-            getContractsByPayment(),
-            getCasesByType(),
-            getDebtReport(),
+            getCSKHSummary(controller.signal),
+            getContractsByStatus(controller.signal),
+            getContractsByPayment(controller.signal),
+            getCasesByType(controller.signal),
+            getDebtReport(controller.signal),
           ]);
+        if (controller.signal.aborted) return;
         setSummary(summaryData);
         setContractStatus(contractData);
         setPaymentStatus(paymentData);
         setCasesByType(casesData);
         setDebtReport(debtData);
       } catch (e: any) {
+        if (isRequestCanceled(e) || controller.signal.aborted) return;
         console.error("Error fetching CSKH report:", e);
         setError(e?.message || "Không thể tải báo cáo");
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
-    fetchData();
+    void fetchData();
+    return () => controller.abort();
   }, []);
 
   // Chart data
@@ -506,4 +511,3 @@ export default function CSKHReport() {
     </div>
   );
 }
-

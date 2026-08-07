@@ -116,7 +116,7 @@ export default function StatisticsChart() {
   const chartOptions: ApexOptions = useMemo(
     () => ({
       chart: {
-        fontFamily: "Outfit, sans-serif",
+        fontFamily: "Be Vietnam Pro, sans-serif",
         height: 310,
         type: "area",
         toolbar: { show: false },

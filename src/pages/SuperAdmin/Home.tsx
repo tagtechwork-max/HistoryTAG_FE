@@ -6,13 +6,16 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import Chart from "react-apexcharts";
 import { ApexOptions } from "apexcharts";
 import { normalizeSecureUrl } from "../../utils/secureUrl";
-import { getSummaryReport, type SuperAdminSummaryDTO, HardwareAPI, getAllImplementationTasks, getAllDevTasks, getAllMaintenanceTasks, getAllUsers, UserResponseDTO, ImplementationTaskResponseDTO, DevTaskResponseDTO, MaintenanceTaskResponseDTO } from "../../api/superadmin.api";
+import { getDashboardOverview, getDashboardFilterOptions, getDashboardHospitalTransferOptions, getDashboardBusinessOverview, getDashboardHardwareOverview, type SuperAdminSummaryDTO, HardwareAPI, getAllImplementationTasks, getAllDevTasks, getAllMaintenanceTasks, getAllUsers, UserResponseDTO, ImplementationTaskResponseDTO, DevTaskResponseDTO, MaintenanceTaskResponseDTO } from "../../api/superadmin.api";
 import { getBusinesses } from "../../api/business.api";
-import api, { getAuthToken } from "../../api/client";
+import { getAuthToken, isRequestCanceled } from "../../api/client";
 import toast from "react-hot-toast";
 import Pagination from "../../components/common/Pagination";
-import CSKHReport from "../../components/reports/CSKHReport";
 import WorkReportExportButton from "../../components/reports/WorkReportExportButton";
+import { StatCard } from "./Home/components/StatCard";
+import { BusinessRevenueChart } from "./Home/components/BusinessRevenueChart";
+import { CSKHReportSection } from "./Home/sections/CSKHReportSection";
+import type { ApexFormatterOptions, BusinessGroupBy, EmployeePerformance, HardwareGroupBy, HardwareReportRow } from "./Home/types";
 
 
 // ExcelJS is heavy; import dynamically inside export functions to reduce initial bundle size
@@ -41,32 +44,20 @@ function scheduleIdleTask(callback: () => void, timeoutMs: number) {
   };
 }
 
-function StatCard({ title, value, icon, color }: { title: string; value: string | number; icon?: React.ReactNode; color?: string }) {
-  let display: React.ReactNode = value;
-  if (typeof value === 'string' && value.endsWith(' ₫')) {
-    const num = value.slice(0, -2);
-    display = <span className="whitespace-nowrap"><span>{num}</span><span className="ml-1">&nbsp;₫</span></span>;
-  }
-
-  return (
-    <div className="flex items-center gap-4 rounded-2xl bg-white p-4 shadow-md border border-gray-100 h-28">
-      <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg text-white ${color ?? 'bg-slate-400'}`}>
-        {icon}
-      </div>
-      <div className="min-w-0 flex-1 flex flex-col justify-center">
-        <div className="text-xs text-gray-500">{title}</div>
-        <div className="mt-1 flex items-baseline gap-2">
-          <div className="text-2xl font-extrabold text-gray-900 whitespace-nowrap" title={typeof value === 'number' ? value.toLocaleString() : String(value)}>
-            {display}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-type ApexFormatterOpts = { w?: { globals?: { series?: number[] } }; seriesIndex?: number } | undefined;
 export default function SuperAdminHome() {
+  const routeAbortControllerRef = useRef<AbortController | null>(null);
+  if (!routeAbortControllerRef.current) routeAbortControllerRef.current = new AbortController();
+  const routeSignal = routeAbortControllerRef.current.signal;
+  const businessControllerRef = useRef<AbortController | null>(null);
+  const businessGenerationRef = useRef(0);
+  const hardwareControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => () => {
+    routeAbortControllerRef.current?.abort();
+    businessControllerRef.current?.abort();
+    hardwareControllerRef.current?.abort();
+  }, []);
+
   const [summary, setSummary] = useState<SuperAdminSummaryDTO | null>(null);
   const [businessFrom, setBusinessFrom] = useState<string>('');
   const [businessTo, setBusinessTo] = useState<string>('');
@@ -76,42 +67,25 @@ export default function SuperAdminHome() {
   const [totalActual, setTotalActual] = useState<number | null>(null);
   const [, setTotalCommission] = useState<number | null>(null);
   const [conversionRate, setConversionRate] = useState<number | null>(null);
-  type BusinessItem = { totalPrice: number; commission: number; status: string; date: Date | null };
-  const [businessItems, setBusinessItems] = useState<BusinessItem[]>([]);
-  const [groupBy, setGroupBy] = useState<'day' | 'month' | 'year'>('day');
+  const [groupBy, setGroupBy] = useState<BusinessGroupBy>('day');
   const [aggLabels, setAggLabels] = useState<string[]>([]);
   const [aggExpected, setAggExpected] = useState<number[]>([]);
   const [aggActual, setAggActual] = useState<number[]>([]);
   const [, setAggCommission] = useState<number[]>([]);
-  const [hwGroupBy, setHwGroupBy] = useState<'hardware' | 'type' | 'supplier'>('hardware');
+  const [hwGroupBy, setHwGroupBy] = useState<HardwareGroupBy>('hardware');
   const [hwTopN, setHwTopN] = useState<number>(8);
-  const [hwRows, setHwRows] = useState<Array<{ key: string; label: string; revenue: number; quantity: number; taskCount: number; impl: number; dev: number; maint: number; image?: string }>>([]);
+  const [hwRows, setHwRows] = useState<HardwareReportRow[]>([]);
   const [hwLoading, setHwLoading] = useState(false);
   const [shouldLoadHardwareReport, setShouldLoadHardwareReport] = useState(false);
   const hardwareReportRef = useRef<HTMLElement | null>(null);
-  const [shouldRenderCSKHReport, setShouldRenderCSKHReport] = useState(false);
-  const cskhReportRef = useRef<HTMLElement | null>(null);
   // Employee Performance report states
   const API_ROOT = import.meta.env.VITE_API_URL || "";
-  type EmployeePerf = {
-    userId?: number | null;
-    fullName?: string | null;
-    team?: string | null;
-    department?: string | null;
-    totalAssigned?: number;
-    totalInProgress?: number;
-    totalCompleted?: number;
-    totalLate?: number;
-    totalReceived?: number;
-    totalTransferred?: number;
-    avgProcessingHours?: number;
-  };
   const [reportYear, setReportYear] = useState<number>(new Date().getFullYear());
   const [reportMonth, setReportMonth] = useState<number | ''>('');
   const [reportTeam, setReportTeam] = useState<string>('ALL');
   const [reportDepartment, setReportDepartment] = useState<string>('');
   const [reportLoading, setReportLoading] = useState(false);
-  const [reportData, setReportData] = useState<EmployeePerf[]>([]);
+  const [reportData, setReportData] = useState<EmployeePerformance[]>([]);
   const [departments, setDepartments] = useState<string[]>([]);
 
   // load users ONCE on mount → extract departments, teams, and cache for reuse
@@ -119,18 +93,12 @@ export default function SuperAdminHome() {
     let mounted = true;
     const cancel = scheduleIdleTask(() => void (async () => {
       try {
-        const uResp = await getAllUsers({ page: 0, size: PAGE_SIZE });
-        const uList = Array.isArray(uResp) ? (uResp as UserResponseDTO[]) : (uResp as any)?.content ?? [];
-        if (!mounted) return;
-        // departments (for employee perf filter)
-        const deps = Array.from(new Set(uList.map((u: any) => (u?.department ?? null)).filter(Boolean))).sort();
-        setDepartments(deps as string[]);
-        // teams (for team dropdown)
-        const teams = Array.from(new Set(uList.map((u) => u.team).filter(Boolean))).sort() as string[];
-        setAvailableTeams(teams);
-        // cache for reuse in loadTeamProfile
-        setAllUsersCache(uList as UserResponseDTO[]);
-      } catch {
+        const options = await getDashboardFilterOptions(routeSignal);
+        if (routeSignal.aborted || !mounted) return;
+        setDepartments(options.departments ?? []);
+        setAvailableTeams(options.teams ?? []);
+      } catch (error) {
+        if (isRequestCanceled(error) || routeSignal.aborted) return;
         // Failed to load users on mount
         if (mounted) {
           setAvailableTeams([]);
@@ -139,20 +107,20 @@ export default function SuperAdminHome() {
       }
     })(), 1500);
     return () => { mounted = false; cancel(); };
-  }, []);
+  }, [routeSignal]);
   // Background: fetch hospital transfer map once on mount (non-blocking, with sessionStorage cache)
   useEffect(() => {
     let mounted = true;
     const cancel = scheduleIdleTask(() => void (async () => {
       try {
-        const hResp = await api.get('/api/v1/auth/hospitals', { params: { page: 0, size: PAGE_SIZE } });
-        const hData = hResp.data;
-        const hList: any[] = Array.isArray(hData) ? hData : hData?.content ?? [];
+        const hResp = await getDashboardHospitalTransferOptions(routeSignal);
+        if (routeSignal.aborted) return;
+        const hList = hResp ?? [];
         const tMap = new Map<string, { transferred: boolean; transferredAt: string | null }>();
         hList.forEach((h: any) => {
           const name = String(h?.name ?? '').trim();
           if (name) tMap.set(name, {
-            transferred: Boolean(h?.transferredToMaintenance),
+            transferred: Boolean(h?.transferred),
             transferredAt: h?.transferredAt ?? null,
           });
         });
@@ -162,11 +130,12 @@ export default function SuperAdminHome() {
           try { sessionStorage.setItem('hospitalTransferMap', JSON.stringify(Array.from(tMap.entries()))); } catch { /* ignore */ }
         }
       } catch (err) {
+        if (isRequestCanceled(err) || routeSignal.aborted) return;
         console.warn('Background hospital transfer map load failed', err);
       }
     })(), 2500);
     return () => { mounted = false; cancel(); };
-  }, []);
+  }, [routeSignal]);
 
   // Team profile states (changed from hospital to team)
   const [selectedTeam, setSelectedTeam] = useState<string>('');
@@ -275,9 +244,11 @@ export default function SuperAdminHome() {
     let mounted = true;
     const load = async () => {
       try {
-        const res = await getSummaryReport();
+        const res = await getDashboardOverview(routeSignal);
+        if (routeSignal.aborted) return;
         if (mounted) setSummary(res);
       } catch (err: unknown) {
+        if (isRequestCanceled(err) || routeSignal.aborted) return;
         console.error("Failed to load summary:", err);
         const msg = err instanceof Error ? err.message : String(err);
         toast.error(msg || "Không thể tải báo cáo");
@@ -287,7 +258,7 @@ export default function SuperAdminHome() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [routeSignal]);
 
   const fetchEmployeePerformance = async () => {
     setReportLoading(true);
@@ -300,16 +271,18 @@ export default function SuperAdminHome() {
 
       const url = `${API_ROOT}/api/v1/superadmin/reports/employee-performance?${params.toString()}`;
       const token = getAuthToken();
-      const res = await fetch(url, { method: 'GET', headers: token ? { Authorization: `Bearer ${token}` } : undefined, credentials: 'include' });
+      const res = await fetch(url, { method: 'GET', headers: token ? { Authorization: `Bearer ${token}` } : undefined, credentials: 'include', signal: routeSignal });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       const data = await res.json();
+      if (routeSignal.aborted) return;
       setReportData(Array.isArray(data) ? data : []);
     } catch (err: unknown) {
+      if (isRequestCanceled(err) || routeSignal.aborted) return;
       console.error('fetchEmployeePerformance failed', err);
       toast.error((err as Error)?.message ?? 'Lấy báo cáo thất bại');
       setReportData([]);
     } finally {
-      setReportLoading(false);
+      if (!routeSignal.aborted) setReportLoading(false);
     }
   };
 
@@ -323,9 +296,10 @@ export default function SuperAdminHome() {
       if (reportDepartment) params.append('department', reportDepartment);
       const url = `${API_ROOT}/api/v1/superadmin/reports/employee-performance/export?${params.toString()}`;
       const token = getAuthToken();
-      const res = await fetch(url, { method: 'GET', headers: token ? { Authorization: `Bearer ${token}` } : undefined, credentials: 'include' });
+      const res = await fetch(url, { method: 'GET', headers: token ? { Authorization: `Bearer ${token}` } : undefined, credentials: 'include', signal: routeSignal });
       if (!res.ok) throw new Error(`Export failed ${res.status}`);
       const blob = await res.blob();
+      if (routeSignal.aborted) return;
       const aUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = aUrl;
@@ -336,59 +310,38 @@ export default function SuperAdminHome() {
       a.remove();
       URL.revokeObjectURL(aUrl);
     } catch (err: unknown) {
+      if (isRequestCanceled(err) || routeSignal.aborted) return;
       console.error('exportEmployeePerformanceExcel failed', err);
       toast.error((err as Error)?.message ?? 'Xuất file thất bại');
     }
   };
 
   // load business report (fetch all pages when total > PAGE_SIZE so totals are correct)
-  const loadBusinessReport = useCallback(async (from?: string, to?: string, status?: string) => {
+  const loadBusinessReport = useCallback(async (from?: string, to?: string, status?: string, grouping?: BusinessGroupBy) => {
+    businessControllerRef.current?.abort();
+    const controller = new AbortController();
+    businessControllerRef.current = controller;
+    const generation = ++businessGenerationRef.current;
     setBusinessLoading(true);
     try {
-      const toParam = (v?: string | null) => v ? (v.length === 16 ? `${v}:00` : v) : undefined;
-      const params: Record<string, unknown> = { size: PAGE_SIZE };
-      if (from) params.startDateFrom = toParam(from);
-      if (to) params.startDateTo = toParam(to);
-      if (status && status.trim() !== '') params.status = status.trim();
-
-      let allContent: unknown[] = [];
-      let page = 0;
-      const maxPages = 50; // safety: cap at 50 pages (e.g. 25k items)
-      while (page < maxPages) {
-        const res = await getBusinesses({ page, ...params });
-        const content = Array.isArray(res?.content) ? res.content : (Array.isArray(res) ? res : []);
-        allContent = allContent.concat(content);
-        const totalElements = (res as { totalElements?: number })?.totalElements ?? allContent.length;
-        if (content.length < PAGE_SIZE || allContent.length >= totalElements) break;
-        page += 1;
-      }
-
-      const itemsRaw = (allContent as Array<Record<string, unknown>>).map((c) => {
-        const rawDate = c['startDate'] ?? c['completionDate'] ?? null;
-        const parsedDate = rawDate ? new Date(String(rawDate)) : null;
-        return {
-          totalPrice: c['totalPrice'] != null ? Number(String(c['totalPrice'])) : 0,
-          commission: c['commission'] != null ? Number(String(c['commission'])) : 0,
-          status: (c['status'] as string) ?? '',
-          date: parsedDate,
-        } as BusinessItem;
-      });
-
-      const totalExp = itemsRaw.reduce((acc, it) => acc + (it.totalPrice ?? 0), 0);
-      const contracted = itemsRaw.filter((it) => (it.status ?? '').toString().toUpperCase() === 'CONTRACTED');
-      const totalAct = contracted.reduce((acc, it) => acc + (it.totalPrice ?? 0), 0);
-      const totalComm = contracted.reduce((acc, it) => acc + (it.commission ?? 0), 0);
-      const totalCount = itemsRaw.length;
-      const contractedCount = contracted.length;
-      const conv = totalCount > 0 ? (contractedCount / totalCount) * 100 : null;
-
-      setTotalExpected(totalExp);
-      setTotalActual(totalAct);
-      setTotalCommission(totalComm);
-      setConversionRate(conv != null ? Math.round(conv * 100) / 100 : null);
-      // keep raw items for aggregation/charting
-      setBusinessItems(itemsRaw);
+      const overview = await getDashboardBusinessOverview({
+        from: from ? (from.length === 16 ? `${from}:00` : from) : undefined,
+        to: to ? (to.length === 16 ? `${to}:00` : to) : undefined,
+        status: status?.trim() || undefined,
+        groupBy: grouping ?? groupBy,
+      }, controller.signal);
+      if (controller.signal.aborted || routeSignal.aborted || generation !== businessGenerationRef.current) return;
+      setTotalExpected(Number(overview.totalExpected ?? 0));
+      setTotalActual(Number(overview.totalActual ?? 0));
+      setTotalCommission(Number(overview.totalCommission ?? 0));
+      setConversionRate(Number(overview.conversionRate ?? 0));
+      setAggLabels((overview.series ?? []).map((point) => point.label));
+      setAggExpected((overview.series ?? []).map((point) => Number(point.expected ?? 0)));
+      setAggActual((overview.series ?? []).map((point) => Number(point.actual ?? 0)));
+      setAggCommission((overview.series ?? []).map((point) => Number(point.commission ?? 0)));
+      return;
     } catch (err: unknown) {
+      if (isRequestCanceled(err) || controller.signal.aborted || routeSignal.aborted) return;
       console.error('Failed to load business report', err);
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(msg || 'Không thể tải báo cáo kinh doanh');
@@ -397,9 +350,9 @@ export default function SuperAdminHome() {
       setTotalCommission(null);
       setConversionRate(null);
     } finally {
-      setBusinessLoading(false);
+      if (!routeSignal.aborted && generation === businessGenerationRef.current) setBusinessLoading(false);
     }
-  }, []);
+  }, [groupBy, routeSignal]);
 
   // load on mount (deferred by 2s to reduce initial connection contention)
   useEffect(() => {
@@ -408,235 +361,33 @@ export default function SuperAdminHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // aggregate when items or grouping change
-  useEffect(() => {
-    if (!businessItems || businessItems.length === 0) {
-      setAggLabels([]);
-      setAggExpected([]);
-      setAggActual([]);
-      setAggCommission([]);
-      return;
-    }
-
-    const map = new Map<string, { expected: number; actual: number; commission: number }>();
-    businessItems.forEach((it) => {
-      if (!it.date) return;
-      const d = it.date;
-      const key = groupBy === 'year'
-        ? String(d.getFullYear())
-        : groupBy === 'month'
-        ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-        : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      if (!map.has(key)) map.set(key, { expected: 0, actual: 0, commission: 0 });
-      const entry = map.get(key)!;
-      entry.expected += it.totalPrice ?? 0;
-      if ((it.status ?? '').toString().toUpperCase() === 'CONTRACTED') {
-        entry.actual += it.totalPrice ?? 0;
-        entry.commission += it.commission ?? 0;
-      }
-    });
-
-    const keys = Array.from(map.keys()).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-    if (groupBy === 'year') {
-      const years = keys.map((k) => Number(k));
-      const minY = Math.min(...years);
-      const maxY = Math.max(...years);
-      const labels: string[] = [];
-      const expected: number[] = [];
-      const actual: number[] = [];
-      const commission: number[] = [];
-      for (let y = minY; y <= maxY; y++) {
-        const k = String(y);
-        const e = map.get(k);
-        labels.push(k);
-        expected.push(e ? e.expected : 0);
-        actual.push(e ? e.actual : 0);
-        commission.push(e ? e.commission : 0);
-      }
-      setAggLabels(labels);
-      setAggExpected(expected);
-      setAggActual(actual);
-      setAggCommission(commission);
-      return;
-    }
-    if (groupBy === 'day') {
-      // keys are in YYYY-MM-DD format; build contiguous date range
-      const minKey = keys[0];
-      const maxKey = keys[keys.length - 1];
-      const minDate = new Date(minKey);
-      const maxDate = new Date(maxKey);
-      const labels: string[] = [];
-      const expected: number[] = [];
-      const actual: number[] = [];
-      const commission: number[] = [];
-      for (let d = new Date(minDate); d <= maxDate; d.setDate(d.getDate() + 1)) {
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        const dd = String(d.getDate()).padStart(2, '0');
-        const k = `${y}-${m}-${dd}`;
-        const e = map.get(k);
-        // display label as DD-MM-YYYY to match screenshot
-        labels.push(`${dd}-${m}-${y}`);
-        expected.push(e ? e.expected : 0);
-        actual.push(e ? e.actual : 0);
-        commission.push(e ? e.commission : 0);
-      }
-      setAggLabels(labels);
-      setAggExpected(expected);
-      setAggActual(actual);
-      setAggCommission(commission);
-      return;
-    }
-
-    // month grouping: keep YYYY-MM keys but display as MM-YYYY for readability
-    const labels: string[] = [];
-    const expected: number[] = [];
-    const actual: number[] = [];
-    const commission: number[] = [];
-    keys.forEach((k) => {
-      const e = map.get(k)!;
-      // k is YYYY-MM; convert to MM-YYYY label
-      const parts = k.split('-');
-      const label = parts.length >= 2 ? `${parts[1]}-${parts[0]}` : k;
-      labels.push(label);
-      expected.push(e.expected);
-      actual.push(e.actual);
-      commission.push(e.commission);
-    });
-    setAggLabels(labels);
-    setAggExpected(expected);
-    setAggActual(actual);
-    setAggCommission(commission);
-  }, [businessItems, groupBy]);
-
   // load hardware report for dashboard widget
   const loadHardwareReport = useCallback(async () => {
+    hardwareControllerRef.current?.abort();
+    const controller = new AbortController();
+    hardwareControllerRef.current = controller;
     setHwLoading(true);
     try {
-      const hwResp = await HardwareAPI.getAllHardware({ size: PAGE_SIZE });
-      const hardwareList = Array.isArray(hwResp) ? (hwResp as unknown[]) : ((hwResp as unknown) as { content?: unknown[] })?.content || [];
-
-      const busResp = await getBusinesses({ size: PAGE_SIZE });
-      const businessList = Array.isArray(busResp) ? (busResp as unknown[]) : ((busResp as unknown) as { content?: unknown[] })?.content || [];
-
-      const implResp = await getAllImplementationTasks({ size: PAGE_SIZE });
-      const implList = Array.isArray(implResp) ? (implResp as unknown[]) : ((implResp as unknown) as { content?: unknown[] })?.content || [];
-      const devResp = await getAllDevTasks({ size: PAGE_SIZE });
-      const devList = Array.isArray(devResp) ? (devResp as unknown[]) : ((devResp as unknown) as { content?: unknown[] })?.content || [];
-      const maintResp = await getAllMaintenanceTasks({ size: PAGE_SIZE });
-      const maintList = Array.isArray(maintResp) ? (maintResp as unknown[]) : ((maintResp as unknown) as { content?: unknown[] })?.content || [];
-
-      const hwById: Record<string, Record<string, unknown>> = {};
-      hardwareList.forEach((hRaw) => {
-        const h = hRaw as Record<string, unknown> | undefined;
-        if (!h) return;
-        const id = h['id'];
-        const name = h['name'];
-        if (id != null) hwById[String(id)] = h;
-        if (name != null) hwById[`name:${String(name)}`] = h;
-      });
-
-  const map = new Map<string, { label: string; revenue: number; quantity: number; taskCount: number; impl: number; dev: number; maint: number }>();
-
-      function ensure(key: string, label: string) {
-        let v = map.get(key);
-        if (!v) {
-          v = { label, revenue: 0, quantity: 0, taskCount: 0, impl: 0, dev: 0, maint: 0 };
-          map.set(key, v);
-        }
-        return v;
-      }
-
-      // businesses -> revenue & quantity (only CONTRACTED considered for revenue)
-      (businessList as unknown[]).forEach((bRaw) => {
-        const b = bRaw as Record<string, unknown> | undefined;
-        try {
-          if (!b) return;
-          const status = String(b['status'] ?? '').toUpperCase();
-          const hwId = (b['hardware'] && (b['hardware'] as any)['id']) ?? b['hardwareId'] ?? null;
-          const hwName = (b['hardware'] && ((b['hardware'] as any)['label'] ?? (b['hardware'] as any)['name'])) ?? b['hardwareName'] ?? null;
-          const hwMeta = hwId != null ? hwById[String(hwId)] : (hwName ? hwById[`name:${String(hwName)}`] : undefined);
-          let key = 'unknown';
-          let label = '-';
-            if (hwGroupBy === 'hardware') {
-            if (hwId) { key = `hw:${String(hwId)}`; label = String((hwMeta && hwMeta['name']) ?? hwName ?? String(hwId)); }
-            else if (hwName) { key = `hwname:${String(hwName)}`; label = String(hwName); }
-          } else if (hwGroupBy === 'type') {
-            const t = String((hwMeta && hwMeta['type']) ?? '—'); key = `type:${t}`; label = t;
-          } else {
-            const s = String((hwMeta && hwMeta['supplier']) ?? '—'); key = `sup:${s}`; label = s;
-          }
-          const row = ensure(key, label);
-          if (status === 'CONTRACTED') {
-            const total = b['totalPrice'] != null ? Number(b['totalPrice']) : (b['unitPrice'] != null && b['quantity'] != null ? Number(b['unitPrice']) * Number(b['quantity']) : 0);
-            row.revenue += Number(total || 0);
-            row.quantity += Number(b['quantity'] ?? 0);
-          }
-        } catch {
-          // ignore
-        }
-      });
-
-      const addTasks = (list: unknown[], kind: 'impl' | 'dev' | 'maint') => {
-        list.forEach((tRaw) => {
-          const t = tRaw as Record<string, unknown> | undefined;
-          try {
-            if (!t) return;
-            const tHwObj = (t['hardware'] as Record<string, unknown> | undefined) ?? undefined;
-            const hwId = t['hardwareId'] ?? (tHwObj && tHwObj['id'] != null ? tHwObj['id'] : null);
-            const hwName = t['hardwareName'] ?? (tHwObj ? (tHwObj['name'] ?? tHwObj['label']) : (t['hardware'] ?? null));
-            const hwMeta = hwId != null ? hwById[String(hwId)] : (hwName ? hwById[`name:${String(hwName)}`] : undefined);
-            let key = 'unknown';
-            let label = '-';
-            if (hwGroupBy === 'hardware') {
-              if (hwId) { key = `hw:${String(hwId)}`; label = String((hwMeta && hwMeta['name']) ?? hwName ?? String(hwId)); }
-              else if (hwName) { key = `hwname:${String(hwName)}`; label = String(hwName); }
-            } else if (hwGroupBy === 'type') {
-              const tval = String((hwMeta && hwMeta['type']) ?? '—'); key = `type:${tval}`; label = tval;
-            } else {
-              const sval = String((hwMeta && hwMeta['supplier']) ?? '—'); key = `sup:${sval}`; label = sval;
-            }
-            const row = ensure(key, label);
-            row.taskCount += 1;
-            if (kind === 'impl') row.impl += 1;
-            if (kind === 'dev') row.dev += 1;
-            if (kind === 'maint') row.maint += 1;
-            row.quantity += Number(t['quantity'] ?? 0);
-          } catch {
-            // ignore
-          }
-        });
-      };
-
-      addTasks(implList, 'impl');
-      addTasks(devList, 'dev');
-      addTasks(maintList, 'maint');
-
-      const out = Array.from(map.entries()).map(([k, v]) => {
-        let image = '';
-        try {
-          if (k.startsWith('hw:')) {
-            const id = k.slice(3);
-            const meta = hwById[String(id)];
-            if (meta) image = String(meta['image'] ?? meta['imageUrl'] ?? meta['thumbnail'] ?? '');
-          } else if (k.startsWith('hwname:')) {
-            const name = k.slice(7);
-            const meta = hwById[`name:${name}`];
-            if (meta) image = String(meta['image'] ?? meta['imageUrl'] ?? meta['thumbnail'] ?? '');
-          }
-        } catch {
-          // ignore
-        }
-        return { key: k, label: v.label, revenue: v.revenue, quantity: v.quantity, taskCount: v.taskCount, impl: v.impl, dev: v.dev, maint: v.maint, image: normalizeSecureUrl(image) };
-      });
-      out.sort((a, b) => b.revenue - a.revenue);
-      setHwRows(out.slice(0, hwTopN));
+      const overview = await getDashboardHardwareOverview({ groupBy: hwGroupBy, topN: hwTopN }, controller.signal);
+      if (controller.signal.aborted || routeSignal.aborted) return;
+      setHwRows((overview.rows ?? []).map((row) => ({
+        key: row.key,
+        label: row.label,
+        revenue: Number(row.revenue ?? 0),
+        quantity: Number(row.quantity ?? 0),
+        taskCount: Number(row.taskCount ?? 0),
+        impl: Number(row.implementationCount ?? 0),
+        dev: Number(row.developmentCount ?? 0),
+        maint: Number(row.maintenanceCount ?? 0),
+        image: normalizeSecureUrl(row.image ?? ""),
+      })));
     } catch (e: unknown) {
+      if (isRequestCanceled(e) || controller.signal.aborted || routeSignal.aborted) return;
       console.error('Failed to load hardware report', e);
     } finally {
-      setHwLoading(false);
+      if (!controller.signal.aborted && !routeSignal.aborted) setHwLoading(false);
     }
-  }, [hwGroupBy, hwTopN]);
+  }, [hwGroupBy, hwTopN, routeSignal]);
 
   useEffect(() => {
     const target = hardwareReportRef.current;
@@ -659,28 +410,6 @@ export default function SuperAdminHome() {
     observer.observe(target);
     return () => observer.disconnect();
   }, [shouldLoadHardwareReport]);
-
-  useEffect(() => {
-    const target = cskhReportRef.current;
-    if (!target || shouldRenderCSKHReport) return;
-
-    if (!('IntersectionObserver' in window)) {
-      const cancel = scheduleIdleTask(() => setShouldRenderCSKHReport(true), 8000);
-      return () => cancel();
-    }
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setShouldRenderCSKHReport(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: '500px 0px' }
-    );
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [shouldRenderCSKHReport]);
 
   // Load hardware only when its section is close to the viewport.
   const hwMountedRef = useRef(false);
@@ -792,7 +521,8 @@ export default function SuperAdminHome() {
         if (allUsersCache.length > 0) {
           allUsers = allUsersCache;
         } else {
-          const uResp = await getAllUsers({ page: 0, size: PAGE_SIZE });
+          const uResp = await getAllUsers({ page: 0, size: PAGE_SIZE }, routeSignal);
+          if (routeSignal.aborted) return;
           const uList = Array.isArray(uResp) ? (uResp as UserResponseDTO[]) : (uResp as any)?.content ?? [];
           allUsers = uList as UserResponseDTO[];
           setAllUsersCache(allUsers);
@@ -928,36 +658,37 @@ export default function SuperAdminHome() {
 
       // Promise 0: Implementation tasks
       const implPromise = !isSalesLikeTeam && (!isStrictSingleTeam || isImplOnlyTeam)
-        ? getAllImplementationTasks(filterParams).catch((err: any) => { console.warn('impl load', err); return null; })
+        ? getAllImplementationTasks(filterParams, routeSignal).catch((err: any) => { if (isRequestCanceled(err)) throw err; console.warn('impl load', err); return null; })
         : Promise.resolve(null);
       parallelPromises.push(implPromise);
 
       // Promise 1: Dev tasks
       const devPromise = !isSalesLikeTeam && (!isStrictSingleTeam || isDevOnlyTeam)
-        ? getAllDevTasks({ page: 0, size: PAGE_SIZE }).catch((err: any) => { console.warn('dev load', err); return null; })
+        ? getAllDevTasks({ page: 0, size: PAGE_SIZE }, routeSignal).catch((err: any) => { if (isRequestCanceled(err)) throw err; console.warn('dev load', err); return null; })
         : Promise.resolve(null);
       parallelPromises.push(devPromise);
 
       // Promise 2: Maintenance tasks
       const maintPromise = !isSalesLikeTeam && (!isStrictSingleTeam || isMaintOnlyTeam)
-        ? getAllMaintenanceTasks({ page: 0, size: PAGE_SIZE }).catch((err: any) => { console.warn('maint load', err); return null; })
+        ? getAllMaintenanceTasks({ page: 0, size: PAGE_SIZE }, routeSignal).catch((err: any) => { if (isRequestCanceled(err)) throw err; console.warn('maint load', err); return null; })
         : Promise.resolve(null);
       parallelPromises.push(maintPromise);
 
       // Promise 3: Businesses
       const bizPromise = isSalesLikeTeam
-        ? getBusinesses({ page: 0, size: PAGE_SIZE } as any).catch((err: any) => { console.warn('business load', err); return null; })
+        ? getBusinesses({ page: 0, size: PAGE_SIZE } as any, routeSignal).catch((err: any) => { if (isRequestCanceled(err)) throw err; console.warn('business load', err); return null; })
         : Promise.resolve(null);
       parallelPromises.push(bizPromise);
 
       // Promise 4: Hardware
-      const hwPromise = HardwareAPI.getAllHardware({ size: PAGE_SIZE } as any).catch((err: any) => { console.warn('hardware load', err); return null; });
+      const hwPromise = HardwareAPI.getAllHardware({ size: PAGE_SIZE } as any, routeSignal).catch((err: any) => { if (isRequestCanceled(err)) throw err; console.warn('hardware load', err); return null; });
       parallelPromises.push(hwPromise);
 
       // Hospital transfer map is now pre-fetched on mount (background effect) → no need to fetch here
 
       // Await all in parallel
       const [implResult, devResult, maintResult, bizResult, hwResult] = await Promise.all(parallelPromises);
+      if (routeSignal.aborted) return;
 
       // Process implementation tasks
       if (!isSalesLikeTeam && implResult != null) {
@@ -1049,11 +780,14 @@ export default function SuperAdminHome() {
       // Hospital transfer map is pre-fetched on mount (background) → already in state
 
     } catch (err) {
+      if (isRequestCanceled(err) || routeSignal.aborted) return;
       console.error('loadTeamProfile failed', err);
       setHasLoadedProfile(false);
     } finally {
-      setProfileLoading(false);
-      setHasLoadedProfile(true);
+      if (!routeSignal.aborted) {
+        setProfileLoading(false);
+        setHasLoadedProfile(true);
+      }
     }
   };
 
@@ -1117,7 +851,7 @@ export default function SuperAdminHome() {
     plotOptions: { pie: { donut: { size: '64%' } } },
     dataLabels: {
       enabled: true,
-      formatter: (val: number, opts?: ApexFormatterOpts) => {
+      formatter: (val: number, opts?: ApexFormatterOptions) => {
         const w = opts?.w;
         const series = w?.globals?.series ?? [];
         const idx = opts?.seriesIndex ?? 0;
@@ -1130,7 +864,7 @@ export default function SuperAdminHome() {
     },
     tooltip: {
       y: {
-        formatter: (val: number, opts?: ApexFormatterOpts) => {
+        formatter: (val: number, opts?: ApexFormatterOptions) => {
           const w = opts?.w;
           const series = w?.globals?.series ?? [];
           const idx = opts?.seriesIndex ?? 0;
@@ -2620,7 +2354,7 @@ export default function SuperAdminHome() {
                 </div>
                 <div className="flex flex-col">
                   <label className="block text-xs text-gray-500">Gộp theo</label>
-                  <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as 'day' | 'month' | 'year')} className="mt-1 rounded-md border px-3 py-2 text-sm bg-white w-40">
+                  <select value={groupBy} onChange={(e) => { const next = e.target.value as BusinessGroupBy; setGroupBy(next); void loadBusinessReport(businessFrom, businessTo, businessStatus, next); }} className="mt-1 rounded-md border px-3 py-2 text-sm bg-white w-40">
                     <option value="day">Theo ngày</option>
                     <option value="month">Theo tháng</option>
                     <option value="year">Theo năm</option>
@@ -2643,56 +2377,19 @@ export default function SuperAdminHome() {
             <div className="mt-6 rounded-2xl bg-white p-4 shadow-sm border border-gray-100">
               <h3 className="text-sm font-medium text-gray-700">So sánh</h3>
               <div className="mt-3">
-                {aggLabels.length === 0 ? (
-                  <Chart
-                    options={{
-                      chart: { toolbar: { show: false } },
-                      plotOptions: { bar: { borderRadius: 8, columnWidth: '30%' } },
-                      xaxis: { categories: ['Dự kiến', 'Thực tế'] },
-                      dataLabels: { enabled: false },
-                      colors: ['#465fff', '#10b981'],
-                    }}
-                    series={[{ name: 'VNĐ', data: [totalExpected ?? 0, totalActual ?? 0] }]}
-                    type="bar"
-                    height={260}
-                    width="100%"
-                  />
-                ) : (
-                  <Chart
-                    options={{
-                      chart: { toolbar: { show: false }, type: 'bar' },
-                      plotOptions: { bar: { horizontal: false, columnWidth: '40%', borderRadius: 6 } },
-                      xaxis: { categories: aggLabels },
-                      dataLabels: { enabled: false },
-                      tooltip: { y: { formatter: (v: number) => `${v.toLocaleString()} ₫` } },
-                      legend: { position: 'top' },
-                      colors: ['#7c3aed', '#10b981'],
-                    }}
-                    series={[
-                      { name: 'Tổng doanh thu dự kiến', type: 'bar', data: aggExpected },
-                      { name: 'Tổng doanh thu thực tế', type: 'bar', data: aggActual },
-                    ]}
-                    type="bar"
-                    height={420}
-                    width="100%"
-                  />
-                )}
+                <BusinessRevenueChart
+                  labels={aggLabels}
+                  expected={aggExpected}
+                  actual={aggActual}
+                  totalExpected={totalExpected}
+                  totalActual={totalActual}
+                />
               </div>
             </div>
           </div>
         </section>
 
-        {/* CSKH Report Section */}
-        <section ref={cskhReportRef} id="section-cskh-report" className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100 w-full">
-          {shouldRenderCSKHReport ? (
-            <CSKHReport />
-          ) : (
-            <div>
-              <h2 className="text-lg font-semibold text-blue-800">Báo cáo Chăm sóc Khách hàng</h2>
-              <p className="mt-1 text-sm text-gray-500">Báo cáo sẽ tự tải khi bạn cuộn tới khu vực này.</p>
-            </div>
-          )}
-        </section>
+        <CSKHReportSection />
 
         {/* Employee Performance Report */}
         <section id="section-employee-report" className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100 w-full">
