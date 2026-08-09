@@ -118,6 +118,13 @@ const BusinessPage: React.FC = () => {
     notes?: string | null;
     attachments?: Array<{ url: string; fileName: string }>;
     implementationCompleted?: boolean | null;
+    deliveryStatus?: 'CHUA_GIAO' | 'DA_GIAO' | null;
+    deliveryDates?: string[];
+    deliveries?: Array<{
+      id: number;
+      deliveryDate: string;
+      allocations: Array<{ poCode: string; quantity: number; serialNumbers: string[] }>;
+    }>;
     paymentStatus?: string | null;
     paidAmount?: number | null;
     paymentDate?: string | null;
@@ -371,6 +378,9 @@ const BusinessPage: React.FC = () => {
           notes: c['notes'] ?? null,
           attachments: Array.isArray(c['attachments']) ? c['attachments'] : [],
           implementationCompleted: Boolean(c['implementationCompleted']),
+          deliveryStatus: (c['deliveryStatus'] ?? c['delivery_status'] ?? 'CHUA_GIAO') as BusinessItem['deliveryStatus'],
+          deliveryDates: Array.isArray(c['deliveryDates']) ? c['deliveryDates'] as string[] : [],
+          deliveries: Array.isArray(c['deliveries']) ? c['deliveries'] as BusinessItem['deliveries'] : [],
           paymentStatus: (c['paymentStatus'] ?? c['payment_status'] ?? null) as string | null,
           paidAmount: c['paidAmount'] != null ? Number(String(c['paidAmount'])) : null,
           paymentDate: (c['paymentDate'] ?? c['payment_date'] ?? null) as string | null,
@@ -1165,6 +1175,9 @@ const BusinessPage: React.FC = () => {
           bankName: (c['bankName'] ?? c['bank_name'] ?? '') as string,
           bankContactPerson: (c['bankContactPerson'] ?? c['bank_contact_person'] ?? '') as string,
           paymentStatus: (c['paymentStatus'] ?? c['payment_status'] ?? 'CHUA_THANH_TOAN') as string,
+          deliveryStatus: (c['deliveryStatus'] ?? c['delivery_status'] ?? 'CHUA_GIAO') as BusinessItem['deliveryStatus'],
+          deliveryDates: Array.isArray(c['deliveryDates']) ? c['deliveryDates'] as string[] : [],
+          deliveries: Array.isArray(c['deliveries']) ? c['deliveries'] as BusinessItem['deliveries'] : [],
           paidAmount: c['paidAmount'] != null ? Number(String(c['paidAmount'])) : null,
           paymentDate: (c['paymentDate'] ?? c['payment_date'] ?? null) as string | null,
           implementationCompleted: Boolean(c['implementationCompleted']),
@@ -3083,6 +3096,7 @@ const BusinessPage: React.FC = () => {
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Phần cứng</th>
                         <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">SL</th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Thanh toán</th>
+                        <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Giao hàng</th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Trạng thái</th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Bảo hành</th>
                         <th className="sticky right-0 z-10 whitespace-nowrap border-l border-gray-200 bg-gray-50 px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400 dark:shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.3)]">
@@ -3093,7 +3107,7 @@ const BusinessPage: React.FC = () => {
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
                       {items.length === 0 ? (
                         <tr>
-                          <td colSpan={14} className="px-3 py-12 text-center text-gray-500 dark:text-gray-400">
+                          <td colSpan={15} className="px-3 py-12 text-center text-gray-500 dark:text-gray-400">
                             <div className="flex flex-col items-center">
                               <svg className="mb-3 h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
@@ -3202,6 +3216,20 @@ const BusinessPage: React.FC = () => {
                                   <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-700">
                                     Chưa thanh toán
                                   </span>
+                                )}
+                              </td>
+                              {/* Giao hàng */}
+                              <td className="whitespace-nowrap px-4 py-3">
+                                {it.deliveryDates?.length ? (
+                                  <div className="flex flex-col items-start gap-1">
+                                    {it.deliveryDates.map((date, deliveryIndex) => (
+                                      <span key={`${date}-${deliveryIndex}`} className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">
+                                        {deliveryIndex === 0 ? 'Giao hàng' : `Giao hàng lần ${deliveryIndex + 1}`} ({formatDateShort(date)})
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">Chưa giao</span>
                                 )}
                               </td>
                               {/* Trạng thái */}
@@ -3417,6 +3445,36 @@ const BusinessPage: React.FC = () => {
                     {viewItem.warrantyEndDate && <DetailField label="Ngày hết hạn bảo hành" value={formatDateShort(viewItem.warrantyEndDate)} />}
                   </div>
                 </div>
+                <hr className="my-3 border-gray-200" />
+
+                {/* Delivery history */}
+                <div>
+                  <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-black">Chi tiết giao hàng</h4>
+                  {viewItem.deliveries?.length ? (
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {viewItem.deliveries.map((delivery, deliveryIndex) => (
+                        <div key={delivery.id} className="rounded-md border border-emerald-200 bg-emerald-50/50 px-3 py-2">
+                          <div className="text-sm font-semibold text-emerald-800">
+                            {deliveryIndex === 0 ? 'Giao hàng' : `Giao hàng lần ${deliveryIndex + 1}`} ({formatDateShort(delivery.deliveryDate)})
+                          </div>
+                          <div className="mt-1.5 space-y-1">
+                            {delivery.allocations.map((allocation, allocationIndex) => (
+                              <div key={`${allocation.poCode}-${allocationIndex}`} className="rounded border border-gray-100 bg-white px-2 py-1.5 text-xs text-gray-700">
+                                <div><span className="font-semibold text-blue-700">PO: {allocation.poCode}</span> · SL: {allocation.quantity}</div>
+                                <div className="mt-0.5 truncate font-medium text-orange-600" title={allocation.serialNumbers?.join(', ')}>
+                                  <span>Seri: </span>
+                                  {allocation.serialNumbers?.length ? allocation.serialNumbers.join(', ') : 'Chưa ghi nhận'}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Chưa giao</span>
+                  )}
+                </div>
               </div>
 
               {/* Notes Section - Full Width */}
@@ -3492,4 +3550,3 @@ const BusinessPage: React.FC = () => {
 export default BusinessPage;
 
 // View modal (rendered by parent when viewItem is set) -- keep outside main component tree
-
