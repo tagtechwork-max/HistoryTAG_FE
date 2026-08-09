@@ -25,6 +25,30 @@ export type SupplierOption = {
 };
 type SupplierPage = { content: SupplierOption[] };
 export type Allocation = { poId: number; quantity: number };
+export type BusinessContractOption = {
+  id: number;
+  contractCode: string;
+  hospitalId: number;
+  hospitalName: string;
+  deliveryStatus: "CHUA_GIAO" | "DA_GIAO";
+  deliveryDates: string[];
+};
+export type DeliveryAllocation = Allocation & {
+  poCode: string;
+  remainingQuantity: number;
+  serialNumbers: string[];
+};
+export type DeliveryContract = {
+  id: number;
+  businessProjectId: number | null;
+  contractCode: string;
+  hospitalId: number;
+  hospitalName: string;
+  deliveryDate: string;
+  notes?: string | null;
+  totalQuantity: number;
+  allocations: DeliveryAllocation[];
+};
 export const getPOs = () => api.get<PO[]>("/api/v1/admin/purchase-orders");
 export const createPO = (body: unknown) =>
   api.post("/api/v1/admin/purchase-orders", body);
@@ -34,6 +58,8 @@ export const deletePO = (id: number) =>
   api.delete(`/api/v1/admin/purchase-orders/${id}`);
 export const getPOSerials = (poId: number) =>
   api.get<POSerial[]>(`/api/v1/admin/purchase-orders/${poId}/serials`);
+export const getAvailablePOSerials = (poId: number) =>
+  api.get<POSerial[]>(`/api/v1/admin/purchase-orders/${poId}/available-serials`);
 export const createPOSerial = (
   poId: number,
   body: { serialNumber: string; notes?: string },
@@ -50,7 +76,11 @@ export const updatePOSerial = (
 export const deletePOSerial = (poId: number, serialId: number) =>
   api.delete(`/api/v1/admin/purchase-orders/${poId}/serials/${serialId}`);
 export const getDeliveryContracts = () =>
-  api.get("/api/v1/admin/purchase-orders/contracts");
+  api.get<DeliveryContract[]>("/api/v1/admin/purchase-orders/contracts");
+export const getBusinessContractsForDelivery = () =>
+  api.get<BusinessContractOption[]>(
+    "/api/v1/admin/purchase-orders/business-contracts",
+  );
 export const createDeliveryContract = (body: unknown) =>
   api.post("/api/v1/admin/purchase-orders/contracts", body);
 export const updateDeliveryContract = (id: number, body: unknown) =>

@@ -1,199 +1,210 @@
-import { useEffect, useState } from 'react';
-import { searchHospitalsForSelect } from '../../api/api';
-import { createDeliveryContract, getDeliveryContracts, getPOs, PO, updateDeliveryContract } from '../../api/purchaseOrder.api';
-import { FiTruck } from 'react-icons/fi';
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import axios from "axios";
+import {
+  BusinessContractOption,
+  DeliveryContract,
+  createDeliveryContract,
+  getDeliveryContracts,
+  getAvailablePOSerials,
+  getPOs,
+  getBusinessContractsForDelivery,
+  PO,
+  POSerial,
+} from "../../api/purchaseOrder.api";
 
-type Row = { poId: number; quantity: number };
+type AllocationRow = { poId: number; quantity: number; serialIds: number[] };
+type DeliveryPayload = { businessProjectId: number; deliveryDate: string; notes: string; allocations: AllocationRow[] };
+type DeliveryContractsProps = { filterPOId?: number | null };
 
-interface DeliveryContractsProps {
-  filterPOId?: number | null;
-}
+const today = () => new Date().toISOString().slice(0, 10);
+const responseMessage = (error: unknown, fallback: string) =>
+  axios.isAxiosError<{ message?: string }>(error) ? error.response?.data?.message || fallback : fallback;
 
 export default function DeliveryContracts({ filterPOId }: DeliveryContractsProps = {}) {
-  const [rows, setRows] = useState<any[]>([]);
+  const [rows, setRows] = useState<DeliveryContract[]>([]);
   const [pos, setPos] = useState<PO[]>([]);
-  const [query, setQuery] = useState('');
-  const [hospitals, setHospitals] = useState<any[]>([]);
-  const [form, setForm] = useState({
-    contractCode: '',
-    hospitalId: '',
-    deliveryDate: new Date().toISOString().slice(0, 10),
-    notes: ''
-  });
-  const [alloc, setAlloc] = useState<Row[]>([{ poId: 0, quantity: 1 }]);
-  const [error, setError] = useState('');
-  const [duplicate, setDuplicate] = useState<{ contract: any; allocations: Row[]; total: number } | null>(null);
+  const [businessContracts, setBusinessContracts] = useState<BusinessContractOption[]>([]);
+  const [contractCodeInput, setContractCodeInput] = useState("");
+  const [contractSuggestionsOpen, setContractSuggestionsOpen] = useState(false);
+  const [form, setForm] = useState({ businessProjectId: 0, deliveryDate: today(), notes: "" });
+  const [allocations, setAllocations] = useState<AllocationRow[]>([{ poId: filterPOId ?? 0, quantity: 1, serialIds: [] }]);
+  const [availableSerials, setAvailableSerials] = useState<Record<number, POSerial[]>>({});
+  const [saving, setSaving] = useState(false);
+  const [repeatDelivery, setRepeatDelivery] = useState<DeliveryPayload | null>(null);
+  const [error, setError] = useState("");
 
-  const load = () =>
-    Promise.all([getDeliveryContracts(), getPOs()]).then(([c, p]) => {
-      setRows(c.data);
-      setPos(p.data);
-    }).catch(e => setError(e?.response?.data?.message || 'Không tải được dữ liệu'));
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  useEffect(() => {
-    if (filterPOId) {
-      setAlloc([{ poId: filterPOId, quantity: 1 }]);
-    } else {
-      setAlloc([{ poId: 0, quantity: 1 }]);
+  const load = async () => {
+    try {
+      const [deliveryResponse, poResponse, businessResponse] = await Promise.all([
+        getDeliveryContracts(),
+        getPOs(),
+        getBusinessContractsForDelivery(),
+      ]);
+      setRows(deliveryResponse.data);
+      setPos(poResponse.data);
+      setBusinessContracts(businessResponse.data);
+      setError("");
+    } catch (requestError: unknown) {
+      setError(responseMessage(requestError, "Không tải được dữ liệu giao hàng"));
     }
+  };
+
+  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    setAllocations([{ poId: filterPOId ?? 0, quantity: 1, serialIds: [] }]);
   }, [filterPOId]);
 
+  const allocationPoIdsKey = useMemo(
+    () => [...new Set(allocations.map((allocation) => allocation.poId).filter((poId) => poId > 0))].sort().join(","),
+    [allocations],
+  );
   useEffect(() => {
-    const t = setTimeout(() => {
-      if (query.trim().length >= 2) {
-        searchHospitalsForSelect(query).then(setHospitals);
-      } else {
-        setHospitals([]);
-      }
-    }, 300);
-    return () => clearTimeout(t);
-  }, [query]);
+    const poIds = allocationPoIdsKey.split(",").map(Number).filter((poId) => poId > 0);
+    if (!poIds.length) return;
+    void Promise.all(poIds.map(async (poId) => ({ poId, serials: (await getAvailablePOSerials(poId)).data })))
+      .then((results) => setAvailableSerials((current) => ({
+        ...current,
+        ...Object.fromEntries(results.map((result) => [result.poId, result.serials])),
+      })))
+      .catch((requestError: unknown) => setError(responseMessage(requestError, "Không tải được danh sách seri")));
+  }, [allocationPoIdsKey]);
+
+  const selectedContract = useMemo(
+    () => businessContracts.find((contract) => contract.id === form.businessProjectId),
+    [businessContracts, form.businessProjectId],
+  );
+  const suggestedContracts = useMemo(() => {
+    const keyword = contractCodeInput.trim().toLocaleLowerCase();
+    if (!keyword) return [];
+    return businessContracts.filter((contract) =>
+      contract.contractCode.toLocaleLowerCase().includes(keyword) ||
+      contract.hospitalName.toLocaleLowerCase().includes(keyword),
+    ).slice(0, 12);
+  }, [businessContracts, contractCodeInput]);
+  const availablePos = filterPOId ? pos.filter((po) => po.id === filterPOId) : pos.filter((po) => po.remainingQuantity > 0);
+  const displayedRows = filterPOId
+    ? rows.filter((contract) => contract.allocations?.some((allocation) => allocation.poId === filterPOId))
+    : rows;
 
   const reset = () => {
-    setForm({ ...form, contractCode: '', hospitalId: '', notes: '' });
-    setQuery('');
-    setAlloc(filterPOId ? [{ poId: filterPOId, quantity: 1 }] : [{ poId: 0, quantity: 1 }]);
+    setContractCodeInput("");
+    setContractSuggestionsOpen(false);
+    setForm({ businessProjectId: 0, deliveryDate: today(), notes: "" });
+    setAllocations([{ poId: filterPOId ?? 0, quantity: 1, serialIds: [] }]);
   };
 
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    const a = alloc.filter(x => x.poId > 0).map(x => ({ ...x, quantity: Number(x.quantity) }));
-    const body = { ...form, hospitalId: Number(form.hospitalId), allocations: a };
+  const performSave = async (payload: DeliveryPayload) => {
+    setSaving(true);
+    setError("");
     try {
-      await createDeliveryContract(body);
+      await createDeliveryContract(payload);
+      setRepeatDelivery(null);
       reset();
-      load();
-    } catch (e: any) {
-      const old = rows.find(r => String(r.contractCode).toLowerCase() === form.contractCode.trim().toLowerCase());
-      if (old) {
-        setDuplicate({
-          contract: old,
-          allocations: a,
-          total: a.reduce((s, x) => s + x.quantity, 0)
-        });
-      } else {
-        setError(e?.response?.data?.message || 'Không thể lưu hợp đồng');
-      }
+      await load();
+    } catch (requestError: unknown) {
+      setError(responseMessage(requestError, "Không thể lưu giao hàng"));
+    } finally {
+      setSaving(false);
     }
   };
 
-  const add = async () => {
-    if (!duplicate) return;
-    try {
-      const merged = [
-        ...(duplicate.contract.allocations || []).map((a: any) => ({ poId: a.poId, quantity: a.quantity })),
-        ...duplicate.allocations
-      ];
-      await updateDeliveryContract(duplicate.contract.id, {
-        ...form,
-        hospitalId: Number(form.hospitalId),
-        allocations: merged
-      });
-      setDuplicate(null);
-      reset();
-      load();
-    } catch (e: any) {
-      setDuplicate(null);
-      setError(e?.response?.data?.message || 'Không thể bổ sung hợp đồng');
+  const save = (event: FormEvent) => {
+    event.preventDefault();
+    const validAllocations = allocations
+      .filter((allocation) => allocation.poId > 0)
+      .map((allocation) => ({ ...allocation, quantity: Number(allocation.quantity) }));
+    if (!form.businessProjectId) return setError("Mã hợp đồng không tồn tại");
+    if (!validAllocations.length) return setError("Vui lòng chọn ít nhất một PO");
+    const invalidSerialAllocation = validAllocations.find((allocation) => allocation.serialIds.length !== allocation.quantity);
+    if (invalidSerialAllocation) {
+      const poCode = pos.find((po) => po.id === invalidSerialAllocation.poId)?.poCode ?? invalidSerialAllocation.poId;
+      return setError(`PO ${poCode} phải chọn đúng ${invalidSerialAllocation.quantity} số seri`);
     }
+    const payload = { ...form, allocations: validAllocations };
+    if (selectedContract?.deliveryDates?.length) {
+      setError("");
+      setRepeatDelivery(payload);
+      return;
+    }
+    void performSave(payload);
   };
 
-  const filteredPos = filterPOId
-    ? pos.filter(p => p.id === filterPOId)
-    : pos.filter(p => p.remainingQuantity > 0);
-
-  const displayedRows = filterPOId
-    ? rows.filter(c => c.allocations?.some((a: any) => a.poId === filterPOId))
-    : rows;
+  const formatDeliveryDate = (value: string) => {
+    const [year, month, day] = value.split("-");
+    return year && month && day ? `${day}/${month}/${year}` : value;
+  };
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      {duplicate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+      {repeatDelivery && selectedContract && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-            <h2 className="text-lg font-semibold text-gray-950">Hợp đồng đã tồn tại</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Xác nhận giao hàng lần nữa</h2>
             <p className="mt-3 text-sm leading-6 text-gray-600">
-              Bạn đã có hợp đồng này. Bạn có muốn bổ sung cho <span className="font-semibold text-blue-600">{query}</span> số lượng <span className="font-semibold text-blue-600">{duplicate.total} kiosk</span> không?
+              Hợp đồng <strong className="text-blue-700">{selectedContract.contractCode}</strong> đã được giao vào ngày{' '}
+              <strong>{formatDeliveryDate(selectedContract.deliveryDates[selectedContract.deliveryDates.length - 1])}</strong>.
+              {' '}Bạn có muốn giao hàng lần nữa không?
             </p>
+            {error && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                {error}
+              </div>
+            )}
             <div className="mt-6 flex justify-end gap-3">
-              <button onClick={() => setDuplicate(null)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-                Hủy
-              </button>
-              <button onClick={add} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors">
-                Bổ sung
+              <button type="button" onClick={() => { setRepeatDelivery(null); setError(""); }} disabled={saving}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Không</button>
+              <button type="button" onClick={() => void performSave(repeatDelivery)} disabled={saving}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+                {saving ? "Đang lưu..." : "Có, giao lần nữa"}
               </button>
             </div>
           </div>
         </div>
       )}
-
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-gray-900">
-          {filterPOId ? (
-            <>
-              Quản lý giao hàng của PO:{' '}
-              <span className="text-blue-600 font-bold">
-                {pos.find(p => p.id === filterPOId)?.poCode || '...'}
-              </span>
-            </>
-          ) : (
-            'Quản lý giao hàng'
-          )}
-        </h1>
-      </div>
+      <h1 className="text-2xl font-semibold text-gray-900">
+        {filterPOId ? <>Quản lý giao hàng của PO: <span className="font-bold text-blue-600">{pos.find((po) => po.id === filterPOId)?.poCode || "..."}</span></> : "Quản lý giao hàng"}
+      </h1>
 
       <form onSubmit={save} className="space-y-5 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="grid gap-4 md:grid-cols-3">
-          <div className="flex flex-col gap-1.5">
+          <div className="relative flex flex-col gap-1.5">
             <label className="text-sm font-semibold text-gray-700">Mã hợp đồng</label>
             <input
               required
-              placeholder="Nhập mã hợp đồng"
-              className="w-full rounded-lg border border-gray-300 px-3.5 py-2 text-sm outline-none transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              value={form.contractCode}
-              onChange={e => setForm({ ...form, contractCode: e.target.value })}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5 relative">
-            <label className="text-sm font-semibold text-gray-700">Bệnh viện</label>
-            <input
-              required
               autoComplete="off"
-              placeholder="Nhập ít nhất 2 ký tự"
-              className="w-full rounded-lg border border-gray-300 px-3.5 py-2 text-sm outline-none transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              value={query}
-              onChange={e => {
-                setQuery(e.target.value);
-                setForm({ ...form, hospitalId: '' });
+              placeholder="Nhập mã hợp đồng"
+              value={contractCodeInput}
+              onChange={(event) => {
+                const value = event.target.value;
+                const matched = businessContracts.find(
+                  (contract) => contract.contractCode.trim().toLocaleLowerCase() === value.trim().toLocaleLowerCase(),
+                );
+                setContractCodeInput(value);
+                setContractSuggestionsOpen(true);
+                setForm((current) => ({ ...current, businessProjectId: matched?.id ?? 0 }));
               }}
+              onFocus={() => setContractSuggestionsOpen(true)}
+              onBlur={() => window.setTimeout(() => setContractSuggestionsOpen(false), 150)}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
-            {form.hospitalId && (
-              <span className="text-xs text-emerald-600 font-semibold mt-1">
-                Đã chọn bệnh viện
-              </span>
-            )}
-            {hospitals.length > 0 && (
-              <div className="absolute left-0 right-0 z-20 mt-16 max-h-56 overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
-                {hospitals.map(h => (
+            {contractSuggestionsOpen && suggestedContracts.length > 0 && (
+              <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-64 overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                {suggestedContracts.map((contract) => (
                   <button
+                    key={contract.id}
                     type="button"
-                    key={h.id}
-                    className="block w-full border-b border-gray-100 px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors"
-                    onMouseDown={e => {
-                      e.preventDefault();
-                      setQuery(h.name);
-                      setForm({ ...form, hospitalId: String(h.id) });
-                      setHospitals([]);
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      setContractCodeInput(contract.contractCode);
+                      setForm((current) => ({ ...current, businessProjectId: contract.id }));
+                      setContractSuggestionsOpen(false);
                     }}
+                    className="flex w-full items-center justify-between gap-3 border-b border-gray-100 px-3.5 py-2.5 text-left text-sm hover:bg-blue-50"
                   >
-                    {h.name}
-                    {h.code ? ` (${h.code})` : ''}
+                    <span><strong className="text-blue-700">{contract.contractCode}</strong><span className="ml-2 text-gray-600">{contract.hospitalName}</span></span>
+                    <span className={`shrink-0 text-xs font-medium ${contract.deliveryStatus === "DA_GIAO" ? "text-emerald-600" : "text-amber-600"}`}>
+                      {contract.deliveryStatus === "DA_GIAO" ? "Đã giao" : "Chưa giao"}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -201,97 +212,86 @@ export default function DeliveryContracts({ filterPOId }: DeliveryContractsProps
           </div>
 
           <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-semibold text-gray-700">Bệnh viện</label>
+            <div className="min-h-[38px] rounded-lg border border-gray-300 bg-gray-50 px-3.5 py-2 text-sm text-gray-700">
+              {selectedContract?.hospitalName || "Tự động theo hợp đồng"}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
             <label className="text-sm font-semibold text-gray-700">Ngày giao</label>
-            <input
-              required
-              type="date"
-              className="w-full rounded-lg border border-gray-300 px-3.5 py-2 text-sm outline-none transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              value={form.deliveryDate}
-              onChange={e => setForm({ ...form, deliveryDate: e.target.value })}
-            />
+            <input required type="date" value={form.deliveryDate}
+              onChange={(event) => setForm((current) => ({ ...current, deliveryDate: event.target.value }))}
+              className="w-full rounded-lg border border-gray-300 px-3.5 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
           </div>
         </div>
 
         <div className="space-y-3 pt-2">
-          <label className="text-sm font-semibold text-gray-700 block">Phân bổ từ PO</label>
-          <div className="space-y-2">
-            {alloc.map((a, i) => (
-              <div className="flex items-center gap-3" key={i}>
+          <label className="block text-sm font-semibold text-gray-700">Phân bổ từ PO</label>
+          {allocations.map((allocation, index) => (
+            <div className="space-y-2 rounded-lg border border-gray-100 bg-gray-50/40 p-3" key={index}>
+              <div className="flex items-center gap-3">
                 {filterPOId ? (
-                  <div className="flex-1 rounded-lg border border-gray-300 p-2.5 text-sm bg-gray-100 text-gray-700 select-none">
-                    {pos.find(p => p.id === a.poId)?.poCode} -{' '}
-                    <span className={pos.find(p => p.id === a.poId)?.remainingQuantity === 0 ? 'text-red-600 font-semibold' : 'text-amber-600 font-semibold'}>
-                      còn {pos.find(p => p.id === a.poId)?.remainingQuantity}
-                    </span>
+                  <div className="flex-1 rounded-lg border border-gray-300 bg-gray-100 p-2.5 text-sm text-gray-700">
+                    {pos.find((po) => po.id === allocation.poId)?.poCode} — còn {pos.find((po) => po.id === allocation.poId)?.remainingQuantity}
                   </div>
                 ) : (
-                  <select
-                    className={`flex-1 rounded-lg border border-gray-300 p-2.5 text-sm outline-none bg-gray-50/50 focus:border-blue-500 ${
-                      a.poId === 0 
-                        ? 'text-gray-500' 
-                        : (pos.find(p => p.id === a.poId)?.remainingQuantity === 0 
-                          ? 'text-red-600 font-semibold' 
-                          : 'text-amber-600 font-semibold')
-                    }`}
-                    value={a.poId}
-                    onChange={e => {
-                      const n = [...alloc];
-                      n[i] = { ...a, poId: Number(e.target.value) };
-                      setAlloc(n);
-                    }}
-                  >
-                    <option value={0} className="text-gray-500">Chọn PO còn hàng</option>
-                    {filteredPos.map(p => (
-                      <option 
-                        key={p.id} 
-                        value={p.id} 
-                        className={p.remainingQuantity === 0 ? 'text-red-600 font-semibold' : 'text-amber-600 font-semibold'}
-                      >
-                        {p.poCode} - còn {p.remainingQuantity}
-                      </option>
-                    ))}
+                  <select value={allocation.poId} onChange={(event) => setAllocations((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, poId: Number(event.target.value), serialIds: [] } : row))}
+                    className="flex-1 rounded-lg border border-gray-300 bg-white p-2.5 text-sm outline-none focus:border-blue-500">
+                    <option value={0}>Chọn PO còn hàng</option>
+                    {availablePos.map((po) => <option key={po.id} value={po.id}>{po.poCode} — còn {po.remainingQuantity}</option>)}
                   </select>
                 )}
-                <input
-                  min={1}
-                  type="number"
-                  className="w-28 rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-blue-500"
-                  value={a.quantity}
-                  onChange={e => {
-                    const n = [...alloc];
-                    n[i] = { ...a, quantity: Number(e.target.value) };
-                    setAlloc(n);
+                <input min={1} type="number" value={allocation.quantity}
+                  onChange={(event) => {
+                    const quantity = Math.max(1, Number(event.target.value));
+                    setAllocations((current) => current.map((row, rowIndex) => rowIndex === index
+                      ? { ...row, quantity, serialIds: row.serialIds.slice(0, quantity) }
+                      : row));
                   }}
-                />
-                {!filterPOId && (
-                  <button
-                    type="button"
-                    onClick={() => setAlloc(alloc.filter((_, j) => j !== i))}
-                    className="text-red-600 hover:text-red-800 text-sm font-medium transition-colors px-2 py-1 rounded hover:bg-red-50"
-                  >
-                    Xóa
-                  </button>
-                )}
+                  className="w-28 rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-blue-500" />
+                {!filterPOId && <button type="button" onClick={() => setAllocations((current) => current.filter((_, rowIndex) => rowIndex !== index))} className="rounded px-2 py-1 text-sm font-medium text-red-600 hover:bg-red-50">Xóa</button>}
               </div>
-            ))}
-          </div>
-          {!filterPOId && (
-            <button
-              type="button"
-              onClick={() => setAlloc([...alloc, { poId: 0, quantity: 1 }])}
-              className="inline-flex items-center text-blue-600 hover:text-blue-800 text-sm font-semibold transition-colors mt-1"
-            >
-              + Thêm PO
-            </button>
-          )}
+              {allocation.poId > 0 && (
+                <div className="rounded-lg border border-gray-200 bg-white p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <label className="text-sm font-semibold text-gray-700">Seri</label>
+                    <span className={`text-xs font-medium ${allocation.serialIds.length === allocation.quantity ? "text-emerald-600" : "text-amber-600"}`}>
+                      Đã chọn {allocation.serialIds.length}/{allocation.quantity}
+                    </span>
+                  </div>
+                  {(availableSerials[allocation.poId] ?? []).length ? (
+                    <div className="flex max-h-36 flex-wrap gap-2 overflow-auto">
+                      {(availableSerials[allocation.poId] ?? []).map((serial) => {
+                        const checked = allocation.serialIds.includes(serial.id);
+                        return (
+                          <label key={serial.id} className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm ${checked ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 bg-white text-gray-700"}`}>
+                            <input type="checkbox" checked={checked}
+                              onChange={() => setAllocations((current) => current.map((row, rowIndex) => {
+                                if (rowIndex !== index) return row;
+                                const serialIds = checked
+                                  ? row.serialIds.filter((id) => id !== serial.id)
+                                  : [...row.serialIds, serial.id];
+                                return { ...row, serialIds, quantity: Math.max(row.quantity, serialIds.length) };
+                              }))} />
+                            {serial.serialNumber}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-red-600">PO này không còn số seri khả dụng.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+          {!filterPOId && <button type="button" onClick={() => setAllocations((current) => [...current, { poId: 0, quantity: 1, serialIds: [] }])} className="text-sm font-semibold text-blue-600 hover:text-blue-800">+ Thêm PO</button>}
         </div>
 
-        <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-          <button
-            disabled={!form.hospitalId}
-            className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-          >
-            Lưu hợp đồng
+        <div className="flex items-center justify-between border-t border-gray-100 pt-4">
+          <button disabled={saving || !form.businessProjectId} className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+            {saving ? "Đang lưu..." : "Lưu giao hàng"}
           </button>
           {error && <div className="rounded-lg bg-red-50 px-4 py-2.5 text-sm font-medium text-red-700">{error}</div>}
         </div>
@@ -299,35 +299,17 @@ export default function DeliveryContracts({ filterPOId }: DeliveryContractsProps
 
       <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
         <table className="min-w-full text-sm">
-          <thead>
-            <tr className="border-b bg-gray-50/50">
-              {['Mã hợp đồng', 'Bệnh viện', 'Ngày giao', 'Danh sách PO', 'Tổng kiosk'].map((x, i) => (
-                <th
-                  className={`px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-gray-500 ${
-                    [2, 4].includes(i) ? 'text-center' : 'text-left'
-                  }`}
-                  key={x}
-                >
-                  {x}
-                </th>
-              ))}
-            </tr>
-          </thead>
+          <thead><tr className="border-b bg-gray-50/50">
+            {["Mã hợp đồng", "Bệnh viện", "Ngày giao", "Danh sách PO", "Tổng kiosk"].map((label) => <th key={label} className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">{label}</th>)}
+          </tr></thead>
           <tbody className="divide-y divide-gray-100">
-            {displayedRows.map(c => (
-              <tr className="hover:bg-gray-50/50 transition-colors" key={c.id}>
-                <td className="px-4 py-4 text-sm font-medium text-gray-900">{c.contractCode}</td>
-                <td className="px-4 py-4 text-sm text-blue-600 font-semibold">{c.hospitalName}</td>
-                <td className="px-4 py-4 text-sm text-center text-gray-500">{c.deliveryDate}</td>
-                <td
-                  className="px-4 py-4 text-sm text-gray-600 max-w-[250px] truncate"
-                  title={c.allocations?.map((a: any) => `${a.poCode} (${a.quantity})`).join(', ')}
-                >
-                  {c.allocations?.map((a: any) => `${a.poCode} (${a.quantity})`).join(', ')}
-                </td>
-                <td className="px-4 py-4 text-sm text-center text-blue-600 font-bold">{c.totalQuantity}</td>
-              </tr>
-            ))}
+            {displayedRows.map((contract) => <tr className="hover:bg-gray-50/50" key={contract.id}>
+              <td className="px-4 py-4 font-medium text-gray-900">{contract.contractCode}</td>
+              <td className="px-4 py-4 font-semibold text-blue-600">{contract.hospitalName}</td>
+              <td className="px-4 py-4 text-gray-500">{contract.deliveryDate}</td>
+              <td className="max-w-[250px] truncate px-4 py-4 text-gray-600" title={contract.allocations?.map((allocation) => `${allocation.poCode} (${allocation.quantity})`).join(", ")}>{contract.allocations?.map((allocation) => `${allocation.poCode} (${allocation.quantity})`).join(", ")}</td>
+              <td className="px-4 py-4 font-bold text-blue-600">{contract.totalQuantity}</td>
+            </tr>)}
           </tbody>
         </table>
       </div>
