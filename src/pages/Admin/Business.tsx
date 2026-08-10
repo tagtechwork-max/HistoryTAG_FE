@@ -27,6 +27,7 @@ import ComponentCard from '../../components/common/ComponentCard';
 import { normalizeBusinessContractName } from '../../utils/businessContract';
 
 type ITUserOption = { id: number; name: string; phone?: string | null };
+type PaymentInstallmentDraft = { amount: number | ''; amountDisplay: string; paymentDate: string };
 
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -90,6 +91,7 @@ const BusinessPage: React.FC = () => {
   const [paidAmount, setPaidAmount] = useState<number | ''>('');
   const [paidAmountDisplay, setPaidAmountDisplay] = useState<string>('');
   const [paymentDateValue, setPaymentDateValue] = useState<string>('');
+  const [paymentInstallments, setPaymentInstallments] = useState<PaymentInstallmentDraft[]>([]);
   const [exporting, setExporting] = useState(false);
   const [notes, setNotes] = useState<string>('');
   const [attachments, setAttachments] = useState<Array<{ url: string; fileName: string }>>([]);
@@ -128,6 +130,7 @@ const BusinessPage: React.FC = () => {
     paymentStatus?: string | null;
     paidAmount?: number | null;
     paymentDate?: string | null;
+    paymentInstallments?: Array<{ id?: number; installmentNumber: number; amount: number; paymentDate: string }>;
   };
 
   function formatDateShort(value?: string | null) {
@@ -141,6 +144,16 @@ const BusinessPage: React.FC = () => {
     } catch {
       return '—';
     }
+  }
+
+  function formatPaymentDateTime(value?: string | null) {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleString('vi-VN', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
   }
   function formatBusinessId(id?: number | null) {
     if (id == null) return '—';
@@ -384,6 +397,14 @@ const BusinessPage: React.FC = () => {
           paymentStatus: (c['paymentStatus'] ?? c['payment_status'] ?? null) as string | null,
           paidAmount: c['paidAmount'] != null ? Number(String(c['paidAmount'])) : null,
           paymentDate: (c['paymentDate'] ?? c['payment_date'] ?? null) as string | null,
+          paymentInstallments: Array.isArray(c['paymentInstallments'])
+            ? (c['paymentInstallments'] as Array<Record<string, unknown>>).map((payment, index) => ({
+                id: payment['id'] != null ? Number(payment['id']) : undefined,
+                installmentNumber: Number(payment['installmentNumber'] ?? index + 1),
+                amount: Number(payment['amount'] ?? 0),
+                paymentDate: String(payment['paymentDate'] ?? ''),
+              }))
+            : [],
         } as BusinessItem;
       });
       const locallyFiltered = applyLocalDateFilter(normalized);
@@ -808,21 +829,17 @@ const BusinessPage: React.FC = () => {
     if (quantity !== '' && Number(quantity) < 0) {
       errors.quantity = 'Số lượng không được nhỏ hơn 0';
     }
-    // Validate paid amount khi trạng thái thanh toán là DA_THANH_TOAN
     if (paymentStatusValue === 'DA_THANH_TOAN') {
-      if (paidAmount === '' || paidAmount <= 0) {
-        errors.paidAmount = 'Khi trạng thái là "Đã thanh toán", số tiền phải lớn hơn 0';
-      } else {
-        const total = computeTotal();
-        if (total > 0 && paidAmount > total) {
-          errors.paidAmount = 'Số tiền thanh toán không được vượt quá thành tiền';
-        }
+      if (!paymentInstallments.length) errors.paidAmount = 'Vui lòng nhập ít nhất một lần thanh toán';
+      if (paymentInstallments.length > 7) errors.paidAmount = 'Chỉ được nhập tối đa 7 lần thanh toán';
+      if (paymentInstallments.some((item) => item.amount === '' || Number(item.amount) <= 0 || !item.paymentDate)) {
+        errors.paidAmount = 'Mỗi lần thanh toán phải có số tiền lớn hơn 0 và ngày thanh toán';
       }
-    }
-    if (paymentStatusValue === 'DA_THANH_TOAN' || paymentStatusValue === 'THANH_TOAN_HET') {
-      if (!paymentDateValue || paymentDateValue.trim() === '') {
-        errors.paymentDateValue = 'Vui lòng nhập ngày thanh toán';
-      }
+      const installmentTotal = paymentInstallments.reduce((sum, item) => sum + (item.amount === '' ? 0 : Number(item.amount)), 0);
+      const total = computeTotal();
+      if (total > 0 && installmentTotal > total) errors.paidAmount = 'Tổng các lần thanh toán không được vượt quá thành tiền';
+    } else if (paymentStatusValue === 'THANH_TOAN_HET' && (!paymentDateValue || !paymentDateValue.trim())) {
+      errors.paymentDateValue = 'Vui lòng nhập ngày thanh toán';
     }
 
     // Ensure startDate is set (default to now) so backend always receives a start date
@@ -896,11 +913,24 @@ const BusinessPage: React.FC = () => {
       paidAmount:
         paymentStatusValue === 'THANH_TOAN_HET'
           ? (totalContractValue !== '' ? Number(totalContractValue) : (finalUnitPrice != null && quantity ? finalUnitPrice * (typeof quantity === 'number' ? quantity : 0) : null))
-          : (paymentStatusValue === 'DA_THANH_TOAN' && typeof paidAmount === 'number' ? paidAmount : null),
+          : (paymentStatusValue === 'DA_THANH_TOAN'
+            ? paymentInstallments.reduce((sum, item) => sum + (item.amount === '' ? 0 : Number(item.amount)), 0)
+            : null),
       paymentDate:
         (paymentStatusValue === 'DA_THANH_TOAN' || paymentStatusValue === 'THANH_TOAN_HET')
-          ? toLocalDateTimeStr(paymentDateValue || null)
+          ? toLocalDateTimeStr(
+              paymentStatusValue === 'DA_THANH_TOAN'
+                ? paymentInstallments[paymentInstallments.length - 1]?.paymentDate || null
+                : paymentDateValue || null,
+            )
           : null,
+      paymentInstallments: paymentStatusValue === 'DA_THANH_TOAN'
+        ? paymentInstallments.map((item, index) => ({
+            installmentNumber: index + 1,
+            amount: Number(item.amount),
+            paymentDate: toLocalDateTimeStr(item.paymentDate),
+          }))
+        : [],
       notes: notes?.trim() || null,
       attachmentUrls: attachments.map(a => a.url),
     };
@@ -1718,6 +1748,25 @@ const BusinessPage: React.FC = () => {
       } else {
         setPaymentDateValue('');
       }
+      const remoteInstallments = Array.isArray((res as BusinessItem).paymentInstallments)
+        ? (res as BusinessItem).paymentInstallments!
+        : [];
+      if (remoteInstallments.length) {
+        setPaymentInstallments(remoteInstallments.slice(0, 7).map((item) => {
+          const amount = Number(item.amount);
+          const normalizedDate = String(item.paymentDate || '').replace(' ', 'T');
+          return {
+            amount,
+            amountDisplay: formatNumber(amount),
+            paymentDate: normalizedDate.length >= 16 ? normalizedDate.substring(0, 16) : normalizedDate,
+          };
+        }));
+      } else if (remotePaymentStatus === 'DA_THANH_TOAN' && res.paidAmount != null) {
+        const legacyDate = typeof paymentDateRaw === 'string' ? paymentDateRaw.replace(' ', 'T').substring(0, 16) : '';
+        setPaymentInstallments([{ amount: Number(res.paidAmount), amountDisplay: formatNumber(Number(res.paidAmount)), paymentDate: legacyDate }]);
+      } else {
+        setPaymentInstallments([]);
+      }
       setNotes(res.notes ?? '');
       setAttachments(Array.isArray(res.attachments) ? res.attachments : []);
       setFieldErrors({});
@@ -2141,6 +2190,7 @@ const BusinessPage: React.FC = () => {
               setPaidAmount('');
               setPaidAmountDisplay('');
               setPaymentDateValue('');
+              setPaymentInstallments([]);
               setNotes('');
               setAttachments([]);
               setLastEdited(null);
@@ -2794,17 +2844,14 @@ const BusinessPage: React.FC = () => {
                                 setPaymentDateValue(nowDateTimeLocal());
                               }
                             } else if (next === 'DA_THANH_TOAN') {
-                              // Keep current paidAmount or reset
-                              if (paidAmount === '') {
-                                setPaidAmountDisplay('');
-                              }
-                              if (!paymentDateValue) {
-                                setPaymentDateValue(nowDateTimeLocal());
+                              if (!paymentInstallments.length) {
+                                setPaymentInstallments([{ amount: '', amountDisplay: '', paymentDate: nowDateTimeLocal() }]);
                               }
                             } else {
                               setPaidAmount('');
                               setPaidAmountDisplay('');
                               setPaymentDateValue('');
+                              setPaymentInstallments([]);
                             }
                           }}
                           className="w-full rounded border px-3 py-2"
@@ -2815,8 +2862,58 @@ const BusinessPage: React.FC = () => {
                         </select>
                       </div>
 
-                      {/* Số tiền thanh toán - chỉ hiện khi DA_THANH_TOAN hoặc THANH_TOAN_HET */}
-                      {(paymentStatusValue === 'DA_THANH_TOAN' || paymentStatusValue === 'THANH_TOAN_HET') && (
+                      {paymentStatusValue === 'DA_THANH_TOAN' && (
+                        <div className="col-span-2 rounded-lg border border-blue-100 bg-blue-50/40 p-4">
+                          <div className="mb-3 flex items-center justify-between">
+                            <div>
+                              <div className="font-medium text-gray-900">Các lần thanh toán</div>
+                              <div className="text-xs text-gray-500">Tối đa 7 lần thanh toán</div>
+                            </div>
+                            <button type="button" disabled={paymentInstallments.length >= 7}
+                              onClick={() => setPaymentInstallments((current) => [...current, { amount: '', amountDisplay: '', paymentDate: nowDateTimeLocal() }])}
+                              className="rounded border border-blue-300 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50">
+                              + Thêm lần thanh toán
+                            </button>
+                          </div>
+                          <div className="space-y-3">
+                            {paymentInstallments.map((item, index) => (
+                              <div key={index} className="grid grid-cols-[auto_1fr_1fr_auto] items-end gap-3 rounded-lg border bg-white p-3">
+                                <div className="pb-2 text-sm font-semibold text-blue-700">Lần {index + 1}</div>
+                                <div>
+                                  <label className="mb-1 block text-xs font-medium text-gray-600">Số tiền*</label>
+                                  <input type="text" value={item.amountDisplay}
+                                    onChange={(e) => {
+                                      const amount = parseFormattedNumber(e.target.value);
+                                      setPaymentInstallments((current) => current.map((row, rowIndex) => rowIndex === index
+                                        ? { ...row, amount, amountDisplay: amount === '' ? '' : formatNumber(amount) }
+                                        : row));
+                                      clearFieldError('paidAmount');
+                                    }}
+                                    placeholder="Nhập số tiền" className="w-full rounded border px-3 py-2" />
+                                </div>
+                                <div>
+                                  <label className="mb-1 block text-xs font-medium text-gray-600">Ngày thanh toán*</label>
+                                  <input type="datetime-local" value={item.paymentDate}
+                                    onChange={(e) => {
+                                      setPaymentInstallments((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, paymentDate: e.target.value } : row));
+                                      clearFieldError('paidAmount');
+                                    }}
+                                    className="w-full rounded border px-3 py-2" />
+                                </div>
+                                <button type="button" disabled={paymentInstallments.length === 1}
+                                  onClick={() => setPaymentInstallments((current) => current.filter((_, rowIndex) => rowIndex !== index))}
+                                  className="mb-1 rounded px-2 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-40">Xóa</button>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-3 text-right text-sm font-semibold text-gray-700">
+                            Tổng đã thanh toán: {formatNumber(paymentInstallments.reduce((sum, item) => sum + (item.amount === '' ? 0 : Number(item.amount)), 0))} ₫
+                          </div>
+                          {fieldErrors.paidAmount && <div className="mt-2 text-sm text-red-600">{fieldErrors.paidAmount}</div>}
+                        </div>
+                      )}
+
+                      {paymentStatusValue === 'THANH_TOAN_HET' && (
                         <>
                           <div>
                             <label className="block text-sm font-medium mb-1">
@@ -2824,8 +2921,7 @@ const BusinessPage: React.FC = () => {
                             </label>
                             <input
                               type="text"
-                              required={paymentStatusValue === 'DA_THANH_TOAN'}
-                              disabled={paymentStatusValue === 'THANH_TOAN_HET'}
+                              disabled
                               value={paidAmountDisplay || (paidAmount !== '' ? formatNumber(paidAmount) : '')}
                               onChange={(e) => {
                                 const parsed = parseFormattedNumber(e.target.value);
@@ -3412,7 +3508,7 @@ const BusinessPage: React.FC = () => {
                     )}
                     {viewItem.paymentDate && (
                       <DetailField
-                        label="Ngày thanh toán"
+                        label="Ngày thanh toán gần nhất"
                         value={<span className="font-semibold text-gray-900">{formatDateShort(viewItem.paymentDate)}</span>}
                       />
                     )}
@@ -3432,6 +3528,37 @@ const BusinessPage: React.FC = () => {
                       );
                     })()}
                   </div>
+
+                  {(() => {
+                    const installments = viewItem.paymentInstallments?.length
+                      ? viewItem.paymentInstallments
+                      : (typeof viewItem.paidAmount === 'number' && viewItem.paidAmount > 0 && viewItem.paymentDate
+                        ? [{ installmentNumber: 1, amount: viewItem.paidAmount, paymentDate: viewItem.paymentDate }]
+                        : []);
+                    if (!installments.length) return null;
+                    return (
+                      <div className="mt-5 rounded-lg border border-blue-100 bg-blue-50/40 p-4">
+                        <div className="mb-3 flex items-center justify-between">
+                          <h5 className="text-sm font-semibold text-gray-900">Các lần thanh toán</h5>
+                          <span className="text-xs font-medium text-gray-500">{installments.length}/7 lần</span>
+                        </div>
+                        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+                          <div className="grid grid-cols-[90px_1fr_1fr] bg-gray-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                            <span>Lần</span>
+                            <span>Số tiền</span>
+                            <span>Ngày thanh toán</span>
+                          </div>
+                          {installments.map((payment, index) => (
+                            <div key={payment.id ?? index} className="grid grid-cols-[90px_1fr_1fr] border-t border-gray-100 px-3 py-3 text-sm">
+                              <span className="font-semibold text-blue-700">Lần {payment.installmentNumber || index + 1}</span>
+                              <span className="font-semibold text-gray-900">{Number(payment.amount).toLocaleString('vi-VN')} ₫</span>
+                              <span className="text-gray-700">{formatPaymentDateTime(payment.paymentDate)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
                 <hr className="my-3 border-gray-200" />
 

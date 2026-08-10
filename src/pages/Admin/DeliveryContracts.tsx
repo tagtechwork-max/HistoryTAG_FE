@@ -4,6 +4,7 @@ import {
   BusinessContractOption,
   DeliveryContract,
   createDeliveryContract,
+  deleteDeliveryContract,
   getDeliveryContracts,
   getAvailablePOSerials,
   getPOs,
@@ -31,6 +32,8 @@ export default function DeliveryContracts({ filterPOId }: DeliveryContractsProps
   const [availableSerials, setAvailableSerials] = useState<Record<number, POSerial[]>>({});
   const [saving, setSaving] = useState(false);
   const [repeatDelivery, setRepeatDelivery] = useState<DeliveryPayload | null>(null);
+  const [returnTarget, setReturnTarget] = useState<DeliveryContract | null>(null);
+  const [returning, setReturning] = useState(false);
   const [error, setError] = useState("");
 
   const load = async () => {
@@ -108,6 +111,29 @@ export default function DeliveryContracts({ filterPOId }: DeliveryContractsProps
     }
   };
 
+  const confirmReturn = async () => {
+    if (!returnTarget || returning) return;
+    setReturning(true);
+    setError("");
+    try {
+      const returnedPoIds = [...new Set(returnTarget.allocations.map((allocation) => allocation.poId))];
+      await deleteDeliveryContract(returnTarget.id);
+      setReturnTarget(null);
+      await load();
+      const refreshedSerials = await Promise.all(
+        returnedPoIds.map(async (poId) => ({ poId, serials: (await getAvailablePOSerials(poId)).data })),
+      );
+      setAvailableSerials((current) => ({
+        ...current,
+        ...Object.fromEntries(refreshedSerials.map(({ poId, serials }) => [poId, serials])),
+      }));
+    } catch (requestError: unknown) {
+      setError(responseMessage(requestError, "Không thể hoàn hàng"));
+    } finally {
+      setReturning(false);
+    }
+  };
+
   const save = (event: FormEvent) => {
     event.preventDefault();
     const validAllocations = allocations
@@ -156,6 +182,42 @@ export default function DeliveryContracts({ filterPOId }: DeliveryContractsProps
               <button type="button" onClick={() => void performSave(repeatDelivery)} disabled={saving}
                 className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
                 {saving ? "Đang lưu..." : "Có, giao lần nữa"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {returnTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+            <h2 className="text-lg font-semibold text-gray-900">Xác nhận hoàn hàng</h2>
+            <p className="mt-3 text-sm leading-6 text-gray-600">
+              Bạn có muốn hoàn lần giao của hợp đồng <strong className="text-blue-700">{returnTarget.contractCode}</strong> không?
+              Thao tác này sẽ hoàn lại <strong>{returnTarget.totalQuantity} kiosk</strong> về PO và giải phóng các serial đã giao.
+            </p>
+            <div className="mt-4 space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-4">
+              {returnTarget.allocations?.map((allocation) => (
+                <div key={allocation.poId} className="text-sm text-gray-700">
+                  <div><strong>{allocation.poCode}</strong>: hoàn {allocation.quantity} kiosk</div>
+                  <div className="mt-1 text-xs text-gray-600">
+                    Serial: {allocation.serialNumbers?.length ? allocation.serialNumbers.join(", ") : "Không có"}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {error && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                {error}
+              </div>
+            )}
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => { setReturnTarget(null); setError(""); }} disabled={returning}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                Không
+              </button>
+              <button type="button" onClick={() => void confirmReturn()} disabled={returning}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50">
+                {returning ? "Đang hoàn..." : "Có, hoàn hàng"}
               </button>
             </div>
           </div>
@@ -300,7 +362,7 @@ export default function DeliveryContracts({ filterPOId }: DeliveryContractsProps
       <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
         <table className="min-w-full text-sm">
           <thead><tr className="border-b bg-gray-50/50">
-            {["Mã hợp đồng", "Bệnh viện", "Ngày giao", "Danh sách PO", "Tổng kiosk"].map((label) => <th key={label} className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">{label}</th>)}
+            {["Mã hợp đồng", "Bệnh viện", "Ngày giao", "Danh sách PO", "Tổng kiosk", "Thao tác"].map((label) => <th key={label} className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">{label}</th>)}
           </tr></thead>
           <tbody className="divide-y divide-gray-100">
             {displayedRows.map((contract) => <tr className="hover:bg-gray-50/50" key={contract.id}>
@@ -309,6 +371,12 @@ export default function DeliveryContracts({ filterPOId }: DeliveryContractsProps
               <td className="px-4 py-4 text-gray-500">{contract.deliveryDate}</td>
               <td className="max-w-[250px] truncate px-4 py-4 text-gray-600" title={contract.allocations?.map((allocation) => `${allocation.poCode} (${allocation.quantity})`).join(", ")}>{contract.allocations?.map((allocation) => `${allocation.poCode} (${allocation.quantity})`).join(", ")}</td>
               <td className="px-4 py-4 font-bold text-blue-600">{contract.totalQuantity}</td>
+              <td className="px-4 py-4">
+                <button type="button" onClick={() => { setError(""); setReturnTarget(contract); }}
+                  className="rounded-lg border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-50">
+                  Hoàn hàng
+                </button>
+              </td>
             </tr>)}
           </tbody>
         </table>
