@@ -85,6 +85,8 @@ export const createDeliveryContract = (body: unknown) =>
   api.post("/api/v1/admin/purchase-orders/contracts", body);
 export const updateDeliveryContract = (id: number, body: unknown) =>
   api.put(`/api/v1/admin/purchase-orders/contracts/${id}`, body);
+export const deleteDeliveryContract = (id: number) =>
+  api.delete(`/api/v1/admin/purchase-orders/contracts/${id}`);
 export const searchSuppliers = (search = "") =>
   api.get<SupplierPage>("/api/v1/superadmin/suppliers", {
     params: { search, page: 0, size: 30, sortBy: "name", sortDir: "asc" },
