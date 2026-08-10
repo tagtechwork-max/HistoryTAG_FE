@@ -3,12 +3,15 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { ImplementationTaskRequestDTO } from "../../api/superadmin.api";
+import { getStoredAccessToken } from "../../api/client";
 import { TaskFormModalCuratorView } from "./TaskFormModalCuratorFragment";
 
 const API_ROOT = import.meta.env.VITE_API_URL || "";
 
 function authHeaders(extra?: Record<string, string>) {
-    const token = localStorage.getItem("access_token");
+    // Use the shared token resolver so SuperAdmin requests also work when the
+    // login flow stores the JWT in sessionStorage, legacy token storage, or cookie.
+    const token = getStoredAccessToken();
     return {
         Accept: "application/json",
         "Content-Type": "application/json",
