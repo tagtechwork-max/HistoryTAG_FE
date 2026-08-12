@@ -212,7 +212,7 @@ export async function getDashboardHospitalTransferOptions(signal?: AbortSignal) 
 }
 
 export async function getDashboardBusinessOverview(params: {
-  from?: string; to?: string; status?: string; groupBy?: "day" | "month" | "year";
+  from?: string; to?: string; status?: string; groupBy?: "day" | "week" | "month" | "year";
 }, signal?: AbortSignal) {
   const { data } = await api.get<DashboardBusinessOverviewDTO>("/api/v1/superadmin/dashboard/business-overview", { params, signal });
   return data;

@@ -1,4 +1,4 @@
-export type BusinessGroupBy = "day" | "month" | "year";
+export type BusinessGroupBy = "day" | "week" | "month" | "year";
 export type HardwareGroupBy = "hardware" | "type" | "supplier";
 
 export type BusinessItem = {
