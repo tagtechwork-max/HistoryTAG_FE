@@ -1264,8 +1264,8 @@ const BusinessPage: React.FC = () => {
       // ── Header row ──
       const headers = [
         'STT', 'Bệnh viện', 'Mã hợp đồng', 'Người phụ trách', 'Phần cứng',
-        'SL', 'Thanh toán', 'Trạng thái', 'Đơn giá', 'Thành tiền',
-        'Đã thanh toán', 'Còn lại', 'Hoa hồng', 'Đơn vị tài trợ', 'Bảo hành đến',
+        'SL', 'Thanh toán', 'Trạng thái', 'Đơn giá', 'Tổng tiền',
+        'Đã thanh toán', 'Tổng công nợ', 'Hoa hồng', 'Đơn vị tài trợ', 'Bảo hành đến',
       ];
       const headerRow = worksheet.addRow(headers);
       headerRow.height = 28;
@@ -3184,14 +3184,12 @@ const BusinessPage: React.FC = () => {
                         <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">STT</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Bệnh viện</th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Đơn giá</th>
-                        <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Thành tiền</th>
-                        <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Còn lại</th>
-                        <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Ngày thanh toán</th>
+                        <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Tổng tiền</th>
+                        <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Tổng công nợ</th>
+                        <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Tổng số lượng</th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Mã hợp đồng</th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Người phụ trách</th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Phần cứng</th>
-                        <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">SL</th>
-                        <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Thanh toán</th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Giao hàng</th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Trạng thái</th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Bảo hành</th>
@@ -3203,7 +3201,7 @@ const BusinessPage: React.FC = () => {
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
                       {items.length === 0 ? (
                         <tr>
-                          <td colSpan={15} className="px-3 py-12 text-center text-gray-500 dark:text-gray-400">
+                          <td colSpan={13} className="px-3 py-12 text-center text-gray-500 dark:text-gray-400">
                             <div className="flex flex-col items-center">
                               <svg className="mb-3 h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
@@ -3239,11 +3237,11 @@ const BusinessPage: React.FC = () => {
                               <td className="whitespace-nowrap px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300">
                                 {it.unitPrice != null ? it.unitPrice.toLocaleString('vi-VN') + ' ₫' : '—'}
                               </td>
-                              {/* Thành tiền */}
+                              {/* Tổng tiền */}
                               <td className="whitespace-nowrap px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
                                 {it.totalPrice != null ? it.totalPrice.toLocaleString('vi-VN') + ' ₫' : '—'}
                               </td>
-                              {/* Còn lại */}
+                              {/* Tổng công nợ */}
                               <td className="whitespace-nowrap px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300">
                                 {(() => {
                                   const total = it.totalPrice ?? 0;
@@ -3257,9 +3255,9 @@ const BusinessPage: React.FC = () => {
                                   );
                                 })()}
                               </td>
-                              {/* Ngày thanh toán */}
-                              <td className="whitespace-nowrap px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300">
-                                {it.paymentDate ? formatDateShort(it.paymentDate) : '—'}
+                              {/* Tổng số lượng kiosk của viện */}
+                              <td className="whitespace-nowrap px-4 py-3 text-center text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                {it.quantity ?? '—'}
                               </td>
                               {/* Mã hợp đồng */}
                               <td className="whitespace-nowrap px-4 py-3">
@@ -3279,40 +3277,6 @@ const BusinessPage: React.FC = () => {
                               {/* Phần cứng */}
                               <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
                                 {it.hardware?.label ?? '—'}
-                              </td>
-                              {/* SL */}
-                              <td className="whitespace-nowrap px-4 py-3 text-center text-sm text-gray-700 dark:text-gray-300">
-                                {it.quantity ?? '—'}
-                              </td>
-                              {/* Thanh toán */}
-                              <td className="whitespace-nowrap px-4 py-3">
-                                {it.paymentStatus === 'THANH_TOAN_HET' ? (
-                                  <div className="flex flex-col gap-1">
-                                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800">
-                                      Thanh toán hết
-                                    </span>
-                                    {typeof it.paidAmount === 'number' && (
-                                      <span className="text-xs text-center text-gray-600">
-                                        {it.paidAmount.toLocaleString('vi-VN')} ₫
-                                      </span>
-                                    )}
-                                  </div>
-                                ) : it.paymentStatus === 'DA_THANH_TOAN' ? (
-                                  <div className="flex flex-col gap-1">
-                                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-700">
-                                      Đã thanh toán
-                                    </span>
-                                    {typeof it.paidAmount === 'number' && (
-                                      <span className="text-xs text-center text-gray-600">
-                                        {it.paidAmount.toLocaleString('vi-VN')} ₫
-                                      </span>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-700">
-                                    Chưa thanh toán
-                                  </span>
-                                )}
                               </td>
                               {/* Giao hàng */}
                               <td className="whitespace-nowrap px-4 py-3">

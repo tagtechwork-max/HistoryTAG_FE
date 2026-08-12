@@ -67,7 +67,7 @@ export default function SuperAdminHome() {
   const [totalActual, setTotalActual] = useState<number | null>(null);
   const [, setTotalCommission] = useState<number | null>(null);
   const [conversionRate, setConversionRate] = useState<number | null>(null);
-  const [groupBy, setGroupBy] = useState<BusinessGroupBy>('day');
+  const [groupBy, setGroupBy] = useState<BusinessGroupBy>('week');
   const [aggLabels, setAggLabels] = useState<string[]>([]);
   const [aggExpected, setAggExpected] = useState<number[]>([]);
   const [aggActual, setAggActual] = useState<number[]>([]);
@@ -2330,7 +2330,7 @@ export default function SuperAdminHome() {
         {/* Full-width Business Report placed below the grid */}
         <section id="section-business-report" className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100 w-full">
           <div className="max-w-full">
-            <h2 className="text-lg font-semibold text-blue-800">Báo cáo Kinh doanh</h2>
+            <h2 className="text-lg font-semibold text-blue-800">Báo cáo doanh số hợp đồng kinh doanh</h2>
             <p className="text-sm text-gray-500 mt-1">Doanh thu & hoa hồng theo dự án. Lọc theo khoảng thời gian.</p>
 
             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -2356,6 +2356,7 @@ export default function SuperAdminHome() {
                   <label className="block text-xs text-gray-500">Gộp theo</label>
                   <select value={groupBy} onChange={(e) => { const next = e.target.value as BusinessGroupBy; setGroupBy(next); void loadBusinessReport(businessFrom, businessTo, businessStatus, next); }} className="mt-1 rounded-md border px-3 py-2 text-sm bg-white w-40">
                     <option value="day">Theo ngày</option>
+                    <option value="week">Theo tuần</option>
                     <option value="month">Theo tháng</option>
                     <option value="year">Theo năm</option>
                   </select>
@@ -2369,8 +2370,8 @@ export default function SuperAdminHome() {
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 items-stretch">
-              <StatCard title="Tổng doanh thu dự kiến" value={totalExpected != null ? (totalExpected).toLocaleString() + ' ₫' : '--'} color="bg-indigo-500" />
-              <StatCard title="Tổng doanh thu thực tế" value={totalActual != null ? (totalActual).toLocaleString() + ' ₫' : '--'} color="bg-emerald-500" />
+              <StatCard title="Tổng thu" value={totalExpected != null ? (totalExpected).toLocaleString() + ' ₫' : '--'} color="bg-indigo-500" />
+              <StatCard title="Tổng nợ" value={totalActual != null ? (totalActual).toLocaleString() + ' ₫' : '--'} color="bg-emerald-500" />
               <StatCard title="Tỷ lệ chuyển đổi" value={conversionRate != null ? `${conversionRate}%` : '--'} color="bg-teal-500" />
             </div>
 
