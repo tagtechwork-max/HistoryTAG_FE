@@ -25,6 +25,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Pagination from '../../components/common/Pagination';
 import ComponentCard from '../../components/common/ComponentCard';
 import { normalizeBusinessContractName } from '../../utils/businessContract';
+import {
+  getBusinessAuditUserDisplay,
+  normalizeBusinessAuditUser,
+  type BusinessAuditUser,
+} from '../../utils/businessAudit';
 
 type ITUserOption = { id: number; name: string; phone?: string | null };
 type PaymentInstallmentDraft = { amount: number | ''; amountDisplay: string; paymentDate: string };
@@ -115,6 +120,9 @@ const BusinessPage: React.FC = () => {
     warrantyStartDate?: string | null;
     warrantyEndDate?: string | null;
     createdAt?: string | null;
+    updatedAt?: string | null;
+    createdBy?: BusinessAuditUser | null;
+    updatedBy?: BusinessAuditUser | null;
     bankName?: string | null;
     bankContactPerson?: string | null;
     notes?: string | null;
@@ -154,6 +162,16 @@ const BusinessPage: React.FC = () => {
       day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit',
     });
+  }
+
+  function renderAuditUser(user?: BusinessAuditUser | null) {
+    const { primary, secondary } = getBusinessAuditUserDisplay(user);
+    return (
+      <div>
+        <div className="font-medium text-gray-900">{primary}</div>
+        {secondary && <div className="mt-0.5 text-sm text-gray-500">{secondary}</div>}
+      </div>
+    );
   }
   function formatBusinessId(id?: number | null) {
     if (id == null) return '—';
@@ -360,6 +378,9 @@ const BusinessPage: React.FC = () => {
         const warrantyStart = (c['warrantyStartDate'] ?? c['warranty_start_date']) as string | undefined | null;
         const warrantyEnd = (c['warrantyEndDate'] ?? c['warranty_end_date']) as string | undefined | null;
         const created = (c['createdAt'] ?? c['created_at']) as string | undefined | null;
+        const updated = (c['updatedAt'] ?? c['updated_at']) as string | undefined | null;
+        const createdBy = normalizeBusinessAuditUser(c['createdBy'] ?? c['created_by']);
+        const updatedBy = normalizeBusinessAuditUser(c['updatedBy'] ?? c['updated_by']);
         const picRaw = c['picUser'] ?? c['pic_user'] ?? null;
         let picUser: BusinessItem['picUser'] = null;
         if (picRaw && typeof picRaw === 'object') {
@@ -385,6 +406,9 @@ const BusinessPage: React.FC = () => {
           warrantyStartDate: warrantyStart ?? null,
           warrantyEndDate: warrantyEnd ?? null,
           createdAt: created ?? null,
+          updatedAt: updated ?? null,
+          createdBy,
+          updatedBy,
           picUser,
           bankName: c['bankName'] ?? c['bank_name'] ?? null,
           bankContactPerson: c['bankContactPerson'] ?? c['bank_contact_person'] ?? null,
@@ -3535,6 +3559,23 @@ const BusinessPage: React.FC = () => {
                     {viewItem.warrantyStartDate && <DetailField label="Ngày bắt đầu bảo hành" value={formatDateShort(viewItem.warrantyStartDate)} />}
                     {viewItem.warrantyEndDate && <DetailField label="Ngày hết hạn bảo hành" value={formatDateShort(viewItem.warrantyEndDate)} />}
                   </div>
+                </div>
+                <hr className="my-3 border-gray-200" />
+
+                {/* Audit information */}
+                <div>
+                  <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-black">Thông tin hệ thống</h4>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <DetailField label="Người tạo" value={renderAuditUser(viewItem.createdBy)} />
+                    <DetailField label="Thời gian tạo" value={<span>{formatPaymentDateTime(viewItem.createdAt)}</span>} />
+                    <DetailField label="Người cập nhật" value={renderAuditUser(viewItem.updatedBy)} />
+                    <DetailField label="Thời gian cập nhật" value={<span>{formatPaymentDateTime(viewItem.updatedAt)}</span>} />
+                  </div>
+                  {(!viewItem.createdBy || !viewItem.updatedBy) && (
+                    <p className="mt-3 text-xs text-gray-500">
+                      Dấu — cho biết hợp đồng được tạo trước khi hệ thống bắt đầu ghi nhận người tạo/người cập nhật.
+                    </p>
+                  )}
                 </div>
                 <hr className="my-3 border-gray-200" />
 

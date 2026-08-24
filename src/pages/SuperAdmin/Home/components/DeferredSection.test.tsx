@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render } from "@testing-library/react";
 import { DeferredSection } from "./DeferredSection";
 
 afterEach(() => {
@@ -10,10 +10,12 @@ afterEach(() => {
 describe("DeferredSection", () => {
   it("renders children immediately when IntersectionObserver is unavailable", async () => {
     Reflect.deleteProperty(window, "IntersectionObserver");
-    render(<DeferredSection placeholder={<span>loading</span>}><span>report</span></DeferredSection>);
+    const { findByText, queryByText } = render(
+      <DeferredSection placeholder={<span>loading</span>}><span>report</span></DeferredSection>,
+    );
 
-    expect(await screen.findByText("report")).toBeTruthy();
-    expect(screen.queryByText("loading")).toBeNull();
+    expect(await findByText("report")).toBeTruthy();
+    expect(queryByText("loading")).toBeNull();
   });
 
   it("keeps the placeholder until the section intersects and disconnects the observer", async () => {
@@ -31,12 +33,14 @@ describe("DeferredSection", () => {
     }
     vi.stubGlobal("IntersectionObserver", TestIntersectionObserver);
 
-    render(<DeferredSection placeholder={<span>loading</span>}><span>report</span></DeferredSection>);
-    expect(screen.getByText("loading")).toBeTruthy();
+    const { findByText, getByText } = render(
+      <DeferredSection placeholder={<span>loading</span>}><span>report</span></DeferredSection>,
+    );
+    expect(getByText("loading")).toBeTruthy();
 
     callback?.([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
 
-    expect(await screen.findByText("report")).toBeTruthy();
+    expect(await findByText("report")).toBeTruthy();
     expect(disconnect).toHaveBeenCalled();
   });
 });
