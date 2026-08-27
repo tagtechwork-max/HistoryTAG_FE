@@ -101,6 +101,27 @@ export async function getBusinesses(params = {}, signal?: AbortSignal) {
   return res.data;
 }
 
+export type BusinessSummary = {
+  quantity: number;
+  totalPrice: number;
+  totalDebt: number;
+};
+
+export async function getBusinessSummary(params = {}, signal?: AbortSignal): Promise<BusinessSummary> {
+  const base = getBase('GET', false);
+  const query = new URLSearchParams();
+  Object.entries(params as Record<string, unknown>).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    if (typeof value === 'string' && value.trim() === '') return;
+    if (key === 'page' || key === 'size' || key === 'sortBy' || key === 'sortDir') return;
+    query.append(key, String(value));
+  });
+  const qs = query.toString();
+  const url = qs ? `${base}/business/summary?${qs}` : `${base}/business/summary`;
+  const res = await api.get<BusinessSummary>(url, { signal });
+  return res.data;
+}
+
 export async function getBusinessById(id: number) {
   // ✅ GET request: luôn dùng admin API
   const base = getBase('GET', false);

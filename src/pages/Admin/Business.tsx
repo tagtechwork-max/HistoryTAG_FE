@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { searchHardware, searchHospitals, createBusiness, getBusinesses, updateBusiness, deleteBusiness, getBusinessById, getHardwareById, getBusinessPicOptions } from '../../api/business.api';
+import { searchHardware, searchHospitals, createBusiness, getBusinesses, getBusinessSummary, updateBusiness, deleteBusiness, getBusinessById, getHardwareById, getBusinessPicOptions } from '../../api/business.api';
 import { getAllUsers } from '../../api/superadmin.api';
 import api from '../../api/client';
 import { toast as hotToast } from 'react-hot-toast';
@@ -260,18 +260,7 @@ const BusinessPage: React.FC = () => {
   }
 
   const [items, setItems] = useState<BusinessItem[]>([]);
-  const totals = React.useMemo(() => {
-    return items.reduce(
-      (acc, it) => {
-        acc.quantity += it.quantity ?? 0;
-        acc.totalPrice += it.totalPrice ?? 0;
-        const debt = (it.totalPrice ?? 0) - (typeof it.paidAmount === 'number' ? it.paidAmount : 0);
-        acc.totalDebt += debt > 0 ? debt : 0;
-        return acc;
-      },
-      { quantity: 0, totalPrice: 0, totalDebt: 0 }
-    );
-  }, [items]);
+  const [totals, setTotals] = useState({ quantity: 0, totalPrice: 0, totalDebt: 0 });
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(0);
   const [itemsPerPage, setItemsPerPage] = useState<number>(10);
@@ -362,7 +351,6 @@ const BusinessPage: React.FC = () => {
 
   async function loadList(page = currentPage, size = itemsPerPage) {
     try {
-      const usePicFilter = Boolean(filterPicId);
       const effectivePage = page;
       const effectiveSize = size;
       const params: Record<string, unknown> = { page: effectivePage, size: effectiveSize };
@@ -376,7 +364,13 @@ const BusinessPage: React.FC = () => {
       if (filterPaymentStatus && filterPaymentStatus !== 'ALL') params.paymentStatus = filterPaymentStatus;
       if (filterPicId) params.picUserId = filterPicId;
       console.debug('[Business] loadList params', params);
-      const res = await getBusinesses(params);
+      const [res, summary] = await Promise.all([
+        getBusinesses(params),
+        getBusinessSummary(params).catch((error) => {
+          console.error('[Business] Failed to load filtered summary', error);
+          return null;
+        }),
+      ]);
       const content = Array.isArray(res?.content) ? res.content : (Array.isArray(res) ? res : []);
       // ensure numeric fields are numbers
       const normalized = (content as Array<Record<string, unknown>>).map((c) => {
@@ -453,7 +447,23 @@ const BusinessPage: React.FC = () => {
         : locallyFiltered;
       const finalList = sortBusinessItems(filteredByPic);
       setItems(finalList);
-      let listForTotals = finalList;
+      const pageTotals = finalList.reduce(
+        (acc, item) => {
+          acc.quantity += item.quantity ?? 0;
+          acc.totalPrice += item.totalPrice ?? 0;
+          const debt = (item.totalPrice ?? 0) - (typeof item.paidAmount === 'number' ? item.paidAmount : 0);
+          acc.totalDebt += debt > 0 ? debt : 0;
+          return acc;
+        },
+        { quantity: 0, totalPrice: 0, totalDebt: 0 },
+      );
+      setTotals(summary
+        ? {
+            quantity: Number(summary.quantity) || 0,
+            totalPrice: Number(summary.totalPrice) || 0,
+            totalDebt: Number(summary.totalDebt) || 0,
+          }
+        : pageTotals);
       // fetch phone numbers for each unique hospital in the list (best-effort, cache results)
       try {
         const cache = hospitalPhoneCacheRef.current;
@@ -501,7 +511,6 @@ const BusinessPage: React.FC = () => {
           : withPhonesFiltered;
         const finalWithPhones = sortBusinessItems(withPhonesPicFiltered);
         setItems(finalWithPhones);
-        listForTotals = finalWithPhones;
       } catch (e) {
         // ignore phone enrichment failures
         // console.warn('Failed to enrich hospitals with phone', e);
@@ -1208,6 +1217,7 @@ const BusinessPage: React.FC = () => {
       if (trimmedSearch) params.search = trimmedSearch;
       if (filterStatus && filterStatus !== 'ALL') params.status = filterStatus;
       if (filterPaymentStatus && filterPaymentStatus !== 'ALL') params.paymentStatus = filterPaymentStatus;
+      if (filterPicId) params.picUserId = filterPicId;
       const startFromParam = normalizeDateForStart(filterStartFrom);
       const startToParam = normalizeDateForEnd(filterStartTo);
       if (startFromParam) params.startDateFrom = startFromParam;
@@ -1238,8 +1248,7 @@ const BusinessPage: React.FC = () => {
         });
       }
 
-      // picUserId is not handled by the current backend endpoint, so apply this
-      // filter only after all server-filtered pages have been collected.
+      // Keep a local PIC guard so exports remain correct against older API deployments.
       if (filterPicId) {
         content = content.filter((item) => {
           const picRaw = item['picUser'] ?? item['pic_user'];
