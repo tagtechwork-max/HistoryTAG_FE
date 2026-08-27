@@ -260,6 +260,18 @@ const BusinessPage: React.FC = () => {
   }
 
   const [items, setItems] = useState<BusinessItem[]>([]);
+  const totals = React.useMemo(() => {
+    return items.reduce(
+      (acc, it) => {
+        acc.quantity += it.quantity ?? 0;
+        acc.totalPrice += it.totalPrice ?? 0;
+        const debt = (it.totalPrice ?? 0) - (typeof it.paidAmount === 'number' ? it.paidAmount : 0);
+        acc.totalDebt += debt > 0 ? debt : 0;
+        return acc;
+      },
+      { quantity: 0, totalPrice: 0, totalDebt: 0 }
+    );
+  }, [items]);
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(0);
   const [itemsPerPage, setItemsPerPage] = useState<number>(10);
@@ -1183,22 +1195,62 @@ const BusinessPage: React.FC = () => {
   async function exportExcel() {
     setExporting(true);
     try {
-      // Fetch ALL items matching current filters (no pagination)
-      const params: Record<string, unknown> = { page: 0, size: 99999 };
+      // The backend caps every page at 20 items, so fetch every matching page
+      // instead of relying on a single oversized request.
+      const exportPageSize = 20;
+      const exportBatchSize = 5;
+      const params: Record<string, unknown> = {
+        size: exportPageSize,
+        sortBy: 'id',
+        sortDir: 'asc',
+      };
       const trimmedSearch = filterSearch.trim();
       if (trimmedSearch) params.search = trimmedSearch;
       if (filterStatus && filterStatus !== 'ALL') params.status = filterStatus;
       if (filterPaymentStatus && filterPaymentStatus !== 'ALL') params.paymentStatus = filterPaymentStatus;
-      if (filterPicId) params.picUserId = filterPicId;
       const startFromParam = normalizeDateForStart(filterStartFrom);
       const startToParam = normalizeDateForEnd(filterStartTo);
       if (startFromParam) params.startDateFrom = startFromParam;
       if (startToParam) params.startDateTo = startToParam;
 
-      const res = await getBusinesses(params as any);
-      const content = Array.isArray(res?.content) ? res.content : (Array.isArray(res) ? res : []);
+      const firstPage = await getBusinesses({ ...params, page: 0 });
+      let content: Array<Record<string, unknown>> = Array.isArray(firstPage?.content)
+        ? firstPage.content
+        : (Array.isArray(firstPage) ? firstPage : []);
+      const totalPagesValue = Number(firstPage?.totalPages);
+      const totalPages = Number.isFinite(totalPagesValue) && totalPagesValue > 0
+        ? Math.floor(totalPagesValue)
+        : 1;
+
+      // Limit concurrent requests so a large export does not overload the API.
+      for (let batchStart = 1; batchStart < totalPages; batchStart += exportBatchSize) {
+        const batchEnd = Math.min(batchStart + exportBatchSize, totalPages);
+        const pageRequests = Array.from(
+          { length: batchEnd - batchStart },
+          (_, index) => getBusinesses({ ...params, page: batchStart + index }),
+        );
+        const responses = await Promise.all(pageRequests);
+        responses.forEach((response) => {
+          const pageContent = Array.isArray(response?.content)
+            ? response.content
+            : (Array.isArray(response) ? response : []);
+          content.push(...pageContent);
+        });
+      }
+
+      // picUserId is not handled by the current backend endpoint, so apply this
+      // filter only after all server-filtered pages have been collected.
+      if (filterPicId) {
+        content = content.filter((item) => {
+          const picRaw = item['picUser'] ?? item['pic_user'];
+          if (!picRaw || typeof picRaw !== 'object') return false;
+          const picId = Number((picRaw as Record<string, unknown>)['id']);
+          return Number.isFinite(picId) && picId === filterPicId;
+        });
+      }
+
       // Normalize
-      const allItems = (content as Array<Record<string, unknown>>).map((c) => {
+      const allItems = content.map((c) => {
         const unit = c['unitPrice'] ?? c['unit_price'];
         const total = c['totalPrice'] ?? c['total_price'];
         const comm = c['commission'];
@@ -1212,9 +1264,18 @@ const BusinessPage: React.FC = () => {
           const pr = picRaw as Record<string, unknown>;
           picLabel = String(pr['label'] ?? pr['name'] ?? '');
         }
+        const deliveries: NonNullable<BusinessItem['deliveries']> = Array.isArray(c['deliveries'])
+          ? c['deliveries'] as NonNullable<BusinessItem['deliveries']>
+          : [];
+        const poCodes = Array.from(new Set(
+          deliveries.flatMap((delivery) => delivery.allocations ?? [])
+            .map((allocation) => allocation.poCode?.trim())
+            .filter((poCode): poCode is string => Boolean(poCode)),
+        )).join(', ');
         return {
           name: c['name'] as string ?? '',
           hospitalLabel: ((c['hospital'] as any)?.label ?? (c['hospital'] as any)?.name ?? '') as string,
+          poCodes,
           picLabel,
           hardwareLabel: ((c['hardware'] as any)?.label ?? (c['hardware'] as any)?.name ?? '') as string,
           quantity: qty != null ? Number(String(qty)) : null,
@@ -1231,7 +1292,7 @@ const BusinessPage: React.FC = () => {
           paymentStatus: (c['paymentStatus'] ?? c['payment_status'] ?? 'CHUA_THANH_TOAN') as string,
           deliveryStatus: (c['deliveryStatus'] ?? c['delivery_status'] ?? 'CHUA_GIAO') as BusinessItem['deliveryStatus'],
           deliveryDates: Array.isArray(c['deliveryDates']) ? c['deliveryDates'] as string[] : [],
-          deliveries: Array.isArray(c['deliveries']) ? c['deliveries'] as BusinessItem['deliveries'] : [],
+          deliveries,
           paidAmount: c['paidAmount'] != null ? Number(String(c['paidAmount'])) : null,
           paymentDate: (c['paymentDate'] ?? c['payment_date'] ?? null) as string | null,
           implementationCompleted: Boolean(c['implementationCompleted']),
@@ -1246,7 +1307,7 @@ const BusinessPage: React.FC = () => {
 
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Kinh doanh');
-      const colCount = 15;
+      const colCount = 16;
 
       // ── Title row ──
       const titleRow = worksheet.addRow(Array(colCount).fill(''));
@@ -1287,7 +1348,7 @@ const BusinessPage: React.FC = () => {
 
       // ── Header row ──
       const headers = [
-        'STT', 'Bệnh viện', 'Mã hợp đồng', 'Người phụ trách', 'Phần cứng',
+        'STT', 'Bệnh viện', 'Mã hợp đồng', 'Mã PO', 'Người phụ trách', 'Phần cứng',
         'SL', 'Thanh toán', 'Trạng thái', 'Đơn giá', 'Tổng tiền',
         'Đã thanh toán', 'Tổng công nợ', 'Hoa hồng', 'Đơn vị tài trợ', 'Bảo hành đến',
       ];
@@ -1302,7 +1363,7 @@ const BusinessPage: React.FC = () => {
       }
 
       // Column widths
-      const widths = [6, 35, 18, 22, 20, 8, 18, 16, 18, 18, 18, 18, 18, 22, 16];
+      const widths = [6, 35, 18, 22, 22, 20, 8, 18, 16, 18, 18, 18, 18, 18, 22, 16];
       widths.forEach((w, i) => { worksheet.getColumn(i + 1).width = w; });
 
       // ── Data rows ──
@@ -1323,6 +1384,7 @@ const BusinessPage: React.FC = () => {
           index + 1,
           item.hospitalLabel,
           item.name,
+          item.poCodes,
           item.picLabel,
           item.hardwareLabel,
           item.quantity ?? '',
@@ -1340,7 +1402,7 @@ const BusinessPage: React.FC = () => {
 
         for (let col = 1; col <= colCount; col++) {
           const cell = row.getCell(col);
-          cell.alignment = { vertical: 'middle', horizontal: col === 1 || col === 6 ? 'center' : 'left', wrapText: col === 2 };
+          cell.alignment = { vertical: 'middle', horizontal: col === 1 || col === 7 ? 'center' : 'left', wrapText: col === 2 || col === 4 };
           cell.border = {
             top: { style: 'thin', color: { argb: 'FFE0E0E0' } },
             left: { style: 'thin', color: { argb: 'FFE0E0E0' } },
@@ -1352,14 +1414,14 @@ const BusinessPage: React.FC = () => {
           }
         }
 
-        // Number format for currency columns (9=Đơn giá, 10=Thành tiền, 11=Đã TT, 12=Còn lại, 13=Hoa hồng)
-        for (const colIdx of [9, 10, 11, 12, 13]) {
+        // Number format for currency columns (10=Đơn giá, 11=Thành tiền, 12=Đã TT, 13=Còn lại, 14=Hoa hồng)
+        for (const colIdx of [10, 11, 12, 13, 14]) {
           row.getCell(colIdx).numFmt = '#,##0';
           row.getCell(colIdx).alignment = { vertical: 'middle', horizontal: 'right' };
         }
 
         // Color coding for status
-        const statusCell = row.getCell(8);
+        const statusCell = row.getCell(9);
         if (item.status === 'CONTRACTED') {
           statusCell.font = { color: { argb: 'FF16A34A' }, bold: true };
         } else if (item.status === 'CANCELLED') {
@@ -1369,7 +1431,7 @@ const BusinessPage: React.FC = () => {
         }
 
         // Color coding for payment status
-        const payCell = row.getCell(7);
+        const payCell = row.getCell(8);
         if (item.paymentStatus === 'THANH_TOAN_HET') {
           payCell.font = { color: { argb: 'FF059669' }, bold: true };
         } else if (item.paymentStatus === 'DA_THANH_TOAN') {
@@ -1382,9 +1444,8 @@ const BusinessPage: React.FC = () => {
       // ── Summary row ──
       worksheet.addRow([]);
       const summaryRow = worksheet.addRow([
-        '', '', '', '', '', '',
-        '', `Tổng: ${allItems.length} hợp đồng`,
-        '',
+        '', '', '', '', '', '', '', '',
+        `Tổng: ${allItems.length} hợp đồng`, '',
         allItems.reduce((s, i) => s + (i.totalPrice ?? 0), 0),
         allItems.reduce((s, i) => s + (typeof i.paidAmount === 'number' ? i.paidAmount : 0), 0),
         allItems.reduce((s, i) => s + ((i.totalPrice ?? 0) - (typeof i.paidAmount === 'number' ? i.paidAmount : 0)), 0),
@@ -1397,11 +1458,11 @@ const BusinessPage: React.FC = () => {
         cell.font = { bold: true, size: 11 };
         cell.border = { top: { style: 'medium' }, bottom: { style: 'medium' }, left: { style: 'thin' }, right: { style: 'thin' } };
       }
-      for (const colIdx of [9, 10, 11, 12, 13]) {
+      for (const colIdx of [10, 11, 12, 13, 14]) {
         summaryRow.getCell(colIdx).numFmt = '#,##0';
         summaryRow.getCell(colIdx).alignment = { vertical: 'middle', horizontal: 'right' };
       }
-      summaryRow.getCell(8).alignment = { vertical: 'middle', horizontal: 'right' };
+      summaryRow.getCell(9).alignment = { vertical: 'middle', horizontal: 'right' };
 
       // ── Generate & download ──
       const buffer = await workbook.xlsx.writeBuffer();
@@ -3223,6 +3284,45 @@ const BusinessPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+                      {/* Dòng Tổng ở đầu danh sách */}
+                      {items.length > 0 && (
+                        <tr className="bg-blue-50/70 font-semibold text-gray-900 dark:bg-blue-950/40 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700/60">
+                          {/* STT */}
+                          <td className="whitespace-nowrap px-4 py-3 text-center text-sm font-bold text-gray-900 dark:text-white">
+                            Tổng
+                          </td>
+                          {/* Bệnh viện */}
+                          <td className="px-4 py-3"></td>
+                          {/* Đơn giá */}
+                          <td className="whitespace-nowrap px-4 py-3"></td>
+                          {/* Tổng tiền */}
+                          <td className="whitespace-nowrap px-4 py-3 text-left text-sm font-bold text-gray-900 dark:text-white">
+                            {totals.totalPrice > 0 ? totals.totalPrice.toLocaleString('vi-VN') + ' ₫' : '0 ₫'}
+                          </td>
+                          {/* Tổng công nợ */}
+                          <td className="whitespace-nowrap px-4 py-3 text-left text-sm font-bold text-red-600 dark:text-red-400">
+                            {totals.totalDebt > 0 ? totals.totalDebt.toLocaleString('vi-VN') + ' ₫' : '0 ₫'}
+                          </td>
+                          {/* Tổng số lượng */}
+                          <td className="whitespace-nowrap px-4 py-3 text-center text-sm font-bold text-gray-900 dark:text-white">
+                            {totals.quantity.toLocaleString('vi-VN')}
+                          </td>
+                          {/* Mã hợp đồng */}
+                          <td className="whitespace-nowrap px-4 py-3"></td>
+                          {/* Người phụ trách */}
+                          <td className="whitespace-nowrap px-4 py-3"></td>
+                          {/* Phần cứng */}
+                          <td className="whitespace-nowrap px-4 py-3"></td>
+                          {/* Giao hàng */}
+                          <td className="whitespace-nowrap px-4 py-3"></td>
+                          {/* Trạng thái */}
+                          <td className="whitespace-nowrap px-4 py-3"></td>
+                          {/* Bảo hành */}
+                          <td className="whitespace-nowrap px-4 py-3"></td>
+                          {/* Thao tác */}
+                          <td className="sticky right-0 z-10 whitespace-nowrap border-l border-blue-100/60 bg-blue-50/70 px-4 py-3 text-center dark:border-gray-700 dark:bg-slate-800/90 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] dark:shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.3)]"></td>
+                        </tr>
+                      )}
                       {items.length === 0 ? (
                         <tr>
                           <td colSpan={13} className="px-3 py-12 text-center text-gray-500 dark:text-gray-400">
