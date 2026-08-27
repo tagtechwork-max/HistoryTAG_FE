@@ -1267,15 +1267,30 @@ const BusinessPage: React.FC = () => {
         const deliveries: NonNullable<BusinessItem['deliveries']> = Array.isArray(c['deliveries'])
           ? c['deliveries'] as NonNullable<BusinessItem['deliveries']>
           : [];
+        const allocations = deliveries.flatMap((delivery) => delivery.allocations ?? []);
         const poCodes = Array.from(new Set(
-          deliveries.flatMap((delivery) => delivery.allocations ?? [])
-            .map((allocation) => allocation.poCode?.trim())
+          allocations.map((allocation) => allocation.poCode?.trim())
             .filter((poCode): poCode is string => Boolean(poCode)),
         )).join(', ');
+        const serialsByPo = new Map<string, Set<string>>();
+        allocations.forEach((allocation) => {
+          const poCode = allocation.poCode?.trim();
+          if (!poCode || !Array.isArray(allocation.serialNumbers)) return;
+          const serials = serialsByPo.get(poCode) ?? new Set<string>();
+          allocation.serialNumbers.forEach((serialNumber) => {
+            const normalizedSerial = serialNumber?.trim();
+            if (normalizedSerial) serials.add(normalizedSerial);
+          });
+          if (serials.size > 0) serialsByPo.set(poCode, serials);
+        });
+        const serialSummary = Array.from(serialsByPo.entries())
+          .map(([poCode, serials]) => `${poCode}: ${Array.from(serials).join(', ')}`)
+          .join('\n');
         return {
           name: c['name'] as string ?? '',
           hospitalLabel: ((c['hospital'] as any)?.label ?? (c['hospital'] as any)?.name ?? '') as string,
           poCodes,
+          serialSummary,
           picLabel,
           hardwareLabel: ((c['hardware'] as any)?.label ?? (c['hardware'] as any)?.name ?? '') as string,
           quantity: qty != null ? Number(String(qty)) : null,
@@ -1307,7 +1322,7 @@ const BusinessPage: React.FC = () => {
 
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Kinh doanh');
-      const colCount = 16;
+      const colCount = 17;
 
       // ── Title row ──
       const titleRow = worksheet.addRow(Array(colCount).fill(''));
@@ -1348,7 +1363,7 @@ const BusinessPage: React.FC = () => {
 
       // ── Header row ──
       const headers = [
-        'STT', 'Bệnh viện', 'Mã hợp đồng', 'Mã PO', 'Người phụ trách', 'Phần cứng',
+        'STT', 'Bệnh viện', 'Mã hợp đồng', 'Mã PO', 'Số seri', 'Người phụ trách', 'Phần cứng',
         'SL', 'Thanh toán', 'Trạng thái', 'Đơn giá', 'Tổng tiền',
         'Đã thanh toán', 'Tổng công nợ', 'Hoa hồng', 'Đơn vị tài trợ', 'Bảo hành đến',
       ];
@@ -1363,7 +1378,7 @@ const BusinessPage: React.FC = () => {
       }
 
       // Column widths
-      const widths = [6, 35, 18, 22, 22, 20, 8, 18, 16, 18, 18, 18, 18, 18, 22, 16];
+      const widths = [6, 35, 18, 22, 36, 22, 20, 8, 18, 16, 18, 18, 18, 18, 18, 22, 16];
       widths.forEach((w, i) => { worksheet.getColumn(i + 1).width = w; });
 
       // ── Data rows ──
@@ -1385,6 +1400,7 @@ const BusinessPage: React.FC = () => {
           item.hospitalLabel,
           item.name,
           item.poCodes,
+          item.serialSummary,
           item.picLabel,
           item.hardwareLabel,
           item.quantity ?? '',
@@ -1398,11 +1414,17 @@ const BusinessPage: React.FC = () => {
           item.bankName,
           item.warrantyEndDate ? formatDateShort(item.warrantyEndDate) : '',
         ]);
-        row.height = 22;
+        const serialVisualLines = item.serialSummary
+          ? item.serialSummary.split('\n').reduce(
+            (lineCount, line) => lineCount + Math.max(1, Math.ceil(line.length / 45)),
+            0,
+          )
+          : 1;
+        row.height = Math.max(22, serialVisualLines * 18);
 
         for (let col = 1; col <= colCount; col++) {
           const cell = row.getCell(col);
-          cell.alignment = { vertical: 'middle', horizontal: col === 1 || col === 7 ? 'center' : 'left', wrapText: col === 2 || col === 4 };
+          cell.alignment = { vertical: 'middle', horizontal: col === 1 || col === 8 ? 'center' : 'left', wrapText: col === 2 || col === 4 || col === 5 };
           cell.border = {
             top: { style: 'thin', color: { argb: 'FFE0E0E0' } },
             left: { style: 'thin', color: { argb: 'FFE0E0E0' } },
@@ -1414,14 +1436,14 @@ const BusinessPage: React.FC = () => {
           }
         }
 
-        // Number format for currency columns (10=Đơn giá, 11=Thành tiền, 12=Đã TT, 13=Còn lại, 14=Hoa hồng)
-        for (const colIdx of [10, 11, 12, 13, 14]) {
+        // Number format for currency columns (11=Đơn giá, 12=Thành tiền, 13=Đã TT, 14=Còn lại, 15=Hoa hồng)
+        for (const colIdx of [11, 12, 13, 14, 15]) {
           row.getCell(colIdx).numFmt = '#,##0';
           row.getCell(colIdx).alignment = { vertical: 'middle', horizontal: 'right' };
         }
 
         // Color coding for status
-        const statusCell = row.getCell(9);
+        const statusCell = row.getCell(10);
         if (item.status === 'CONTRACTED') {
           statusCell.font = { color: { argb: 'FF16A34A' }, bold: true };
         } else if (item.status === 'CANCELLED') {
@@ -1431,7 +1453,7 @@ const BusinessPage: React.FC = () => {
         }
 
         // Color coding for payment status
-        const payCell = row.getCell(8);
+        const payCell = row.getCell(9);
         if (item.paymentStatus === 'THANH_TOAN_HET') {
           payCell.font = { color: { argb: 'FF059669' }, bold: true };
         } else if (item.paymentStatus === 'DA_THANH_TOAN') {
@@ -1444,7 +1466,7 @@ const BusinessPage: React.FC = () => {
       // ── Summary row ──
       worksheet.addRow([]);
       const summaryRow = worksheet.addRow([
-        '', '', '', '', '', '', '', '',
+        '', '', '', '', '', '', '', '', '',
         `Tổng: ${allItems.length} hợp đồng`, '',
         allItems.reduce((s, i) => s + (i.totalPrice ?? 0), 0),
         allItems.reduce((s, i) => s + (typeof i.paidAmount === 'number' ? i.paidAmount : 0), 0),
@@ -1458,11 +1480,11 @@ const BusinessPage: React.FC = () => {
         cell.font = { bold: true, size: 11 };
         cell.border = { top: { style: 'medium' }, bottom: { style: 'medium' }, left: { style: 'thin' }, right: { style: 'thin' } };
       }
-      for (const colIdx of [10, 11, 12, 13, 14]) {
+      for (const colIdx of [11, 12, 13, 14, 15]) {
         summaryRow.getCell(colIdx).numFmt = '#,##0';
         summaryRow.getCell(colIdx).alignment = { vertical: 'middle', horizontal: 'right' };
       }
-      summaryRow.getCell(9).alignment = { vertical: 'middle', horizontal: 'right' };
+      summaryRow.getCell(10).alignment = { vertical: 'middle', horizontal: 'right' };
 
       // ── Generate & download ──
       const buffer = await workbook.xlsx.writeBuffer();
