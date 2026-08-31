@@ -28,6 +28,13 @@ type NavItem = {
   subItems?: { name: string; path: string; pro?: boolean; new?: boolean }[];
 };
 
+function resolveNavPathForRole(path: string, isSuperAdmin: boolean): string {
+  if (!isSuperAdmin) return path;
+  if (path === "/home") return "/superadmin/home";
+  if (path === "/admin/hospital-care") return "/superadmin/hospital-care";
+  return path;
+}
+
 // Danh sách mục điều hướng chính
 const navItems: NavItem[] = [
   {
@@ -271,7 +278,15 @@ const AppSidebar: React.FC = () => {
         return { ...item, subItems };
       }
       return item;
-    });
+    })
+    .map((item) => ({
+      ...item,
+      path: item.path ? resolveNavPathForRole(item.path, isSuperAdmin) : undefined,
+      subItems: item.subItems?.map((subItem) => ({
+        ...subItem,
+        path: resolveNavPathForRole(subItem.path, isSuperAdmin),
+      })),
+    }));
 
   // Kiểm tra xem đường dẫn hiện tại có trùng khớp hay không
   const isActive = useCallback(
@@ -479,7 +494,7 @@ const AppSidebar: React.FC = () => {
       onMouseLeave={() => setIsHovered(false)}
     >
       <div className="py-8 flex justify-center">
-        <Link to="/home" className="block">
+        <Link to={resolveNavPathForRole("/home", isSuperAdmin)} className="block">
           {isExpanded || isHovered || isMobileOpen ? (
             <>
               <img

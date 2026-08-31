@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import Chart from "react-apexcharts";
 import { ApexOptions } from "apexcharts";
 import ChartTab from "../common/ChartTab";
+import { fetchWithAuth } from "../../api/client";
 
 const API_ROOT = import.meta.env.VITE_API_URL || "";
 
@@ -21,15 +22,6 @@ type UserTaskStatsResponseDTO = {
   endYear?: number | null;
   data: UserTaskStatsItemDTO[];
 };
-
-function authHeaders() {
-  const token = localStorage.getItem("access_token");
-  return {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
 
 const periodLabels: Record<Period, string> = {
   monthly: "theo tháng",
@@ -57,11 +49,9 @@ export default function StatisticsChart() {
         } else {
           params.append("range", "5");
         }
-        const res = await fetch(
+        const res = await fetchWithAuth(
           `${API_ROOT}/api/v1/admin/dashboard/user/task-stats?${params.toString()}`,
           {
-            headers: authHeaders(),
-            credentials: "include",
             signal: controller.signal,
           }
         );

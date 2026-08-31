@@ -1,22 +1,13 @@
 import { useEffect, useState } from "react";
 import {
-  PaperPlaneIcon,
   CheckCircleIcon,
   TaskIcon,
   UserIcon,
   BoxIcon,
 } from "../../icons";
+import { fetchWithAuth } from "../../api/client";
 
 const API_ROOT = import.meta.env.VITE_API_URL || "";
-
-function authHeaders() {
-  const token = localStorage.getItem("access_token");
-  return {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
 
 type TaskSummary = {
   assignedCount: number;
@@ -44,11 +35,9 @@ export default function EcommerceMetrics() {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(
+        const res = await fetchWithAuth(
           `${API_ROOT}/api/v1/admin/dashboard/user/summary`,
           {
-            headers: authHeaders(),
-            credentials: "include",
             signal: controller.signal,
           }
         );
