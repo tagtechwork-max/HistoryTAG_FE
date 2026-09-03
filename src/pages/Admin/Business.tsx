@@ -33,6 +33,8 @@ import {
 
 type ITUserOption = { id: number; name: string; phone?: string | null };
 type PaymentInstallmentDraft = { amount: number | ''; amountDisplay: string; paymentDate: string };
+type BusinessSortField = 'totalPrice' | 'totalDebt' | 'quantity';
+type SortDirection = 'asc' | 'desc';
 
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -221,7 +223,8 @@ const BusinessPage: React.FC = () => {
 
   // Ensure items with status 'CARING' (Đang chăm sóc) are shown first.
   // Secondary sort: newer startDate first. Non-dates are treated as 0.
-  function sortBusinessItems(list: BusinessItem[]) {
+  function sortBusinessItems(list: BusinessItem[], preserveServerOrder = false) {
+    if (preserveServerOrder) return list.slice();
     return list.slice().sort((a, b) => {
       const aCare = (a.status ?? '').toString().toUpperCase() === 'CARING';
       const bCare = (b.status ?? '').toString().toUpperCase() === 'CARING';
@@ -266,6 +269,8 @@ const BusinessPage: React.FC = () => {
   const [itemsPerPage, setItemsPerPage] = useState<number>(10);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [totalItems, setTotalItems] = useState<number>(0);
+  const [sortField, setSortField] = useState<BusinessSortField | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [filterStartFrom, setFilterStartFrom] = useState<string>('');
   const [filterStartTo, setFilterStartTo] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
@@ -354,6 +359,10 @@ const BusinessPage: React.FC = () => {
       const effectivePage = page;
       const effectiveSize = size;
       const params: Record<string, unknown> = { page: effectivePage, size: effectiveSize };
+      if (sortField) {
+        params.sortBy = sortField;
+        params.sortDir = sortDirection;
+      }
       const startFromParam = normalizeDateForStart(filterStartFrom);
       const startToParam = normalizeDateForEnd(filterStartTo);
       if (startFromParam) params.startDateFrom = startFromParam;
@@ -445,7 +454,7 @@ const BusinessPage: React.FC = () => {
           return numericId != null && Number.isFinite(numericId) && numericId === filterPicId;
         })
         : locallyFiltered;
-      const finalList = sortBusinessItems(filteredByPic);
+      const finalList = sortBusinessItems(filteredByPic, sortField !== null);
       setItems(finalList);
       const pageTotals = finalList.reduce(
         (acc, item) => {
@@ -509,16 +518,28 @@ const BusinessPage: React.FC = () => {
             return numericId != null && Number.isFinite(numericId) && numericId === filterPicId;
           })
           : withPhonesFiltered;
-        const finalWithPhones = sortBusinessItems(withPhonesPicFiltered);
+        const finalWithPhones = sortBusinessItems(withPhonesPicFiltered, sortField !== null);
         setItems(finalWithPhones);
       } catch (e) {
         // ignore phone enrichment failures
         // console.warn('Failed to enrich hospitals with phone', e);
       }
-      const fallbackTotal = res?.totalElements ?? (Array.isArray(res) ? res.length : content.length);
-      setTotalItems(fallbackTotal);
-      setTotalPages(res?.totalPages ?? 1);
-      setCurrentPage(res?.number ?? page);
+      const pageMetadata = res?.page && typeof res.page === 'object' ? res.page : null;
+      const responseTotal = Number(res?.totalElements ?? pageMetadata?.totalElements);
+      const responsePages = Number(res?.totalPages ?? pageMetadata?.totalPages);
+      const responseNumber = Number(res?.number ?? pageMetadata?.number);
+      const responseSize = Number(res?.size ?? pageMetadata?.size);
+      const fallbackTotal = Array.isArray(res) ? res.length : content.length;
+
+      setTotalItems(Number.isFinite(responseTotal) ? responseTotal : fallbackTotal);
+      setTotalPages(Number.isFinite(responsePages) && responsePages > 0 ? responsePages : 1);
+      setCurrentPage(Number.isFinite(responseNumber) && responseNumber >= 0 ? responseNumber : page);
+
+      // The API may enforce a lower server-side page-size limit. Keep the UI,
+      // row numbering and subsequent requests aligned with the actual response.
+      if (Number.isFinite(responseSize) && responseSize > 0 && responseSize !== size) {
+        setItemsPerPage(responseSize);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -690,7 +711,26 @@ const BusinessPage: React.FC = () => {
     };
   }, []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  React.useEffect(() => { loadList(currentPage, itemsPerPage); }, [currentPage, itemsPerPage, reloadKey]);
+  React.useEffect(() => { loadList(currentPage, itemsPerPage); }, [currentPage, itemsPerPage, reloadKey, sortField, sortDirection]);
+
+  function handleSort(field: BusinessSortField) {
+    const nextDirection: SortDirection = sortField === field && sortDirection === 'asc' ? 'desc' : 'asc';
+    setSortField(field);
+    setSortDirection(nextDirection);
+    setCurrentPage(0);
+  }
+
+  function renderSortIndicator(field: BusinessSortField) {
+    const isActive = sortField === field;
+    return (
+      <span
+        aria-hidden="true"
+        className={`text-sm leading-none transition-colors ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 group-hover:text-gray-600 dark:text-gray-500 dark:group-hover:text-gray-300'}`}
+      >
+        {isActive ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}
+      </span>
+    );
+  }
 
   const scheduleReload = React.useCallback((options?: { resetPage?: boolean; delay?: number }) => {
     const { resetPage = false, delay = 0 } = options || {};
@@ -1204,14 +1244,13 @@ const BusinessPage: React.FC = () => {
   async function exportExcel() {
     setExporting(true);
     try {
-      // The backend caps every page at 20 items, so fetch every matching page
-      // instead of relying on a single oversized request.
-      const exportPageSize = 20;
+      // Fetch every matching page instead of relying on a single oversized request.
+      const exportPageSize = 100;
       const exportBatchSize = 5;
       const params: Record<string, unknown> = {
         size: exportPageSize,
-        sortBy: 'id',
-        sortDir: 'asc',
+        sortBy: sortField ?? 'id',
+        sortDir: sortField ? sortDirection : 'asc',
       };
       const trimmedSearch = filterSearch.trim();
       if (trimmedSearch) params.search = trimmedSearch;
@@ -3300,9 +3339,48 @@ const BusinessPage: React.FC = () => {
                         <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">STT</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Bệnh viện</th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Đơn giá</th>
-                        <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Tổng tiền</th>
-                        <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Tổng công nợ</th>
-                        <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Tổng số lượng</th>
+                        <th
+                          aria-sort={sortField === 'totalPrice' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                          className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleSort('totalPrice')}
+                            className="group inline-flex w-full items-center gap-1.5 text-left hover:text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:hover:text-blue-400"
+                            title={`Sắp xếp Tổng tiền ${sortField === 'totalPrice' && sortDirection === 'asc' ? 'giảm dần' : 'tăng dần'}`}
+                          >
+                            <span>Tổng tiền</span>
+                            {renderSortIndicator('totalPrice')}
+                          </button>
+                        </th>
+                        <th
+                          aria-sort={sortField === 'totalDebt' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                          className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleSort('totalDebt')}
+                            className="group inline-flex w-full items-center gap-1.5 text-left hover:text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:hover:text-blue-400"
+                            title={`Sắp xếp Tổng công nợ ${sortField === 'totalDebt' && sortDirection === 'asc' ? 'giảm dần' : 'tăng dần'}`}
+                          >
+                            <span>Tổng công nợ</span>
+                            {renderSortIndicator('totalDebt')}
+                          </button>
+                        </th>
+                        <th
+                          aria-sort={sortField === 'quantity' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                          className="whitespace-nowrap px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleSort('quantity')}
+                            className="group inline-flex w-full items-center justify-center gap-1.5 hover:text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:hover:text-blue-400"
+                            title={`Sắp xếp Tổng số lượng ${sortField === 'quantity' && sortDirection === 'asc' ? 'giảm dần' : 'tăng dần'}`}
+                          >
+                            <span>Tổng số lượng</span>
+                            {renderSortIndicator('quantity')}
+                          </button>
+                        </th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Mã hợp đồng</th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Người phụ trách</th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Phần cứng</th>
