@@ -3338,6 +3338,7 @@ const BusinessPage: React.FC = () => {
                       <tr>
                         <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">STT</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Bệnh viện</th>
+                        <th className="min-w-[160px] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Đơn vị tài trợ</th>
                         <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">Đơn giá</th>
                         <th
                           aria-sort={sortField === 'totalPrice' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
@@ -3402,6 +3403,8 @@ const BusinessPage: React.FC = () => {
                           </td>
                           {/* Bệnh viện */}
                           <td className="px-4 py-3"></td>
+                          {/* Đơn vị tài trợ */}
+                          <td className="px-4 py-3"></td>
                           {/* Đơn giá */}
                           <td className="whitespace-nowrap px-4 py-3"></td>
                           {/* Tổng tiền */}
@@ -3434,7 +3437,7 @@ const BusinessPage: React.FC = () => {
                       )}
                       {items.length === 0 ? (
                         <tr>
-                          <td colSpan={13} className="px-3 py-12 text-center text-gray-500 dark:text-gray-400">
+                          <td colSpan={14} className="px-3 py-12 text-center text-gray-500 dark:text-gray-400">
                             <div className="flex flex-col items-center">
                               <svg className="mb-3 h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
@@ -3462,9 +3465,13 @@ const BusinessPage: React.FC = () => {
                                 <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                                   {it.hospital?.label ?? '—'}
                                 </div>
-                                {it.hospitalPhone && (
+                              {it.hospitalPhone && (
                                   <div className="text-xs text-gray-500 mt-0.5">{it.hospitalPhone}</div>
                                 )}
+                              </td>
+                              {/* Đơn vị tài trợ */}
+                              <td className="min-w-[160px] px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                                {it.bankName || '—'}
                               </td>
                               {/* Đơn giá */}
                               <td className="whitespace-nowrap px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300">
