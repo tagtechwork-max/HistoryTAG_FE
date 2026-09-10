@@ -21,6 +21,7 @@ import {
 import { searchHospitals } from "../../api/business.api";
 import { PlusIcon } from "../../icons";
 import MaintainContractForm, { type WarrantyContractForm } from "./Form/MaintainContractForm";
+import { useAuth } from "../../contexts/AuthContext";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
@@ -153,31 +154,35 @@ const statusConfig: Record<string, { label: string; bgColor: string; textColor: 
 export default function MaintainContractsPage() {
   // Determine if current user can perform write actions
   // Allow SUPERADMIN or team CUSTOMER_SERVICE/SALES
+  const {
+    isSuperAdmin,
+    activeTeam: authActiveTeam,
+    availableTeams: authAvailableTeams,
+  } = useAuth();
   const canEdit = (() => {
     try {
-      // Check SUPERADMIN role
-      const rolesStr = localStorage.getItem("roles") || sessionStorage.getItem("roles");
-      if (rolesStr) {
-        const roles = JSON.parse(rolesStr);
-        const isSuperAdmin = Array.isArray(roles) && roles.some((r: string) =>
-          r === "SUPERADMIN" || r === "SUPER_ADMIN" || r === "Super Admin"
-        );
-        if (isSuperAdmin) return true;
-      }
+      if (isSuperAdmin) return true;
 
-      // Check CUSTOMER_SERVICE/SALES team from user object
+      // Check every team membership, not only the legacy/primary `user.team`.
+      // Multi-team users can have SALES as a secondary team while their
+      // primary team is DEPLOYMENT or MAINTENANCE.
       const userStr = localStorage.getItem("user") || sessionStorage.getItem("user");
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        const directTeam = user?.team ? String(user.team).toUpperCase() : null;
-        const activeTeam = user?.activeTeam ? String(user.activeTeam).toUpperCase() : null;
-        const teamList = Array.isArray(user?.teams)
-          ? user.teams.map((t: unknown) => String(t).toUpperCase())
-          : [];
-        const allowedTeams = [directTeam, activeTeam, ...teamList];
-        if (allowedTeams.includes("CUSTOMER_SERVICE") || allowedTeams.includes("SALES")) {
-          return true;
-        }
+      const user = userStr ? JSON.parse(userStr) : null;
+      const directTeam = user?.team ? String(user.team).toUpperCase() : null;
+      const activeTeam = user?.activeTeam ? String(user.activeTeam).toUpperCase() : null;
+      const teamList = [
+        directTeam,
+        activeTeam,
+        authActiveTeam,
+        ...(Array.isArray(user?.teams) ? user.teams : []),
+        ...(Array.isArray(user?.availableTeams) ? user.availableTeams : []),
+        ...(user?.teamRoles && typeof user.teamRoles === "object"
+          ? Object.keys(user.teamRoles)
+          : []),
+        ...(Array.isArray(authAvailableTeams) ? authAvailableTeams : []),
+      ].map((team: unknown) => String(team ?? "").toUpperCase());
+      if (teamList.includes("CUSTOMER_SERVICE") || teamList.includes("SALES")) {
+        return true;
       }
 
       return false;
@@ -2330,4 +2335,3 @@ export default function MaintainContractsPage() {
     </>
   );
 }
-

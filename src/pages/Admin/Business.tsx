@@ -40,7 +40,7 @@ import { useAuth } from '../../contexts/AuthContext';
 
 const BusinessPage: React.FC = () => {
   // ✅ Use AuthContext hook - Performance optimized với useMemo, reactive với token changes
-  const { roles, isAdmin, isSuperAdmin } = useAuth();
+  const { roles, isAdmin, isSuperAdmin, availableTeams: authAvailableTeams } = useAuth();
 
   // Read stored user dl (may contain team information)
   const storedUserRaw = localStorage.getItem('user') || sessionStorage.getItem('user');
@@ -51,10 +51,24 @@ const BusinessPage: React.FC = () => {
     storedUser = null;
   }
   const userTeam = storedUser && storedUser.team ? String(storedUser.team).toUpperCase() : null;
+  const storedAvailableTeams = Array.isArray(storedUser?.availableTeams)
+    ? storedUser.availableTeams
+    : [];
+  const storedTeamRoles = storedUser?.teamRoles && typeof storedUser.teamRoles === 'object'
+    ? Object.keys(storedUser.teamRoles)
+    : [];
+  const hasSalesTeam = [
+    userTeam,
+    ...storedAvailableTeams,
+    ...storedTeamRoles,
+    ...(Array.isArray(authAvailableTeams) ? authAvailableTeams : []),
+  ].some((team) => String(team ?? '').toUpperCase() === 'SALES');
   // Page access: allow if ADMIN/SUPERADMIN or we have a logged-in user (teams can view). This keeps viewing broadly available in admin area.
   const pageAllowed = isAdmin || isSuperAdmin || Boolean(storedUser);
-  // Manage rights: only SUPERADMIN or team SALES can create/update/delete
-  const canManage = isSuperAdmin || userTeam === 'SALES';
+  // Manage rights: SUPERADMIN or any account belonging to the SALES team.
+  // Multi-team accounts may have another primary team (e.g. DEPLOYMENT), so
+  // checking only user.team would incorrectly hide business actions.
+  const canManage = isSuperAdmin || hasSalesTeam;
 
   const [hardwareOptions, setHardwareOptions] = useState<Array<{ id: number; label: string; subLabel?: string }>>([]);
   const [hospitalOptions, setHospitalOptions] = useState<Array<{ id: number; label: string }>>([]);

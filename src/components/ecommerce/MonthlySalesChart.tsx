@@ -26,9 +26,15 @@ export default function MonthlySalesChart() {
   
   const userTeam = storedUser && storedUser.team ? String(storedUser.team).toUpperCase() : null;
   const userDepartment = storedUser && storedUser.department ? String(storedUser.department).toUpperCase() : null;
+  const availableTeams = Array.isArray(storedUser?.availableTeams) ? storedUser.availableTeams : [];
+  const teamRoles = storedUser?.teamRoles && typeof storedUser.teamRoles === 'object'
+    ? Object.keys(storedUser.teamRoles)
+    : [];
+  const hasSalesTeam = [userTeam, ...availableTeams, ...teamRoles]
+    .some((team) => String(team ?? '').toUpperCase() === 'SALES');
   
   // Only show for SALES team or BUSINESS department
-  const canViewSalesChart = userTeam === 'SALES' || userDepartment === 'BUSINESS';
+  const canViewSalesChart = hasSalesTeam || userDepartment === 'BUSINESS';
 
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [loading, setLoading] = useState(false);

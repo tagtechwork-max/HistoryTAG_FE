@@ -190,9 +190,26 @@ const AppSidebar: React.FC = () => {
   const userTeam = userInfo?.team ? String(userInfo.team).toUpperCase() : null;
   const userDepartment = userInfo?.department ? String(userInfo.department).toUpperCase() : null;
 
-  const { isSuperAdmin, isAdmin, activeTeam: authActiveTeam } = useAuth();
+  const {
+    isSuperAdmin,
+    isAdmin,
+    activeTeam: authActiveTeam,
+    availableTeams: authAvailableTeams,
+  } = useAuth();
   const effectiveTeam = (authActiveTeam || userTeam || "").toString().toUpperCase();
-  const isSalesTeam = effectiveTeam === "SALES";
+  const storedAvailableTeams = Array.isArray(userInfo?.availableTeams)
+    ? userInfo.availableTeams
+    : [];
+  const storedTeamRoles = userInfo?.teamRoles && typeof userInfo.teamRoles === "object"
+    ? Object.keys(userInfo.teamRoles)
+    : [];
+  const hasSalesTeam = [
+    userTeam,
+    ...storedAvailableTeams,
+    ...storedTeamRoles,
+    ...(Array.isArray(authAvailableTeams) ? authAvailableTeams : []),
+  ].some((team) => String(team ?? "").toUpperCase() === "SALES");
+  const isSalesTeam = effectiveTeam === "SALES" || hasSalesTeam;
 
   // Filter calendar menu items based on user role/team/department
   const getCalendarMenuItems = () => {
@@ -210,7 +227,7 @@ const AppSidebar: React.FC = () => {
     const items = [{ name: "Lịch cá nhân", path: "/calendar", pro: false }];
 
     // Add business calendar for SALES team or BUSINESS department
-    if (userTeam === "SALES" || userDepartment === "BUSINESS") {
+    if (hasSalesTeam || userDepartment === "BUSINESS") {
       items.push({ name: "Lịch phòng kinh doanh", path: "/calendar/business", pro: false });
     }
 
@@ -232,7 +249,7 @@ const AppSidebar: React.FC = () => {
     .filter((item) => {
       // Chỉ hiển thị menu "Phòng kinh doanh" cho user thuộc phòng kinh doanh hoặc SuperAdmin
       if (item.name === "Phòng kinh doanh") {
-        return isSuperAdmin || userDepartment === "BUSINESS";
+        return isSuperAdmin || userDepartment === "BUSINESS" || hasSalesTeam;
       }
       // Chỉ hiển thị menu "Công việc" cho user thuộc IT doanh hoặc SuperAdmin
       if (item.name === "Công việc") {
