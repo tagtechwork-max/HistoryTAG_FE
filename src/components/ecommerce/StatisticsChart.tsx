@@ -29,7 +29,7 @@ const periodLabels: Record<Period, string> = {
   yearly: "theo năm",
 };
 
-export default function StatisticsChart() {
+export default function StatisticsChart({ activeTeam }: { activeTeam?: string | null }) {
   const currentYear = new Date().getFullYear();
   const [period, setPeriod] = useState<Period>("monthly");
   const [year, setYear] = useState<number>(currentYear);
@@ -78,7 +78,7 @@ export default function StatisticsChart() {
     }
     load();
     return () => controller.abort();
-  }, [period, year]);
+  }, [period, year, activeTeam]);
 
   const categories = useMemo(
     () => stats?.data.map((item) => item.label) ?? [],

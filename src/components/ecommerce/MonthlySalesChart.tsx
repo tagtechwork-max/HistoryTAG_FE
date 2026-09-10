@@ -5,6 +5,7 @@ import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { MoreDotIcon } from "../../icons";
 import { useState, useEffect } from "react";
 import { getMonthlySalesStats } from "../../api/business.api";
+import { useAuth } from "../../contexts/AuthContext";
 
 interface MonthlySalesStats {
   month: number;
@@ -15,7 +16,8 @@ interface MonthlySalesStats {
 }
 
 export default function MonthlySalesChart() {
-  // Check if user is in SALES team or BUSINESS department
+  const { activeTeam } = useAuth();
+  // Dùng đội đang hoạt động; chỉ fallback về hồ sơ cũ khi token chưa có activeTeam.
   const storedUserRaw = localStorage.getItem('user') || sessionStorage.getItem('user');
   let storedUser: Record<string, any> | null = null;
   try {
@@ -26,15 +28,8 @@ export default function MonthlySalesChart() {
   
   const userTeam = storedUser && storedUser.team ? String(storedUser.team).toUpperCase() : null;
   const userDepartment = storedUser && storedUser.department ? String(storedUser.department).toUpperCase() : null;
-  const availableTeams = Array.isArray(storedUser?.availableTeams) ? storedUser.availableTeams : [];
-  const teamRoles = storedUser?.teamRoles && typeof storedUser.teamRoles === 'object'
-    ? Object.keys(storedUser.teamRoles)
-    : [];
-  const hasSalesTeam = [userTeam, ...availableTeams, ...teamRoles]
-    .some((team) => String(team ?? '').toUpperCase() === 'SALES');
-  
-  // Only show for SALES team or BUSINESS department
-  const canViewSalesChart = hasSalesTeam || userDepartment === 'BUSINESS';
+  const effectiveTeam = String(activeTeam ?? userTeam ?? '').toUpperCase();
+  const canViewSalesChart = effectiveTeam === 'SALES' || (!effectiveTeam && userDepartment === 'BUSINESS');
 
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [loading, setLoading] = useState(false);

@@ -24,7 +24,7 @@ type TaskSummary = {
 const formatNumber = (value: number) =>
   Number.isFinite(value) ? value.toLocaleString("vi-VN") : "0";
 
-export default function EcommerceMetrics() {
+export default function EcommerceMetrics({ activeTeam }: { activeTeam?: string | null }) {
   const [summary, setSummary] = useState<TaskSummary | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +64,7 @@ export default function EcommerceMetrics() {
     }
     load();
     return () => controller.abort();
-  }, []);
+  }, [activeTeam]);
 
   const assigned = summary?.assignedCount ?? 0;
   const received = summary?.receivedCount ?? 0;

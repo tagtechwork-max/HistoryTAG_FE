@@ -163,7 +163,7 @@ function getStoredTeam(): string | null {
     const raw = localStorage.getItem("user") || sessionStorage.getItem("user");
     if (!raw) return null;
     const u = JSON.parse(raw);
-    const t = u?.team ?? u?.activeTeam ?? u?.teamName;
+    const t = u?.activeTeam ?? u?.team ?? u?.teamName;
     return typeof t === "string" ? t : null;
   } catch {
     return null;
