@@ -71,6 +71,7 @@ const navItems: NavItem[] = [
     name: "Phòng Kinh doanh",
     icon: <BoxIconLine />,
     subItems: [
+      { name: "Khách hàng liên hệ", path: "/superadmin/demo-registrations", pro: false, new: true },
       { name: "Hợp đồng kinh doanh", path: "/superadmin/business", pro: false },
       { name: "Hợp đồng bảo trì", path: "/superadmin/maintain-contracts", pro: false },
       { name: "Quản lý PO", path: "/superadmin/purchase-orders", pro: false },
@@ -129,6 +130,9 @@ const SuperAdminSidebar: React.FC = () => {
   } | null>(null);
   const [subMenuHeight, setSubMenuHeight] = useState<Record<string, number>>({});
   const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const openSubmenuItemCount = openSubmenu !== null
+    ? navItems[openSubmenu.index]?.subItems?.length ?? 0
+    : 0;
 
   const isActive = useCallback(
     (path: string) => location.pathname === path,
@@ -165,7 +169,7 @@ const SuperAdminSidebar: React.FC = () => {
         );
       }
     }
-  }, [openSubmenu]);
+  }, [openSubmenu, openSubmenuItemCount]);
 
   const handleSubmenuToggle = (index: number) => {
     setOpenSubmenu((prevOpenSubmenu) => {

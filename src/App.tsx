@@ -55,6 +55,7 @@ const DevSuperTaskPage = route("dev-super-task", () => import("./pages/SuperAdmi
 const MaintenanceSuperTaskPage = route("maintenance-super-task", () => import("./pages/SuperAdmin/maintenacesuper-task"));
 const AllNotificationsPage = route("all-notifications", () => import("./pages/Notifications/AllNotificationsPage"));
 const BusinessPage = route("business", () => import("./pages/Admin/Business"));
+const DemoRegistrationsPage = route("demo-registrations", () => import("./pages/Admin/DemoRegistrations"));
 const MaintainContractsPage = route("maintain-contracts", () => import("./pages/CustomerCare/MaintainContracts"));
 const PurchaseOrders = route("purchase-orders", () => import("./pages/Admin/PurchaseOrders"));
 const HospitalCareList = route("hospital-care-list", () => import("./pages/CustomerCare/HospitalCareList"));
@@ -166,6 +167,7 @@ export default function App() {
             <Route path="/superadmin/profile" element={<SuperAdminProfile />} />
             {/* SuperAdmin notifications - keep layout consistent for superadmin users */}
             {/* SuperAdmin Business (reuse Admin Business page) */}
+            <Route path="/superadmin/demo-registrations" element={<DemoRegistrationsPage />} />
             <Route path="/superadmin/business" element={<BusinessPage />} />
             <Route path="/superadmin/purchase-orders" element={<PurchaseOrders />} />
             <Route path="/superadmin/maintain-contracts" element={<MaintainContractsPage />} />
@@ -190,6 +192,7 @@ export default function App() {
             <Route path="/ticket-statistics" element={<TicketStatistics />} />
 
             {/* Admin - Business department */}
+            <Route path="/admin/demo-registrations" element={<DemoRegistrationsPage />} />
             <Route path="/admin/business" element={<BusinessPage />} />
             <Route path="/admin/purchase-orders" element={<PurchaseOrders />} />
             <Route path="/admin/maintain-contracts" element={<MaintainContractsPage />} />

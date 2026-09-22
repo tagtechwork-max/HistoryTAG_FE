@@ -32,6 +32,7 @@ function resolveNavPathForRole(path: string, isSuperAdmin: boolean): string {
   if (!isSuperAdmin) return path;
   if (path === "/home") return "/superadmin/home";
   if (path === "/admin/hospital-care") return "/superadmin/hospital-care";
+  if (path === "/admin/demo-registrations") return "/superadmin/demo-registrations";
   return path;
 }
 
@@ -74,6 +75,7 @@ const navItems: NavItem[] = [
     name: "Phòng kinh doanh",
     icon: <BoxIconLine />,
     subItems: [
+      { name: "Khách hàng liên hệ", path: "/admin/demo-registrations", pro: false, new: true },
       { name: "Hợp đồng kinh doanh", path: "/admin/business", pro: false },
       { name: "Hợp đồng bảo trì", path: "/admin/maintain-contracts", pro: false },
       { name: "Quản lý PO", path: "/admin/purchase-orders", pro: false },
