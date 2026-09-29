@@ -50,6 +50,8 @@ export type MaintainContractResponseDTO = {
   daysLeft?: number | null; // Số ngày còn lại (có thể âm nếu quá hạn)
   createdAt?: string | null;
   updatedAt?: string | null;
+  createdBy?: { id: number; label: string; subLabel?: string; phone?: string | null } | null;
+  updatedBy?: { id: number; label: string; subLabel?: string; phone?: string | null } | null;
   paymentStatus: "CHUA_THANH_TOAN" | "DA_THANH_TOAN" | "THANH_TOAN_HET";
   paidAmount?: number | null; // Số tiền đã thanh toán
   paymentDate?: string | null; // Ngày thanh toán
@@ -202,5 +204,4 @@ export async function getMaintainContractPicOptions() {
     return [];
   }
 }
-
 
