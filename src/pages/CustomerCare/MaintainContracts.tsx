@@ -2166,42 +2166,36 @@ export default function MaintainContractsPage() {
                           {viewing.updatedAt && <DetailField label="Cập nhật lúc" value={fmt(viewing.updatedAt)} />}
                         </div>
                       </div>
-                      {(viewing.createdBy || viewing.updatedBy) && (
-                        <>
-                          <hr className="my-3 border-gray-200" />
-                          <div>
-                            <h4 className="text-xs font-semibold text-black uppercase tracking-wider mb-3">Thông tin audit</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {viewing.createdBy && (
-                                <DetailField
-                                  label="Người tạo"
-                                  value={
-                                    <div>
-                                      <div className="font-medium text-gray-900">{viewing.createdBy.label}</div>
-                                      {viewing.createdBy.subLabel && (
-                                        <div className="text-sm text-gray-500 mt-0.5">{viewing.createdBy.subLabel}</div>
-                                      )}
-                                    </div>
-                                  }
-                                />
-                              )}
-                              {viewing.updatedBy && (
-                                <DetailField
-                                  label="Người cập nhật gần nhất"
-                                  value={
-                                    <div>
-                                      <div className="font-medium text-gray-900">{viewing.updatedBy.label}</div>
-                                      {viewing.updatedBy.subLabel && (
-                                        <div className="text-sm text-gray-500 mt-0.5">{viewing.updatedBy.subLabel}</div>
-                                      )}
-                                    </div>
-                                  }
-                                />
-                              )}
-                            </div>
+                      <>
+                        <hr className="my-3 border-gray-200" />
+                        <div>
+                          <h4 className="text-xs font-semibold text-black uppercase tracking-wider mb-3">Thông tin audit</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <DetailField
+                              label="Người tạo"
+                              value={viewing.createdBy ? (
+                                <div>
+                                  <div className="font-medium text-gray-900">{viewing.createdBy.label}</div>
+                                  {viewing.createdBy.subLabel && (
+                                    <div className="text-sm text-gray-500 mt-0.5">{viewing.createdBy.subLabel}</div>
+                                  )}
+                                </div>
+                              ) : "Chưa có dữ liệu"}
+                            />
+                            <DetailField
+                              label="Người cập nhật gần nhất"
+                              value={viewing.updatedBy ? (
+                                <div>
+                                  <div className="font-medium text-gray-900">{viewing.updatedBy.label}</div>
+                                  {viewing.updatedBy.subLabel && (
+                                    <div className="text-sm text-gray-500 mt-0.5">{viewing.updatedBy.subLabel}</div>
+                                  )}
+                                </div>
+                              ) : "Chưa có dữ liệu"}
+                            />
                           </div>
-                        </>
-                      )}
+                        </div>
+                      </>
                     </div>
                   </div>
                 ) : (
