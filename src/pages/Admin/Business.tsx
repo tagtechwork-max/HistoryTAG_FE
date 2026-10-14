@@ -1348,19 +1348,6 @@ const BusinessPage: React.FC = () => {
 
     // Ensure startDate is set (default to now) so backend always receives a start date
     const finalStart = startDateValue && startDateValue.trim() !== '' ? startDateValue : nowDateTimeLocal();
-    // Validate completion date is not earlier than start date
-    if (completionDateValue && completionDateValue.trim() !== '') {
-      try {
-        const st = new Date(finalStart);
-        const comp = new Date(completionDateValue);
-        if (comp.getTime() < st.getTime()) {
-          errors.completionDateValue = 'Ngày hoàn thành không được nhỏ hơn ngày bắt đầu';
-        }
-      } catch {
-        // ignore parse errors, backend will validate further
-      }
-    }
-
     // Optional warranty block validation
     if (warrantyEnabled) {
       if (!warrantyStartDateValue || warrantyStartDateValue.trim() === '') {
@@ -3076,14 +3063,14 @@ const BusinessPage: React.FC = () => {
                     {label}<span className={contractSortField === field ? 'text-blue-600' : 'text-gray-400'}>{contractSortField === field ? (contractSortDirection === 'asc' ? '↑' : '↓') : '↕'}</span>
                   </button>
                 </th>)}
-                <th className="whitespace-nowrap px-4 py-3">Trạng thái</th><th className="whitespace-nowrap px-4 py-3 text-center">Thao tác</th>
+                <th className="whitespace-nowrap px-4 py-3">Trạng thái</th><th className="sticky right-0 z-20 whitespace-nowrap border-l border-gray-200 bg-gray-50 px-4 py-3 text-center">Thao tác</th>
               </tr></thead>
               <tbody className="divide-y divide-gray-200">
                 {contractTotalItems > 0 && <tr className="border-b border-gray-200 bg-blue-50/70 font-semibold text-gray-900">
                   <td className="whitespace-nowrap px-4 py-3 text-center text-sm font-bold">Tổng</td><td className="px-4 py-3"></td><td className="px-4 py-3"></td><td className="px-4 py-3"></td>
                   <td className="whitespace-nowrap px-4 py-3">{Number(contractSummary.totalPrice || 0).toLocaleString('vi-VN')} ₫</td>
                   <td className={`whitespace-nowrap px-4 py-3 ${contractSummary.totalDebt > 0 ? 'text-red-600' : 'text-green-600'}`}>{Number(contractSummary.totalDebt || 0).toLocaleString('vi-VN')} ₫</td>
-                  <td className="whitespace-nowrap px-4 py-3 text-center">{Number(contractSummary.totalQuantity || 0).toLocaleString('vi-VN')}</td><td className="px-4 py-3"></td><td className="px-4 py-3"></td>
+                  <td className="whitespace-nowrap px-4 py-3 text-center">{Number(contractSummary.totalQuantity || 0).toLocaleString('vi-VN')}</td><td className="px-4 py-3"></td><td className="sticky right-0 z-10 whitespace-nowrap border-l border-blue-100/60 bg-blue-50/70 px-4 py-3"></td>
                 </tr>}
                 {contractRows.length === 0 ? <tr><td colSpan={9} className="px-4 py-10 text-center text-gray-500">Chưa có hợp đồng</td></tr> : sortedContractRows.map((contract, index) => <tr key={contract.id} className="group transition hover:bg-gray-50">
                   <td className="whitespace-nowrap px-4 py-3 text-center text-gray-500">{contractPage * contractItemsPerPage + index + 1}</td>
@@ -3094,7 +3081,12 @@ const BusinessPage: React.FC = () => {
                   <td className={`whitespace-nowrap px-4 py-3 font-semibold ${getContractDebt(contract) > 0 ? 'text-red-600' : 'text-green-600'}`}>{getContractDebt(contract).toLocaleString('vi-VN')} ₫</td>
                   <td className="px-4 py-3">{Number(contract.totalQuantity || 0).toLocaleString('vi-VN')}</td>
                   <td className="px-4 py-3">{canManage ? <select value={contract.status || 'CARING'} onChange={(event) => void changeContractStatus(contract.id, event.target.value)} className="rounded border px-2 py-1"><option value="CARING">Đang chăm sóc</option><option value="CONTRACTED">Đã ký</option><option value="CANCELLED">Đã hủy</option></select> : contract.status || '—'}</td>
-                  <td className="px-4 py-3"><div className="flex flex-wrap gap-2"><button type="button" aria-label={`Xem hợp đồng ${contract.contractCode || contract.id}`} title="Xem hợp đồng và các phân bổ" onClick={() => void showContractDetails(contract.id)} className="inline-flex items-center gap-1.5 rounded border border-blue-200 px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-50"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12s3.5-6.75 9.75-6.75S21.75 12 21.75 12 18.25 18.75 12 18.75 2.25 12 2.25 12Z" /><circle cx="12" cy="12" r="2.75" /></svg><span>Xem</span></button>{canManage && <button type="button" disabled={contractLoading} onClick={() => void openContractEditModal(contract.id)} className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">{contractLoading ? 'Đang tải...' : 'Sửa'}</button>}</div></td>
+                  <td className="sticky right-0 z-10 whitespace-nowrap border-l border-gray-200 bg-white px-4 py-3 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] transition-colors group-hover:bg-gray-50">
+                    <div className="flex items-center justify-center gap-1">
+                      <button type="button" aria-label={`Xem hợp đồng ${contract.contractCode || contract.id}`} title="Xem hợp đồng và các phân bổ" onClick={() => void showContractDetails(contract.id)} className="rounded-lg p-1.5 text-gray-500 transition hover:bg-blue-100 hover:text-blue-600"><EyeIcon style={{ width: 18, height: 18 }} /></button>
+                      {canManage && <button type="button" aria-label="Sửa hợp đồng" title="Sửa" disabled={contractLoading} onClick={() => void openContractEditModal(contract.id)} className="rounded-lg p-1.5 text-gray-500 transition hover:bg-yellow-100 hover:text-orange-600 disabled:cursor-not-allowed disabled:opacity-50">{contractLoading ? <span className="block h-[18px] w-[18px] animate-spin rounded-full border-2 border-gray-300 border-t-orange-500" /> : <PencilIcon style={{ width: 18, height: 18 }} />}</button>}
+                    </div>
+                  </td>
                 </tr>)}
               </tbody>
             </table>
@@ -3768,7 +3760,6 @@ const BusinessPage: React.FC = () => {
                               setCompletionDateValue(e.target.value);
                               clearFieldError('completionDateValue');
                             }}
-                            min={startDateValue || undefined}
                             className={`w-full rounded border px-3 py-2 ${fieldErrors.completionDateValue ? 'border-red-500' : ''}`}
                           />
                           {fieldErrors.completionDateValue && <div className="mt-1 text-sm text-red-600">{fieldErrors.completionDateValue}</div>}
