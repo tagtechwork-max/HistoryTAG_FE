@@ -162,3 +162,123 @@ export async function getMonthlySalesStats(year?: number) {
   const res = await api.get(`${base}/business/monthly-stats${query}`);
   return res.data;
 }
+
+export type BusinessContractAllocationInput = {
+  businessProjectId?: number;
+  hospitalId: number;
+  hardwareId: number;
+  quantity: number;
+  unitPrice?: number | null;
+  unitPriceNet?: number | null;
+  totalPrice: number;
+  commission?: number | null;
+  picUserId?: number | null;
+  hasWarranty?: boolean;
+  warrantyStartDate?: string | null;
+  warrantyEndDate?: string | null;
+};
+
+export type BusinessContractInput = {
+  contractCode: string;
+  signingPartyType: 'HOSPITAL' | 'SPONSOR';
+  signingPartyName?: string;
+  signingHospitalId?: number | null;
+  signingPartyContactName?: string;
+  status: string;
+  totalQuantity: number;
+  totalPrice: number;
+  paymentStatus: string;
+  paidAmount?: number;
+  paymentDate?: string | null;
+  paymentInstallments?: Array<{ installmentNumber: number; amount: number; paymentDate: string }>;
+  startDate?: string | null;
+  completionDate?: string | null;
+  deadline?: string | null;
+  notes?: string;
+  attachmentUrls?: string[];
+  allocations: BusinessContractAllocationInput[];
+};
+
+export type BusinessContractRecord = {
+  id: number;
+  contractCode: string;
+  signingPartyType: 'HOSPITAL' | 'SPONSOR' | 'LEGACY_UNKNOWN';
+  signingPartyName?: string;
+  signingHospital?: { id: number; label: string } | null;
+  signingPartyContactName?: string | null;
+  status?: string;
+  totalQuantity?: number;
+  totalPrice?: number;
+  paymentStatus?: string;
+  paidAmount?: number;
+  paymentInstallments?: Array<{ id?: number; installmentNumber: number; amount: number; paymentDate: string }>;
+  startDate?: string | null;
+  completionDate?: string | null;
+  deadline?: string | null;
+  notes?: string | null;
+  attachmentUrls?: string[];
+  allocationCount?: number;
+  allocations?: Array<{
+    businessProjectId: number;
+    hospital?: { id: number; label: string };
+    hardware?: { id: number; label: string };
+    quantity?: number;
+    unitPrice?: number;
+    unitPriceNet?: number;
+    totalPrice?: number;
+    commission?: number;
+    status?: string;
+    picUser?: { id: number; label: string };
+    warrantyStartDate?: string | null;
+    warrantyEndDate?: string | null;
+  }>;
+};
+
+export type BusinessContractSummary = {
+  totalPrice: number;
+  totalDebt: number;
+  totalQuantity: number;
+};
+
+export async function createBusinessContract(payload: BusinessContractInput, canManage = false): Promise<BusinessContractRecord> {
+  const base = getBase('POST', canManage);
+  const res = await api.post(`${base}/business/contracts`, payload);
+  return res.data;
+}
+
+export async function updateBusinessContract(id: number, payload: BusinessContractInput, canManage = false): Promise<BusinessContractRecord> {
+  const base = getBase('PUT', canManage);
+  const res = await api.put(`${base}/business/contracts/${id}`, payload);
+  return res.data;
+}
+
+export async function getBusinessContracts(params: Record<string, unknown> = {}, signal?: AbortSignal) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+    query.append(key, String(value));
+  });
+  const qs = query.toString();
+  const url = `/api/v1/admin/business/contracts${qs ? `?${qs}` : ''}`;
+  const res = await api.get(url, { signal });
+  return res.data;
+}
+
+export async function getBusinessContractSummary(search = ''): Promise<BusinessContractSummary> {
+  const query = new URLSearchParams();
+  if (search) query.set('search', search);
+  const qs = query.toString();
+  const res = await api.get(`/api/v1/admin/business/contracts/summary${qs ? `?${qs}` : ''}`);
+  return res.data;
+}
+
+export async function getBusinessContract(id: number): Promise<BusinessContractRecord> {
+  const res = await api.get(`/api/v1/admin/business/contracts/${id}`);
+  return res.data;
+}
+
+export async function updateBusinessContractStatus(id: number, status: string, canManage = false): Promise<BusinessContractRecord> {
+  const base = getBase('PUT', canManage);
+  const res = await api.put(`${base}/business/contracts/${id}/status`, { status });
+  return res.data;
+}

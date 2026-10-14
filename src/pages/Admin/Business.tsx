@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { searchHardware, searchHospitals, createBusiness, getBusinesses, getBusinessSummary, updateBusiness, deleteBusiness, getBusinessById, getHardwareById, getBusinessPicOptions } from '../../api/business.api';
+import { searchHardware, searchHospitals, createBusiness, getBusinesses, getBusinessSummary, updateBusiness, deleteBusiness, getBusinessById, getHardwareById, getBusinessPicOptions, createBusinessContract, updateBusinessContract, getBusinessContracts, getBusinessContractSummary, getBusinessContract, updateBusinessContractStatus, type BusinessContractInput, type BusinessContractRecord, type BusinessContractSummary } from '../../api/business.api';
 import { getAllUsers } from '../../api/superadmin.api';
 import api from '../../api/client';
 import { toast as hotToast } from 'react-hot-toast';
@@ -35,6 +35,9 @@ type ITUserOption = { id: number; name: string; phone?: string | null };
 type PaymentInstallmentDraft = { amount: number | ''; amountDisplay: string; paymentDate: string };
 type BusinessSortField = 'totalPrice' | 'totalDebt' | 'quantity';
 type SortDirection = 'asc' | 'desc';
+type ContractAllocationDraft = { draftId: string; businessProjectId?: number; hospitalSearch: string; hospitalId: number | ''; hardwareId: number | ''; quantity: number | ''; unitPrice: number | ''; unitPriceNet: number | ''; commission: number | ''; picUserId: number | ''; hasWarranty: boolean; warrantyStartDate: string; warrantyEndDate: string };
+let contractAllocationDraftCounter = 0;
+const emptyContractAllocation = (): ContractAllocationDraft => ({ draftId: `contract-allocation-${++contractAllocationDraftCounter}`, hospitalSearch: '', hospitalId: '', hardwareId: '', quantity: '', unitPrice: '', unitPriceNet: '', commission: '', picUserId: '', hasWarranty: false, warrantyStartDate: '', warrantyEndDate: '' });
 
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -320,6 +323,41 @@ const BusinessPage: React.FC = () => {
   const initialPicAppliedRef = React.useRef(false);
   const [filterPicId, setFilterPicId] = useState<number | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [contractView, setContractView] = useState(false);
+  const [contractRows, setContractRows] = useState<BusinessContractRecord[]>([]);
+  const [contractSummary, setContractSummary] = useState<BusinessContractSummary>({ totalPrice: 0, totalDebt: 0, totalQuantity: 0 });
+  const [contractSortField, setContractSortField] = useState<'totalPrice' | 'totalDebt' | 'totalQuantity' | null>(null);
+  const [contractSortDirection, setContractSortDirection] = useState<SortDirection>('desc');
+  const [contractPage, setContractPage] = useState(0);
+  const [contractItemsPerPage, setContractItemsPerPage] = useState(10);
+  const [contractPages, setContractPages] = useState(1);
+  const [contractTotalItems, setContractTotalItems] = useState(0);
+  const [contractModalOpen, setContractModalOpen] = useState(false);
+  const [contractSaving, setContractSaving] = useState(false);
+  const [contractEditingId, setContractEditingId] = useState<number | null>(null);
+  const [contractEditStatus, setContractEditStatus] = useState('CARING');
+  const [contractDetails, setContractDetails] = useState<BusinessContractRecord | null>(null);
+  const [contractLoading, setContractLoading] = useState(false);
+  const [contractCode, setContractCode] = useState('');
+  const [signingPartyType, setSigningPartyType] = useState<'HOSPITAL' | 'SPONSOR'>('HOSPITAL');
+  const [additionalAllocations, setAdditionalAllocations] = useState<ContractAllocationDraft[]>([]);
+  const [additionalHospitalOptions, setAdditionalHospitalOptions] = useState<Record<string, Array<{ id: number; label: string }>>>({});
+  const [contractPartyType, setContractPartyType] = useState<'HOSPITAL' | 'SPONSOR'>('HOSPITAL');
+  const [contractSponsorName, setContractSponsorName] = useState('');
+  const [contractSignerContact, setContractSignerContact] = useState('');
+  const [contractSignerHospitalId, setContractSignerHospitalId] = useState<number | ''>('');
+  const [contractAllocations, setContractAllocations] = useState<ContractAllocationDraft[]>([emptyContractAllocation()]);
+  const [contractHospitalOptions, setContractHospitalOptions] = useState<Record<string, Array<{ id: number; label: string }>>>({});
+  const [contractHospitalDropdownOpen, setContractHospitalDropdownOpen] = useState<Record<string, boolean>>({});
+  const [contractPicUserId, setContractPicUserId] = useState<number | ''>('');
+  const [contractTotalPrice, setContractTotalPrice] = useState<number | ''>('');
+  const [contractStartDate, setContractStartDate] = useState('');
+  const [contractCompletionDate, setContractCompletionDate] = useState('');
+  const [contractDeadline, setContractDeadline] = useState('');
+  const [contractNotes, setContractNotes] = useState('');
+  const [contractAttachmentUrls, setContractAttachmentUrls] = useState<string[]>([]);
+  const [contractPaymentStatus, setContractPaymentStatus] = useState<'CHUA_THANH_TOAN' | 'DA_THANH_TOAN' | 'THANH_TOAN_HET'>('CHUA_THANH_TOAN');
+  const [contractPayments, setContractPayments] = useState<PaymentInstallmentDraft[]>([]);
   const pendingStartInputRef = React.useRef<HTMLInputElement | null>(null);
   const pendingEndInputRef = React.useRef<HTMLInputElement | null>(null);
   React.useEffect(() => {
@@ -366,6 +404,59 @@ const BusinessPage: React.FC = () => {
     } catch (e) {
       console.error(e);
     }
+  }
+
+  async function searchAdditionalAllocationHospitals(draftId: string, query: string) {
+    setAdditionalAllocations((rows) => rows.map((row) => row.draftId === draftId
+      ? { ...row, hospitalSearch: query, hospitalId: '' }
+      : row));
+
+    const trimmedQuery = query.trim();
+    if (trimmedQuery.length < 2) {
+      setAdditionalHospitalOptions((options) => ({ ...options, [draftId]: [] }));
+      return;
+    }
+
+    try {
+      const hospitals = await searchHospitals(trimmedQuery);
+      setAdditionalHospitalOptions((options) => ({ ...options, [draftId]: hospitals || [] }));
+    } catch (error) {
+      console.error(error);
+      setAdditionalHospitalOptions((options) => ({ ...options, [draftId]: [] }));
+    }
+  }
+
+  function selectAdditionalAllocationHospital(draftId: string, hospital: { id: number; label: string }) {
+    setAdditionalAllocations((rows) => rows.map((row) => row.draftId === draftId
+      ? { ...row, hospitalId: hospital.id, hospitalSearch: hospital.label }
+      : row));
+    setAdditionalHospitalOptions((options) => ({ ...options, [draftId]: [] }));
+  }
+
+  async function searchContractAllocationHospitals(draftId: string, query: string) {
+    setContractAllocations((rows) => rows.map((row) => row.draftId === draftId
+      ? { ...row, hospitalSearch: query, hospitalId: '' }
+      : row));
+    setContractHospitalDropdownOpen((open) => ({ ...open, [draftId]: true }));
+    if (query.trim().length < 2) {
+      setContractHospitalOptions((options) => ({ ...options, [draftId]: [] }));
+      return;
+    }
+    try {
+      const hospitals = await searchHospitals(query.trim());
+      setContractHospitalOptions((options) => ({ ...options, [draftId]: hospitals || [] }));
+    } catch (error) {
+      console.error(error);
+      setContractHospitalOptions((options) => ({ ...options, [draftId]: [] }));
+    }
+  }
+
+  function selectContractAllocationHospital(draftId: string, hospital: { id: number; label: string }) {
+    setContractAllocations((rows) => rows.map((row) => row.draftId === draftId
+      ? { ...row, hospitalId: hospital.id, hospitalSearch: hospital.label }
+      : row));
+    setContractHospitalDropdownOpen((open) => ({ ...open, [draftId]: false }));
+    setContractHospitalOptions((options) => ({ ...options, [draftId]: [] }));
   }
 
   async function loadList(page = currentPage, size = itemsPerPage) {
@@ -575,6 +666,304 @@ const BusinessPage: React.FC = () => {
     return v ? (v.length === 16 ? `${v}:00` : v) : undefined;
   }
 
+  const contractAllocationQuantity = contractAllocations.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
+  const contractAverageUnitPrice = contractAllocationQuantity > 0 && contractTotalPrice !== ''
+    ? Math.round((Number(contractTotalPrice) / contractAllocationQuantity) * 100) / 100
+    : 0;
+  const contractAllocationValues = (() => {
+    const totalDriven = contractPartyType === 'SPONSOR' || Boolean(contractEditingId);
+    if (!totalDriven || contractTotalPrice === '') {
+      return contractAllocations.map((row) => (Number(row.quantity) || 0) * (Number(row.unitPrice) || 0));
+    }
+    let allocated = 0;
+    return contractAllocations.map((row, index) => {
+      const rowQuantity = Number(row.quantity) || 0;
+      if (index === contractAllocations.length - 1) return Number(contractTotalPrice) - allocated;
+      const rowTotal = contractAllocationQuantity > 0
+        ? Math.round((Number(contractTotalPrice) * rowQuantity) / contractAllocationQuantity)
+        : 0;
+      allocated += rowTotal;
+      return rowTotal;
+    });
+  })();
+  const contractAllocationValue = (contractPartyType === 'SPONSOR' || Boolean(contractEditingId))
+    ? (contractTotalPrice === '' ? 0 : Number(contractTotalPrice))
+    : contractAllocationValues.reduce((sum, value) => sum + value, 0);
+  const contractPaymentTotal = contractPayments.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
+  const primaryAllocationUnitPrice = unitPrice !== '' ? Number(unitPrice) : (selectedHardwarePrice ?? 0);
+  const additionalAllocationQuantity = additionalAllocations.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
+  const primaryAllocationValue = (Number(quantity) || 0) * primaryAllocationUnitPrice;
+  const newContractTotalQuantity = (Number(quantity) || 0) + additionalAllocationQuantity;
+  const sponsorTotalValue = totalContractValue === '' ? 0 : Number(totalContractValue);
+  const sponsorAverageUnitPrice = newContractTotalQuantity > 0
+    ? Math.round((sponsorTotalValue / newContractTotalQuantity) * 100) / 100
+    : 0;
+  const sponsorAllocationValues = (() => {
+    const quantities = [Number(quantity) || 0, ...additionalAllocations.map((row) => Number(row.quantity) || 0)];
+    const totalQuantity = quantities.reduce((sum, value) => sum + value, 0);
+    if (totalQuantity <= 0) return quantities.map(() => 0);
+    let allocated = 0;
+    return quantities.map((allocationQuantity, index) => {
+      if (index === quantities.length - 1) return sponsorTotalValue - allocated;
+      const allocationValue = Math.round((sponsorTotalValue * allocationQuantity) / totalQuantity);
+      allocated += allocationValue;
+      return allocationValue;
+    });
+  })();
+  const newContractTotalValue = signingPartyType === 'SPONSOR'
+    ? sponsorTotalValue
+    : (totalContractValue !== '' ? Number(totalContractValue) : primaryAllocationValue);
+
+  async function loadContractList(page = contractPage, size = contractItemsPerPage) {
+    try {
+      const search = filterSearch.trim();
+      const [response, summary] = await Promise.all([
+        getBusinessContracts({ page, size, search }),
+        getBusinessContractSummary(search).catch((error) => {
+          console.error('[Business] Failed to load contract totals', error);
+          return null;
+        }),
+      ]);
+      const rows: BusinessContractRecord[] = Array.isArray(response?.content) ? response.content as BusinessContractRecord[] : (Array.isArray(response) ? response as BusinessContractRecord[] : []);
+      setContractRows(rows as BusinessContractRecord[]);
+      let resolvedSummary = summary;
+      const needsSummaryFallback = !resolvedSummary || (resolvedSummary.totalPrice === 0 && rows.some((row: BusinessContractRecord) => Number(row.totalPrice || 0) > 0));
+      if (needsSummaryFallback) {
+        try {
+          const firstPage = await getBusinessContracts({ page: 0, size: 100, search });
+          const pageCount = Math.max(1, Number(firstPage?.totalPages) || 1);
+          const remainingPages = await Promise.all(Array.from({ length: pageCount - 1 }, (_, index) =>
+            getBusinessContracts({ page: index + 1, size: 100, search })));
+          const allRows: BusinessContractRecord[] = [firstPage, ...remainingPages].flatMap((pageData) =>
+            Array.isArray(pageData?.content) ? pageData.content as BusinessContractRecord[] : Array.isArray(pageData) ? pageData as BusinessContractRecord[] : []);
+          resolvedSummary = allRows.reduce((totals, row): BusinessContractSummary => {
+            const totalPrice = Number(row.totalPrice || 0);
+            const paidAmount = Number(row.paidAmount || 0);
+            totals.totalPrice += totalPrice;
+            totals.totalDebt += Math.max(0, totalPrice - paidAmount);
+            totals.totalQuantity += Number(row.totalQuantity || 0);
+            return totals;
+          }, { totalPrice: 0, totalDebt: 0, totalQuantity: 0 });
+        } catch (error) {
+          console.error('[Business] Failed to calculate contract totals from list', error);
+          resolvedSummary = rows.reduce((totals, row): BusinessContractSummary => {
+            const totalPrice = Number(row.totalPrice || 0);
+            totals.totalPrice += totalPrice;
+            totals.totalDebt += Math.max(0, totalPrice - Number(row.paidAmount || 0));
+            totals.totalQuantity += Number(row.totalQuantity || 0);
+            return totals;
+          }, { totalPrice: 0, totalDebt: 0, totalQuantity: 0 });
+        }
+      }
+      if (resolvedSummary) setContractSummary(resolvedSummary);
+      setContractPages(Math.max(1, Number(response?.totalPages) || 1));
+      setContractTotalItems(Number(response?.totalElements ?? response?.totalItems) || rows.length);
+    } catch (error) {
+      console.error('[Business] Failed to load contracts', error);
+      setToast({ message: 'Không tải được danh sách hợp đồng', type: 'error' });
+    }
+  }
+
+  const getContractDebt = (contract: BusinessContractRecord) => Math.max(0, Number(contract.totalPrice || 0) - Number(contract.paidAmount || 0));
+  const sortedContractRows = [...contractRows].sort((left, right) => {
+    if (!contractSortField) return 0;
+    const leftValue = contractSortField === 'totalDebt' ? getContractDebt(left)
+      : contractSortField === 'totalQuantity' ? Number(left.totalQuantity || 0) : Number(left.totalPrice || 0);
+    const rightValue = contractSortField === 'totalDebt' ? getContractDebt(right)
+      : contractSortField === 'totalQuantity' ? Number(right.totalQuantity || 0) : Number(right.totalPrice || 0);
+    return (leftValue - rightValue) * (contractSortDirection === 'asc' ? 1 : -1);
+  });
+
+  function toggleContractSort(field: 'totalPrice' | 'totalDebt' | 'totalQuantity') {
+    if (contractSortField === field) setContractSortDirection((direction) => direction === 'asc' ? 'desc' : 'asc');
+    else {
+      setContractSortField(field);
+      setContractSortDirection('desc');
+    }
+  }
+
+  function openBusinessCreateModal() {
+    setEditingId(null);
+    setName('');
+    setSigningPartyType('HOSPITAL');
+    setAdditionalAllocations([]);
+    setAdditionalHospitalOptions({});
+    setOriginalStatus('CARING');
+    setSelectedHardwareId(null);
+    setSelectedHardwarePrice(null);
+    setUnitPrice('');
+    setUnitPriceNet('');
+    setSelectedHospitalId(null);
+    setSelectedHospitalPhone(null);
+    setSelectedPicId(null);
+    setPicDropdownOpen(false);
+    setPicSearchInput('');
+    setQuantity(0);
+    setTotalContractValue('');
+    setStatusValue('CARING');
+    setStartDateValue(nowDateTimeLocal());
+    setCompletionDateValue('');
+    setWarrantyEnabled(false);
+    setWarrantyStartDateValue('');
+    setWarrantyEndDateValue('');
+    setWarrantyDuration('');
+    setCommission('');
+    setCommissionDisplay('');
+    setBankName('');
+    setBankContactPerson('');
+    setPaymentStatusValue('CHUA_THANH_TOAN');
+    setPaidAmount('');
+    setPaidAmountDisplay('');
+    setPaymentDateValue('');
+    setPaymentInstallments([]);
+    setNotes('');
+    setAttachments([]);
+    setFieldErrors({});
+    setPendingSubmit(null);
+    setStatusConfirmOpen(false);
+    setConfirmCreateOpen(false);
+    setHospitalSearchInput('');
+    setHospitalDropdownOpen(false);
+    setLastEdited(null);
+    setShowModal(true);
+    void fetchHospitalOptions('');
+    void fetchHardwareOptions('');
+  }
+
+  async function openContractEditModal(id: number) {
+    setContractLoading(true);
+    try {
+      const contract = await getBusinessContract(id);
+      const allocations = contract.allocations || [];
+      setContractEditingId(contract.id);
+      setContractEditStatus(contract.status || 'CARING');
+      setContractCode(contract.contractCode || '');
+      setContractPartyType(contract.signingPartyType === 'SPONSOR' ? 'SPONSOR' : 'HOSPITAL');
+      setContractSponsorName(contract.signingPartyName || '');
+      setContractSignerContact(contract.signingPartyContactName || '');
+      setContractSignerHospitalId(contract.signingHospital?.id ?? (allocations.length === 1 ? allocations[0].hospital?.id ?? '' : ''));
+      setContractTotalPrice(contract.totalPrice ?? '');
+      setContractPicUserId(allocations[0]?.picUser?.id ?? '');
+      setContractAllocations(allocations.map((allocation) => ({
+        ...emptyContractAllocation(),
+        businessProjectId: allocation.businessProjectId,
+        hospitalId: allocation.hospital?.id ?? '',
+        hospitalSearch: allocation.hospital?.label ?? '',
+        hardwareId: allocation.hardware?.id ?? '',
+        quantity: allocation.quantity ?? '',
+        unitPrice: allocation.unitPrice ?? '',
+        unitPriceNet: allocation.unitPriceNet ?? '',
+        commission: allocation.commission ?? '',
+        picUserId: allocation.picUser?.id ?? '',
+        hasWarranty: Boolean(allocation.warrantyStartDate || allocation.warrantyEndDate),
+        warrantyStartDate: allocation.warrantyStartDate?.slice(0, 16) || '',
+        warrantyEndDate: allocation.warrantyEndDate?.slice(0, 16) || '',
+      })));
+      setContractStartDate(contract.startDate?.slice(0, 16) || '');
+      setContractCompletionDate(contract.completionDate?.slice(0, 16) || '');
+      setContractDeadline(contract.deadline?.slice(0, 16) || '');
+      setContractNotes(contract.notes || '');
+      setContractAttachmentUrls(contract.attachmentUrls || []);
+      setContractPaymentStatus((contract.paymentStatus || 'CHUA_THANH_TOAN') as typeof contractPaymentStatus);
+      setContractPayments((contract.paymentInstallments || []).map((payment) => ({
+        amount: payment.amount,
+        amountDisplay: formatNumber(payment.amount),
+        paymentDate: payment.paymentDate?.slice(0, 16) || '',
+      })));
+      setContractModalOpen(true);
+      void fetchHospitalOptions('');
+      void fetchHardwareOptions('');
+    } catch (error: any) {
+      setToast({ message: error?.response?.data?.message || 'Không tải được hợp đồng để sửa', type: 'error' });
+    } finally {
+      setContractLoading(false);
+    }
+  }
+
+  async function submitNewContract(event: React.FormEvent) {
+    event.preventDefault();
+    if (!canManage || contractSaving) return;
+    if (!contractCode.trim()) return setToast({ message: 'Vui lòng nhập mã hợp đồng', type: 'error' });
+    if (contractPartyType === 'SPONSOR' && !contractSponsorName.trim()) return setToast({ message: 'Vui lòng nhập tên đơn vị tài trợ', type: 'error' });
+    if (contractPartyType === 'SPONSOR' && (contractTotalPrice === '' || Number(contractTotalPrice) <= 0)) return setToast({ message: 'Vui lòng nhập tổng tiền hợp đồng lớn hơn 0', type: 'error' });
+    if (contractPartyType === 'HOSPITAL' && !contractSignerHospitalId) return setToast({ message: 'Vui lòng chọn bệnh viện ký hợp đồng', type: 'error' });
+    if (contractAllocations.some((row) => !row.hospitalId || !row.hardwareId || !Number(row.quantity) || Number(row.quantity) <= 0)) {
+      return setToast({ message: 'Mỗi phân bổ cần bệnh viện, phần cứng và số lượng lớn hơn 0', type: 'error' });
+    }
+    if (contractPaymentStatus !== 'CHUA_THANH_TOAN' && (!contractPayments.length || contractPayments.some((payment) => !Number(payment.amount) || !payment.paymentDate))) {
+      return setToast({ message: 'Mỗi lần thanh toán cần số tiền và ngày thanh toán', type: 'error' });
+    }
+    if (contractPaymentTotal > contractAllocationValue || (contractPaymentStatus === 'THANH_TOAN_HET' && contractPaymentTotal !== contractAllocationValue)) {
+      return setToast({ message: 'Tổng thanh toán phải không vượt quá giá trị hợp đồng; trạng thái đã thanh toán hết cần khớp chính xác', type: 'error' });
+    }
+    if (contractPartyType === 'HOSPITAL' && (contractAllocations.length !== 1 || Number(contractAllocations[0].hospitalId) !== Number(contractSignerHospitalId))) {
+      return setToast({ message: 'Hợp đồng ký trực tiếp cần một phân bổ đúng bệnh viện ký', type: 'error' });
+    }
+    const payload: BusinessContractInput = {
+      contractCode: contractCode.trim(),
+      signingPartyType: contractPartyType,
+      signingPartyName: contractPartyType === 'SPONSOR' ? contractSponsorName.trim() : undefined,
+      signingHospitalId: contractPartyType === 'HOSPITAL' ? Number(contractSignerHospitalId) : null,
+      signingPartyContactName: contractSignerContact.trim() || undefined,
+      status: contractEditingId ? contractEditStatus : 'CARING',
+      totalQuantity: contractAllocationQuantity,
+      totalPrice: contractAllocationValue,
+      paymentStatus: contractPaymentStatus,
+      paidAmount: contractPaymentTotal,
+      paymentInstallments: contractPayments.map((payment, index) => ({ installmentNumber: index + 1, amount: Number(payment.amount) || 0, paymentDate: toLocalDateTimeStr(payment.paymentDate) || '' })),
+      startDate: toLocalDateTimeStr(contractStartDate),
+      completionDate: toLocalDateTimeStr(contractCompletionDate),
+      deadline: toLocalDateTimeStr(contractDeadline),
+      notes: contractNotes.trim() || undefined,
+      attachmentUrls: contractAttachmentUrls,
+      allocations: contractAllocations.map((row, index) => ({
+        businessProjectId: row.businessProjectId,
+        hospitalId: Number(row.hospitalId), hardwareId: Number(row.hardwareId), quantity: Number(row.quantity),
+        unitPrice: contractPartyType === 'SPONSOR' ? contractAverageUnitPrice : Number(row.unitPrice) || 0,
+        unitPriceNet: row.unitPriceNet === '' ? null : Number(row.unitPriceNet),
+        totalPrice: contractAllocationValues[index],
+        commission: Number(row.commission) || 0, picUserId: contractPicUserId === '' ? null : Number(contractPicUserId),
+        hasWarranty: row.hasWarranty,
+        warrantyStartDate: row.hasWarranty ? toLocalDateTimeStr(row.warrantyStartDate) : undefined,
+        warrantyEndDate: row.hasWarranty ? toLocalDateTimeStr(row.warrantyEndDate) : undefined,
+      })),
+    };
+    setContractSaving(true);
+    try {
+      if (contractEditingId) await updateBusinessContract(contractEditingId, payload, canManage);
+      else await createBusinessContract(payload, canManage);
+      setContractModalOpen(false);
+      setContractEditingId(null);
+      setContractPage(0);
+      await loadContractList(0);
+      setReloadKey((key) => key + 1);
+      setToast({ message: contractEditingId ? 'Đã cập nhật hợp đồng' : 'Đã tạo hợp đồng', type: 'success' });
+    } catch (error: any) {
+      const data = error?.response?.data;
+      setToast({ message: data?.message || data?.error || error?.message || (contractEditingId ? 'Không cập nhật được hợp đồng' : 'Không tạo được hợp đồng'), type: 'error' });
+    } finally {
+      setContractSaving(false);
+    }
+  }
+
+  async function showContractDetails(id: number) {
+    setContractLoading(true);
+    try { setContractDetails(await getBusinessContract(id)); }
+    catch (error) { console.error(error); setToast({ message: 'Không tải được chi tiết hợp đồng', type: 'error' }); }
+    finally { setContractLoading(false); }
+  }
+
+  async function changeContractStatus(id: number, status: string) {
+    try {
+      await updateBusinessContractStatus(id, status, canManage);
+      await loadContractList();
+      setReloadKey((key) => key + 1);
+      setToast({ message: 'Đã cập nhật trạng thái hợp đồng', type: 'success' });
+    } catch (error: any) {
+      setToast({ message: error?.response?.data?.message || 'Không cập nhật được trạng thái hợp đồng', type: 'error' });
+    }
+  }
+
   // Parse duration string để lấy số năm và số tháng
   function parseWarrantyDuration(duration: string): { years: number; months: number } {
     if (!duration || !duration.trim()) return { years: 0, months: 0 };
@@ -726,6 +1115,9 @@ const BusinessPage: React.FC = () => {
   }, []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useEffect(() => { loadList(currentPage, itemsPerPage); }, [currentPage, itemsPerPage, reloadKey, sortField, sortDirection]);
+  React.useEffect(() => {
+    if (contractView) void loadContractList(contractPage);
+  }, [contractView, contractPage, contractItemsPerPage, filterSearch, reloadKey]);
 
   function handleSort(field: BusinessSortField) {
     const nextDirection: SortDirection = sortField === field && sortDirection === 'asc' ? 'desc' : 'asc';
@@ -925,6 +1317,18 @@ const BusinessPage: React.FC = () => {
     if (!selectedHospitalId) errors.selectedHospitalId = 'Vui lòng chọn bệnh viện';
     // if (!selectedHardwareId) errors.selectedHardwareId = 'Vui lòng chọn phần cứng';
     if (businessPicOptionsState.length > 0 && !selectedPicId) errors.selectedPicId = 'Vui lòng chọn người phụ trách';
+    if (!editingId) {
+      if (!selectedHardwareId) errors.selectedHardwareId = 'Vui lòng chọn phần cứng';
+      if (!quantity || Number(quantity) <= 0) errors.quantity = 'Số lượng phải lớn hơn 0';
+      if (signingPartyType === 'SPONSOR' && !bankName.trim()) errors.bankName = 'Vui lòng nhập đơn vị tài trợ ký hợp đồng';
+      if (signingPartyType === 'SPONSOR' && (totalContractValue === '' || Number(totalContractValue) <= 0)) errors.totalContractValue = 'Vui lòng nhập tổng tiền hợp đồng lớn hơn 0';
+      if (additionalAllocations.some((allocation) => !allocation.hospitalId || !allocation.hardwareId || !Number(allocation.quantity) || Number(allocation.quantity) <= 0)) {
+        errors.additionalAllocations = 'Mỗi phân bổ bổ sung cần bệnh viện, phần cứng và số lượng lớn hơn 0';
+      }
+      if (additionalAllocations.some((allocation) => allocation.hasWarranty && (!allocation.warrantyStartDate || !allocation.warrantyEndDate))) {
+        errors.additionalAllocations = 'Phân bổ có bảo hành cần đủ ngày bắt đầu và ngày kết thúc';
+      }
+    }
     if (quantity !== '' && Number(quantity) < 0) {
       errors.quantity = 'Số lượng không được nhỏ hơn 0';
     }
@@ -935,8 +1339,9 @@ const BusinessPage: React.FC = () => {
         errors.paidAmount = 'Mỗi lần thanh toán phải có số tiền lớn hơn 0 và ngày thanh toán';
       }
       const installmentTotal = paymentInstallments.reduce((sum, item) => sum + (item.amount === '' ? 0 : Number(item.amount)), 0);
-      const total = computeTotal();
+      const total = !editingId ? newContractTotalValue : computeTotal();
       if (total > 0 && installmentTotal > total) errors.paidAmount = 'Tổng các lần thanh toán không được vượt quá thành tiền';
+      if (!editingId && total > 0 && installmentTotal >= total) errors.paidAmount = 'Thanh toán một phần phải nhỏ hơn tổng giá trị hợp đồng';
     } else if (paymentStatusValue === 'THANH_TOAN_HET' && (!paymentDateValue || !paymentDateValue.trim())) {
       errors.paymentDateValue = 'Vui lòng nhập ngày thanh toán';
     }
@@ -990,6 +1395,66 @@ const BusinessPage: React.FC = () => {
     setFieldErrors({});
 
     const finalUnitPrice = unitPrice !== '' ? Number(unitPrice) : (selectedHardwarePrice ?? null);
+    if (!editingId) {
+      const contractPayload: BusinessContractInput = {
+        contractCode: name.trim(),
+        signingPartyType,
+        signingPartyName: signingPartyType === 'SPONSOR' ? bankName.trim() : undefined,
+        signingPartyContactName: signingPartyType === 'SPONSOR' ? bankContactPerson.trim() || undefined : undefined,
+        signingHospitalId: signingPartyType === 'HOSPITAL' ? selectedHospitalId : null,
+        status: 'CARING',
+        totalQuantity: newContractTotalQuantity,
+        totalPrice: newContractTotalValue,
+        paymentStatus: paymentStatusValue,
+        paidAmount: paymentStatusValue === 'CHUA_THANH_TOAN' ? undefined : paymentStatusValue === 'THANH_TOAN_HET' ? newContractTotalValue : paymentInstallments.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0),
+        paymentDate: paymentStatusValue === 'THANH_TOAN_HET' ? toLocalDateTimeStr(paymentDateValue) : paymentStatusValue === 'DA_THANH_TOAN' ? toLocalDateTimeStr(paymentInstallments[paymentInstallments.length - 1]?.paymentDate) : undefined,
+        paymentInstallments: paymentStatusValue === 'DA_THANH_TOAN' ? paymentInstallments.map((payment, index) => ({ installmentNumber: index + 1, amount: Number(payment.amount), paymentDate: toLocalDateTimeStr(payment.paymentDate) || '' })) : [],
+        startDate: toLocalDateTimeStr(finalStart),
+        completionDate: toLocalDateTimeStr(completionDateValue),
+        notes: notes.trim() || undefined,
+        attachmentUrls: attachments.map((attachment) => attachment.url),
+        allocations: [
+          {
+            hospitalId: Number(selectedHospitalId), hardwareId: Number(selectedHardwareId), quantity: Number(quantity),
+            unitPrice: signingPartyType === 'SPONSOR' ? sponsorAverageUnitPrice : finalUnitPrice,
+            unitPriceNet: unitPriceNet === '' ? null : Number(unitPriceNet),
+            totalPrice: signingPartyType === 'SPONSOR' ? sponsorAllocationValues[0] : newContractTotalValue,
+            commission: commission === '' ? 0 : Number(commission), picUserId: selectedPicId,
+            hasWarranty: warrantyEnabled,
+            warrantyStartDate: warrantyEnabled ? toLocalDateTimeStr(warrantyStartDateValue) : undefined,
+            warrantyEndDate: warrantyEnabled ? toLocalDateTimeStr(warrantyEndDateValue) : undefined,
+          },
+          ...additionalAllocations.map((allocation, index) => ({
+            hospitalId: Number(allocation.hospitalId), hardwareId: Number(allocation.hardwareId), quantity: Number(allocation.quantity),
+            unitPrice: sponsorAverageUnitPrice, unitPriceNet: allocation.unitPriceNet === '' ? null : Number(allocation.unitPriceNet),
+            totalPrice: sponsorAllocationValues[index + 1] || 0,
+            commission: Number(allocation.commission) || 0, picUserId: selectedPicId,
+            hasWarranty: allocation.hasWarranty,
+            warrantyStartDate: allocation.hasWarranty ? toLocalDateTimeStr(allocation.warrantyStartDate) : undefined,
+            warrantyEndDate: allocation.hasWarranty ? toLocalDateTimeStr(allocation.warrantyEndDate) : undefined,
+          })),
+        ],
+      };
+      setSaving(true);
+      try {
+        await createBusinessContract(contractPayload, canManage);
+        setToast({ message: 'Tạo thành công', type: 'success' });
+        setShowModal(false);
+        setEditingId(null);
+        setSigningPartyType('HOSPITAL');
+        setAdditionalAllocations([]);
+        setAdditionalHospitalOptions({});
+        setReloadKey((key) => key + 1);
+        await loadList(0, itemsPerPage);
+        await loadContractList(0);
+      } catch (error: any) {
+        const response = error?.response?.data;
+        setToast({ message: response?.message || response?.error || error?.message || 'Lỗi khi tạo hợp đồng', type: 'error' });
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     const payload: Record<string, unknown> = {
       name,
       hospitalId: selectedHospitalId,
@@ -1204,6 +1669,10 @@ const BusinessPage: React.FC = () => {
     setQuantity(qtyVal);
     clearFieldError('quantity');
 
+    // For sponsor contracts, the contract total is entered once and is not
+    // recalculated from the first hospital's quantity or hardware price.
+    if (!editingId && signingPartyType === 'SPONSOR') return;
+
     const q = qtyVal !== '' ? Number(qtyVal) : 0;
     if (qtyVal === '' || q === 0) {
       setUnitPrice('');
@@ -1248,6 +1717,8 @@ const BusinessPage: React.FC = () => {
     setTotalContractValue(totalVal);
     setLastEdited('total');
     clearFieldError('totalContractValue');
+
+    if (!editingId && signingPartyType === 'SPONSOR') return;
 
     const q = quantity !== '' ? Number(quantity) : 0;
     if (totalVal !== '' && q > 0) {
@@ -2319,52 +2790,83 @@ const BusinessPage: React.FC = () => {
       </AnimatePresence>
       {/* Page background simplified to white (no animated gradient) */}
 
+      {contractModalOpen && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-3" onMouseDown={(event) => { if (event.target === event.currentTarget && !contractSaving) setContractModalOpen(false); }}>
+        <form onSubmit={submitNewContract} className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <div className="border-b px-6 py-4"><h2 className="text-xl font-semibold">{contractEditingId ? 'Sửa hợp đồng' : 'Tạo hợp đồng'}</h2><p className="mt-1 text-sm text-gray-500">{contractEditingId ? 'Cập nhật thông tin chung, phân bổ và lịch thanh toán của hợp đồng.' : 'Hợp đồng mới bắt đầu ở trạng thái Đang chăm sóc. Mỗi dòng dưới đây là một phân bổ cho bệnh viện.'}</p></div>
+          <div className="flex-1 space-y-5 overflow-y-auto p-6">
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="text-sm font-medium">Mã hợp đồng<input required value={contractCode} onChange={(event) => setContractCode(event.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2" /></label>
+              <label className="text-sm font-medium">Bên ký hợp đồng<select value={contractPartyType} onChange={(event) => { const type = event.target.value as 'HOSPITAL' | 'SPONSOR'; setContractPartyType(type); if (type === 'HOSPITAL') { const id = contractSignerHospitalId || contractAllocations[0]?.hospitalId || ''; const hospital = hospitalOptions.find((item) => item.id === id); setContractAllocations((rows) => [{ ...rows[0], hospitalId: id, hospitalSearch: hospital?.label || rows[0]?.hospitalSearch || '' }]); } }} className="mt-1 w-full rounded-lg border px-3 py-2"><option value="HOSPITAL">Bệnh viện</option><option value="SPONSOR">Đơn vị tài trợ</option></select></label>
+              {contractPartyType === 'HOSPITAL' ? <label className="text-sm font-medium">Bệnh viện ký<select required value={contractSignerHospitalId} onChange={(event) => { const id = event.target.value ? Number(event.target.value) : ''; const hospital = hospitalOptions.find((item) => item.id === id); setContractSignerHospitalId(id); setContractAllocations((rows) => [{ ...rows[0], hospitalId: id, hospitalSearch: hospital?.label || '' }]); }} className="mt-1 w-full rounded-lg border px-3 py-2"><option value="">— Chọn bệnh viện —</option>{hospitalOptions.map((hospital) => <option key={hospital.id} value={hospital.id}>{hospital.label}</option>)}</select></label> : <label className="text-sm font-medium">Tên đơn vị tài trợ<input required value={contractSponsorName} onChange={(event) => setContractSponsorName(event.target.value)} placeholder="Ví dụ: Techcombank" className="mt-1 w-full rounded-lg border px-3 py-2" /></label>}
+              {contractPartyType === 'SPONSOR' && <label className="text-sm font-medium">Người liên hệ bên ký<input value={contractSignerContact} onChange={(event) => setContractSignerContact(event.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2" /></label>}
+              <label className="text-sm font-medium">Người phụ trách<select value={contractPicUserId} onChange={(event) => setContractPicUserId(event.target.value ? Number(event.target.value) : '')} className="mt-1 w-full rounded-lg border px-3 py-2"><option value="">— Chưa chọn —</option>{businessPicOptionsState.map((pic) => <option key={pic.id} value={pic.id}>{pic.label}</option>)}</select></label>
+              <label className="text-sm font-medium">Ngày bắt đầu<input type="datetime-local" value={contractStartDate} onChange={(event) => setContractStartDate(event.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2" /></label>
+              <label className="text-sm font-medium">Ngày hoàn thành<input type="datetime-local" value={contractCompletionDate} onChange={(event) => setContractCompletionDate(event.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2" /></label>
+              <label className="text-sm font-medium">Hạn hợp đồng<input type="datetime-local" value={contractDeadline} onChange={(event) => setContractDeadline(event.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2" /></label>
+              {(contractPartyType === 'SPONSOR' || contractEditingId) && <label className="text-sm font-medium">Tổng tiền hợp đồng<input type="number" min="0" step="0.01" required={contractPartyType === 'SPONSOR'} value={contractTotalPrice} onChange={(event) => setContractTotalPrice(event.target.value ? Number(event.target.value) : '')} className="mt-1 w-full rounded-lg border px-3 py-2" /></label>}
+            </div>
+            <div>
+              <div className="mb-3 flex items-center justify-between"><h3 className="font-semibold">Phân bổ bệnh viện</h3>{contractPartyType === 'SPONSOR' && <button type="button" onClick={() => setContractAllocations((rows) => [...rows, emptyContractAllocation()])} className="rounded-lg border border-blue-200 px-3 py-1.5 text-sm text-blue-700">+ Thêm bệnh viện</button>}</div>
+              <div className="space-y-3">{contractAllocations.map((row, index) => <div key={index} className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <div className="mb-3 flex items-center justify-between"><span className="text-sm font-semibold">Bệnh viện #{index + 1}</span>{contractPartyType === 'SPONSOR' && contractAllocations.length > 1 && <button type="button" onClick={() => setContractAllocations((rows) => rows.filter((_, rowIndex) => rowIndex !== index))} className="text-sm text-red-600">Xóa dòng</button>}</div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="relative text-xs font-medium text-gray-600">Bệnh viện
+                    <input required disabled={contractPartyType === 'HOSPITAL'} autoComplete="off" value={contractPartyType === 'HOSPITAL' ? hospitalOptions.find((hospital) => hospital.id === row.hospitalId)?.label || row.hospitalSearch : row.hospitalSearch} onChange={(event) => { void searchContractAllocationHospitals(row.draftId, event.target.value); }} onFocus={() => {
+                      if (contractPartyType === 'HOSPITAL') return;
+                      setContractHospitalDropdownOpen((open) => ({ ...open, [row.draftId]: true }));
+                      if (row.hospitalSearch.trim().length >= 2) void searchHospitals(row.hospitalSearch.trim()).then((hospitals) => setContractHospitalOptions((options) => ({ ...options, [row.draftId]: hospitals || [] }))).catch(() => setContractHospitalOptions((options) => ({ ...options, [row.draftId]: [] })));
+                    }} placeholder="Tìm kiếm bệnh viện..." className="mt-1 w-full rounded border bg-white px-2.5 py-2 text-sm font-normal disabled:bg-gray-100" />
+                    {contractPartyType !== 'HOSPITAL' && contractHospitalDropdownOpen[row.draftId] && <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-52 overflow-y-auto rounded-md border bg-white py-1 shadow-lg">
+                      {row.hospitalSearch.trim().length < 2 ? <div className="px-3 py-2 text-xs text-gray-500">Nhập ít nhất 2 ký tự để tìm viện</div> : (contractHospitalOptions[row.draftId] || []).length > 0 ? (contractHospitalOptions[row.draftId] || []).map((hospital) => <button key={hospital.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => selectContractAllocationHospital(row.draftId, hospital)} className="block w-full px-3 py-2 text-left text-sm text-gray-800 hover:bg-blue-50">{hospital.label}</button>) : <div className="px-3 py-2 text-xs text-gray-500">Không tìm thấy bệnh viện</div>}
+                    </div>}
+                  </div>
+                  <label className="text-xs font-medium text-gray-600">Phần cứng<select required value={row.hardwareId} onChange={(event) => setContractAllocations((rows) => rows.map((item, rowIndex) => rowIndex === index ? { ...item, hardwareId: event.target.value ? Number(event.target.value) : '' } : item))} className="mt-1 w-full rounded border bg-white px-2.5 py-2 text-sm"><option value="">— Chọn phần cứng —</option>{hardwareOptions.map((hardware) => <option key={hardware.id} value={hardware.id}>{hardware.label}</option>)}</select></label>
+                  <label className="text-xs font-medium text-gray-600">Số lượng cây<input required type="number" min="1" value={row.quantity} onChange={(event) => setContractAllocations((rows) => rows.map((item, rowIndex) => rowIndex === index ? { ...item, quantity: event.target.value ? Number(event.target.value) : '' } : item))} className="mt-1 w-full rounded border px-2.5 py-2 text-sm" /></label>
+                  {contractPartyType === 'SPONSOR' ? <div className="text-xs font-medium text-gray-600">Đơn giá bình quân/kiosk<div className="mt-1 rounded border bg-white px-2.5 py-2 text-sm">{contractAverageUnitPrice.toLocaleString('vi-VN', { maximumFractionDigits: 2 })} ₫</div></div> : <label className="text-xs font-medium text-gray-600">Đơn giá<input type="number" min="0" value={row.unitPrice} onChange={(event) => setContractAllocations((rows) => rows.map((item, rowIndex) => rowIndex === index ? { ...item, unitPrice: event.target.value ? Number(event.target.value) : '' } : item))} className="mt-1 w-full rounded border px-2.5 py-2 text-sm" /></label>}
+                  <label className="text-xs font-medium text-gray-600">Đơn giá sau chiết khấu<input type="number" min="0" value={row.unitPriceNet} onChange={(event) => setContractAllocations((rows) => rows.map((item, rowIndex) => rowIndex === index ? { ...item, unitPriceNet: event.target.value ? Number(event.target.value) : '' } : item))} className="mt-1 w-full rounded border px-2.5 py-2 text-sm" /></label>
+                </div><div className="mt-2 flex flex-wrap items-center gap-3 text-xs"><label className="inline-flex items-center gap-2"><input type="checkbox" checked={row.hasWarranty} onChange={(event) => setContractAllocations((rows) => rows.map((item, rowIndex) => rowIndex === index ? { ...item, hasWarranty: event.target.checked } : item))} />Có bảo hành</label>{row.hasWarranty && <><input aria-label="Ngày bắt đầu bảo hành" type="datetime-local" value={row.warrantyStartDate} onChange={(event) => setContractAllocations((rows) => rows.map((item, rowIndex) => rowIndex === index ? { ...item, warrantyStartDate: event.target.value } : item))} className="rounded border px-2 py-1" /><input aria-label="Ngày kết thúc bảo hành" type="datetime-local" value={row.warrantyEndDate} onChange={(event) => setContractAllocations((rows) => rows.map((item, rowIndex) => rowIndex === index ? { ...item, warrantyEndDate: event.target.value } : item))} className="rounded border px-2 py-1" /></>}</div><div className="mt-2 text-right text-xs text-gray-500">Thành tiền dòng: {(contractAllocationValues[index] || 0).toLocaleString('vi-VN')} ₫</div>
+              </div>)}</div>
+              <div className="mt-3 flex flex-wrap justify-end gap-x-6 gap-y-1 rounded-lg bg-blue-50 px-4 py-3 text-sm"><span>Tổng số lượng phân bổ: <b>{contractAllocationQuantity}</b></span><span>Tổng giá trị hợp đồng: <b>{contractAllocationValue.toLocaleString('vi-VN')} ₫</b></span></div>
+            </div>
+            <div className="rounded-xl border p-4"><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">Thanh toán của hợp đồng</h3><select value={contractPaymentStatus} onChange={(event) => { const value = event.target.value as typeof contractPaymentStatus; setContractPaymentStatus(value); if (value === 'CHUA_THANH_TOAN') setContractPayments([]); else if (!contractPayments.length) setContractPayments([{ amount: '', amountDisplay: '', paymentDate: '' }]); }} className="rounded border px-3 py-2 text-sm"><option value="CHUA_THANH_TOAN">Chưa thanh toán</option><option value="DA_THANH_TOAN">Đã thanh toán một phần</option><option value="THANH_TOAN_HET">Đã thanh toán hết</option></select></div>
+              {contractPaymentStatus !== 'CHUA_THANH_TOAN' && <div className="space-y-2">{contractPayments.map((payment, index) => <div key={index} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"><input type="text" inputMode="numeric" placeholder={`Số tiền lần ${index + 1}`} value={payment.amountDisplay} onChange={(event) => { const amount = parseFormattedNumber(event.target.value); setContractPayments((rows) => rows.map((item, rowIndex) => rowIndex === index ? { ...item, amount, amountDisplay: amount === '' ? '' : formatNumber(amount) } : item)); }} className="rounded border px-3 py-2 text-sm" /><input type="datetime-local" value={payment.paymentDate} onChange={(event) => setContractPayments((rows) => rows.map((item, rowIndex) => rowIndex === index ? { ...item, paymentDate: event.target.value } : item))} className="rounded border px-3 py-2 text-sm" />{contractPayments.length > 1 && <button type="button" onClick={() => setContractPayments((rows) => rows.filter((_, rowIndex) => rowIndex !== index))} className="px-2 text-sm text-red-600">Xóa</button>}</div>)}{contractPayments.length < 7 && <button type="button" onClick={() => setContractPayments((rows) => [...rows, { amount: '', amountDisplay: '', paymentDate: '' }])} className="text-sm text-blue-700">+ Thêm lần thanh toán</button>}<p className="text-xs text-gray-500">Đã nhập: {contractPaymentTotal.toLocaleString('vi-VN')} ₫ / {contractAllocationValue.toLocaleString('vi-VN')} ₫</p></div>}
+            </div>
+            <label className="block text-sm font-medium">Ghi chú<textarea rows={2} value={contractNotes} onChange={(event) => setContractNotes(event.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2" /></label>
+          </div>
+          <div className="flex justify-end gap-3 border-t bg-gray-50 px-6 py-4"><button type="button" disabled={contractSaving} onClick={() => { setContractModalOpen(false); setContractEditingId(null); }} className="rounded-lg border px-4 py-2">Hủy</button><button type="submit" disabled={contractSaving} className="rounded-lg bg-blue-600 px-5 py-2 font-medium text-white disabled:opacity-50">{contractSaving ? 'Đang lưu...' : contractEditingId ? 'Lưu thay đổi' : 'Tạo hợp đồng'}</button></div>
+        </form>
+      </div>}
+
+      {(contractDetails || contractLoading) && <div className="fixed inset-0 z-[125] flex items-center justify-center bg-slate-950/55 p-3 sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget && !contractLoading) setContractDetails(null); }}>
+        <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+          {contractLoading ? <p className="py-16 text-center text-gray-500">Đang tải chi tiết...</p> : contractDetails && <>
+            <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-6 py-5 sm:px-8">
+              <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Chi tiết hợp đồng</p><h2 className="mt-1 truncate text-xl font-semibold text-gray-900 sm:text-2xl">{contractDetails.contractCode}</h2><p className="mt-2 text-sm text-gray-600">Bên ký: <span className="font-medium text-gray-800">{contractDetails.signingPartyType === 'HOSPITAL' ? contractDetails.signingHospital?.label || contractDetails.signingPartyName : contractDetails.signingPartyName || 'Chưa xác định'}</span><span className="mx-2 text-gray-300">·</span><span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">{{ CARING: 'Đang chăm sóc', CONTRACTED: 'Đã ký', CANCELLED: 'Đã hủy' }[contractDetails.status || ''] || contractDetails.status || '—'}</span></p></div>
+              <button type="button" onClick={() => setContractDetails(null)} className="shrink-0 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Đóng</button>
+            </div>
+            <div className="flex-1 space-y-7 overflow-y-auto px-6 py-6 sm:px-8 sm:py-7">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-gray-200 bg-gray-50/70 p-4"><div className="text-sm text-gray-500">Tổng số lượng</div><div className="mt-2 text-xl font-semibold text-gray-900">{Number(contractDetails.totalQuantity || 0).toLocaleString('vi-VN')} <span className="text-sm font-normal text-gray-500">kiosk</span></div></div>
+                <div className="rounded-xl border border-gray-200 bg-gray-50/70 p-4"><div className="text-sm text-gray-500">Tổng tiền hợp đồng</div><div className="mt-2 text-xl font-semibold text-gray-900">{Number(contractDetails.totalPrice || 0).toLocaleString('vi-VN')} ₫</div></div>
+                <div className="rounded-xl border border-gray-200 bg-gray-50/70 p-4"><div className="text-sm text-gray-500">Trạng thái thanh toán</div><div className="mt-2 text-base font-semibold text-gray-900">{{ CHUA_THANH_TOAN: 'Chưa thanh toán', DA_THANH_TOAN: 'Đã thanh toán một phần', THANH_TOAN_HET: 'Đã thanh toán hết' }[contractDetails.paymentStatus || ''] || contractDetails.paymentStatus || 'Chưa thanh toán'}</div></div>
+              </div>
+              {!!contractDetails.paymentInstallments?.length && <section className="rounded-xl border border-gray-200 p-5 sm:p-6"><div className="mb-4"><h3 className="font-semibold text-gray-900">Lịch sử thanh toán hợp đồng</h3><p className="mt-1 text-sm text-gray-500">Các lần thanh toán ghi nhận cho hợp đồng này.</p></div><ul className="space-y-2">{contractDetails.paymentInstallments.map((payment, index) => <li key={payment.id || index} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-gray-50 px-4 py-3 text-sm"><span className="text-gray-600">Lần {payment.installmentNumber || index + 1}<span className="mx-2 text-gray-300">·</span>{formatPaymentDateTime(payment.paymentDate)}</span><b className="whitespace-nowrap text-gray-900">{Number(payment.amount || 0).toLocaleString('vi-VN')} ₫</b></li>)}</ul></section>}
+              <section className="rounded-xl border border-gray-200 p-5 sm:p-6"><div className="mb-4"><h3 className="font-semibold text-gray-900">Các bệnh viện nhận phân bổ</h3><p className="mt-1 text-sm text-gray-500">{contractDetails.allocations?.length || 0} phân bổ trong hợp đồng.</p></div><div className="overflow-x-auto rounded-lg border border-gray-200"><table className="w-full min-w-[760px] divide-y divide-gray-200 text-sm"><thead className="bg-gray-50"><tr className="text-left text-xs font-semibold uppercase tracking-wide text-gray-500"><th className="w-[32%] px-4 py-3">Bệnh viện</th><th className="w-[18%] px-4 py-3">Phần cứng</th><th className="w-[12%] px-4 py-3 text-center">Số lượng</th><th className="w-[19%] px-4 py-3 text-right">Giá trị</th><th className="w-[19%] px-4 py-3">Người phụ trách</th></tr></thead><tbody className="divide-y divide-gray-100">{(contractDetails.allocations || []).map((allocation, index) => <tr key={allocation.businessProjectId || index} className="align-top hover:bg-gray-50/70"><td className="px-4 py-4 font-medium leading-6 text-gray-900">{allocation.hospital?.label || '—'}</td><td className="px-4 py-4 leading-6 text-gray-700">{allocation.hardware?.label || '—'}</td><td className="whitespace-nowrap px-4 py-4 text-center text-gray-700">{Number(allocation.quantity || 0).toLocaleString('vi-VN')}</td><td className="whitespace-nowrap px-4 py-4 text-right font-medium text-gray-900">{Number(allocation.totalPrice || 0).toLocaleString('vi-VN')} ₫</td><td className="px-4 py-4 leading-6 text-gray-700">{allocation.picUser?.label || '—'}</td></tr>)}</tbody></table></div></section>
+            </div>
+          </>}
+        </div>
+      </div>}
+
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-extrabold mb-0">Quản lý Kinh doanh</h1>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => { setContractView(false); setCurrentPage(0); }} className={`rounded-xl border px-4 py-2.5 text-sm font-medium ${!contractView ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}>Theo bệnh viện</button>
+          <button type="button" onClick={() => { setContractView(true); setContractPage(0); }} className={`rounded-xl border px-4 py-2.5 text-sm font-medium ${contractView ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}>Theo hợp đồng</button>
+        </div>
         {canManage && (
           <button
             type="button"
-            onClick={() => {
-              setEditingId(null);
-              setName('');
-              setOriginalStatus('CARING');
-              setSelectedHardwareId(null);
-              setSelectedHardwarePrice(null);
-              setUnitPrice('');
-              setUnitPriceNet('');
-              setSelectedHospitalId(null);
-              setSelectedHospitalPhone(null);
-              setSelectedPicId(null);
-              setPicDropdownOpen(false);
-              setPicSearchInput('');
-              setQuantity(0);
-              setTotalContractValue('');
-              setStatusValue('CARING');
-              setStartDateValue(nowDateTimeLocal());
-              setCompletionDateValue('');
-              setWarrantyEnabled(false);
-              setWarrantyStartDateValue('');
-              setWarrantyEndDateValue('');
-              setWarrantyDuration('');
-              setCommission('');
-              setCommissionDisplay('');
-              setFieldErrors({});
-              setPendingSubmit(null);
-              setStatusConfirmOpen(false);
-              setHospitalSearchInput('');
-              setHospitalDropdownOpen(false);
-              setBankName('');
-              setBankContactPerson('');
-              setPaymentStatusValue('CHUA_THANH_TOAN');
-              setPaidAmount('');
-              setPaidAmountDisplay('');
-              setPaymentDateValue('');
-              setPaymentInstallments([]);
-              setNotes('');
-              setAttachments([]);
-              setLastEdited(null);
-              setShowModal(true);
-            }}
+            onClick={openBusinessCreateModal}
             className="rounded-xl border px-6 py-3 text-sm font-medium text-white transition-all flex items-center gap-2 border-blue-500 bg-blue-500 hover:bg-blue-600 hover:shadow-md"
           >
             <PlusIcon style={{ width: 18, height: 18, fill: 'white' }} />
@@ -2558,6 +3060,58 @@ const BusinessPage: React.FC = () => {
           </div>
         )}
       </ComponentCard>
+      {contractView && (
+        <div className="mt-10.5 mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+          <div className="flex items-center justify-between border-b border-gray-200 px-6 py-5"><h3 className="text-base font-medium text-gray-800">Danh sách hợp đồng</h3><span className="text-sm text-gray-500">Mỗi dòng là một hợp đồng; bấm xem để mở các viện được phân bổ.</span></div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1100px] divide-y divide-gray-200">
+              <thead className="bg-gray-50"><tr className="text-left text-xs font-semibold uppercase tracking-wider text-gray-600">
+                <th className="whitespace-nowrap px-4 py-3 text-center">STT</th><th className="whitespace-nowrap px-4 py-3">Mã hợp đồng</th><th className="px-4 py-3">Bên ký</th><th className="whitespace-nowrap px-4 py-3">Số viện</th>
+                {([
+                  ['totalPrice', 'Tổng tiền'],
+                  ['totalDebt', 'Tổng công nợ'],
+                  ['totalQuantity', 'Tổng số lượng'],
+                ] as const).map(([field, label]) => <th key={field} aria-sort={contractSortField === field ? (contractSortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} className="whitespace-nowrap px-4 py-3">
+                  <button type="button" onClick={() => toggleContractSort(field)} className="inline-flex items-center gap-1.5 hover:text-blue-600" title={`Sắp xếp ${label}`}>
+                    {label}<span className={contractSortField === field ? 'text-blue-600' : 'text-gray-400'}>{contractSortField === field ? (contractSortDirection === 'asc' ? '↑' : '↓') : '↕'}</span>
+                  </button>
+                </th>)}
+                <th className="whitespace-nowrap px-4 py-3">Trạng thái</th><th className="whitespace-nowrap px-4 py-3 text-center">Thao tác</th>
+              </tr></thead>
+              <tbody className="divide-y divide-gray-200">
+                {contractTotalItems > 0 && <tr className="border-b border-gray-200 bg-blue-50/70 font-semibold text-gray-900">
+                  <td className="whitespace-nowrap px-4 py-3 text-center text-sm font-bold">Tổng</td><td className="px-4 py-3"></td><td className="px-4 py-3"></td><td className="px-4 py-3"></td>
+                  <td className="whitespace-nowrap px-4 py-3">{Number(contractSummary.totalPrice || 0).toLocaleString('vi-VN')} ₫</td>
+                  <td className={`whitespace-nowrap px-4 py-3 ${contractSummary.totalDebt > 0 ? 'text-red-600' : 'text-green-600'}`}>{Number(contractSummary.totalDebt || 0).toLocaleString('vi-VN')} ₫</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-center">{Number(contractSummary.totalQuantity || 0).toLocaleString('vi-VN')}</td><td className="px-4 py-3"></td><td className="px-4 py-3"></td>
+                </tr>}
+                {contractRows.length === 0 ? <tr><td colSpan={9} className="px-4 py-10 text-center text-gray-500">Chưa có hợp đồng</td></tr> : sortedContractRows.map((contract, index) => <tr key={contract.id} className="group transition hover:bg-gray-50">
+                  <td className="whitespace-nowrap px-4 py-3 text-center text-gray-500">{contractPage * contractItemsPerPage + index + 1}</td>
+                  <td className="px-4 py-3 font-semibold">{contract.contractCode || `HD${contract.id}`}</td>
+                  <td className="px-4 py-3">{contract.signingPartyType === 'HOSPITAL' ? contract.signingHospital?.label || contract.signingPartyName || 'Bệnh viện' : contract.signingPartyType === 'SPONSOR' ? contract.signingPartyName || 'Đơn vị tài trợ' : 'Chưa xác định'}</td>
+                  <td className="px-4 py-3">{contract.allocationCount ?? contract.allocations?.length ?? '—'}</td>
+                  <td className="whitespace-nowrap px-4 py-3 font-semibold">{Number(contract.totalPrice || 0).toLocaleString('vi-VN')} ₫</td>
+                  <td className={`whitespace-nowrap px-4 py-3 font-semibold ${getContractDebt(contract) > 0 ? 'text-red-600' : 'text-green-600'}`}>{getContractDebt(contract).toLocaleString('vi-VN')} ₫</td>
+                  <td className="px-4 py-3">{Number(contract.totalQuantity || 0).toLocaleString('vi-VN')}</td>
+                  <td className="px-4 py-3">{canManage ? <select value={contract.status || 'CARING'} onChange={(event) => void changeContractStatus(contract.id, event.target.value)} className="rounded border px-2 py-1"><option value="CARING">Đang chăm sóc</option><option value="CONTRACTED">Đã ký</option><option value="CANCELLED">Đã hủy</option></select> : contract.status || '—'}</td>
+                  <td className="px-4 py-3"><div className="flex flex-wrap gap-2"><button type="button" aria-label={`Xem hợp đồng ${contract.contractCode || contract.id}`} title="Xem hợp đồng và các phân bổ" onClick={() => void showContractDetails(contract.id)} className="inline-flex items-center gap-1.5 rounded border border-blue-200 px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-50"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12s3.5-6.75 9.75-6.75S21.75 12 21.75 12 18.25 18.75 12 18.75 2.25 12 2.25 12Z" /><circle cx="12" cy="12" r="2.75" /></svg><span>Xem</span></button>{canManage && <button type="button" disabled={contractLoading} onClick={() => void openContractEditModal(contract.id)} className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">{contractLoading ? 'Đang tải...' : 'Sửa'}</button>}</div></td>
+                </tr>)}
+              </tbody>
+            </table>
+          </div>
+          <div className="border-t border-gray-200 px-6 py-4">
+            <Pagination
+              currentPage={contractPage}
+              totalPages={contractPages}
+              totalItems={contractTotalItems}
+              itemsPerPage={contractItemsPerPage}
+              onPageChange={setContractPage}
+              onItemsPerPageChange={(size) => { setContractItemsPerPage(size); setContractPage(0); }}
+              showItemsPerPage={true}
+            />
+          </div>
+        </div>
+      )}
       {!pageAllowed ? (
         <div className="text-red-600">Bạn không có quyền truy cập trang này.</div>
       ) : (
@@ -2689,7 +3243,15 @@ const BusinessPage: React.FC = () => {
                         />
                         {fieldErrors.name && <div className="mt-1 text-sm text-red-600">{fieldErrors.name}</div>}
                       </div>
-                      <div>
+                      {!editingId && <div>
+                        <label className="block text-sm font-medium mb-1">Bên ký hợp đồng</label>
+                        <select value={signingPartyType} onChange={(event) => { const type = event.target.value as 'HOSPITAL' | 'SPONSOR'; setSigningPartyType(type); if (type === 'HOSPITAL') { setAdditionalAllocations([]); setAdditionalHospitalOptions({}); } }} className="w-full rounded border px-3 py-2">
+                          <option value="HOSPITAL">Bệnh viện ký trực tiếp</option>
+                          <option value="SPONSOR">Đơn vị tài trợ ký</option>
+                        </select>
+                        <p className="mt-1 text-xs text-gray-500">Hợp đồng mới bắt đầu ở trạng thái Đang chăm sóc.</p>
+                      </div>}
+                      {(Boolean(editingId) || signingPartyType === 'HOSPITAL') && <div>
                         <label className="block text-sm font-medium mb-1">Phần cứng</label>
                         <select
                           value={selectedHardwareId ?? ''}
@@ -2722,7 +3284,7 @@ const BusinessPage: React.FC = () => {
                           {hardwareOptions.map(h => <option key={h.id} value={h.id}>{h.label} {h.subLabel ? `— ${h.subLabel}` : ''}</option>)}
                         </select>
                         {fieldErrors.selectedHardwareId && <div className="mt-1 text-sm text-red-600">{fieldErrors.selectedHardwareId}</div>}
-                      </div>
+                      </div>}
                       <div>
                         <label className="block text-sm font-medium mb-1">Người phụ trách</label>
                         <div className="relative" ref={picDropdownRef}>
@@ -2789,7 +3351,7 @@ const BusinessPage: React.FC = () => {
                         </div>
                         {fieldErrors.selectedPicId && <div className="mt-1 text-sm text-red-600">{fieldErrors.selectedPicId}</div>}
                       </div>
-                      <div className="relative">
+                      {(Boolean(editingId) || signingPartyType === 'HOSPITAL') && <div className="relative">
                         <label className="block text-sm font-medium mb-1">Bệnh viện</label>
                         <div className="relative hospital-dropdown-container">
                           <input
@@ -2845,18 +3407,18 @@ const BusinessPage: React.FC = () => {
                         </div>
                         {fieldErrors.selectedHospitalId && <div className="mt-1 text-sm text-red-600">{fieldErrors.selectedHospitalId}</div>}
                         {selectedHospitalPhone && !fieldErrors.selectedHospitalId && <div className="mt-1 text-sm text-gray-700">Số điện thoại bệnh viện: <span className="font-medium">{selectedHospitalPhone}</span></div>}
-                      </div>
+                      </div>}
                       <div>
                         <label className="block text-sm font-medium mb-1">Trạng thái</label>
-                        <select value={statusValue} onChange={handleStatusChange} className="w-full rounded border px-3 py-2">
+                        <select value={statusValue} onChange={handleStatusChange} disabled={!editingId} className="w-full rounded border px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500">
                           <option value="CARING">Đang chăm sóc</option>
                           <option value="CONTRACTED">Ký hợp đồng</option>
                           <option value="CANCELLED">Hủy</option>
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium mb-1">Số lượng Kiosk</label>
-                        <input
+                        <label className="block text-sm font-medium mb-1">{!editingId && signingPartyType === 'SPONSOR' ? 'Tổng số lượng Kiosk của hợp đồng' : 'Số lượng Kiosk'}</label>
+                        {!editingId && signingPartyType === 'SPONSOR' ? <div className="rounded border bg-blue-50 px-3 py-2 font-semibold text-blue-800">{newContractTotalQuantity}</div> : <input
                           type="number"
                           min={0}
                           value={quantity === '' ? '' : quantity}
@@ -2865,7 +3427,7 @@ const BusinessPage: React.FC = () => {
                             handleQuantityChange(val);
                           }}
                           className={`w-full rounded border px-3 py-2 ${fieldErrors.quantity ? 'border-red-500' : ''}`}
-                        />
+                        />}
                         {fieldErrors.quantity && <div className="mt-1 text-sm text-red-600">{fieldErrors.quantity}</div>}
                       </div>
                       <div>
@@ -2912,17 +3474,19 @@ const BusinessPage: React.FC = () => {
                           <div className="p-2 text-gray-700">{commission !== '' ? formatNumber(commission) + ' ₫' : '—'}</div>
                         )}
                       </div>
-                      <div>
+                      {(signingPartyType === 'SPONSOR' || Boolean(editingId)) && <div>
                         <label className="block text-sm font-medium mb-1">Đơn vị tài trợ</label>
                         <input
                           type="text"
                           value={bankName}
                           onChange={(e) => setBankName(e.target.value)}
+                          required={!editingId && signingPartyType === 'SPONSOR'}
                           className="w-full rounded border px-3 py-2"
                           placeholder="Nhập đơn vị tài trợ"
                         />
-                      </div>
-                      <div>
+                        {fieldErrors.bankName && <div className="mt-1 text-sm text-red-600">{fieldErrors.bankName}</div>}
+                      </div>}
+                      {(signingPartyType === 'SPONSOR' || Boolean(editingId)) && <div>
                         <label className="block text-sm font-medium mb-1">Liên hệ đơn vị tài trợ</label>
                         <input
                           type="text"
@@ -2931,9 +3495,56 @@ const BusinessPage: React.FC = () => {
                           className="w-full rounded border px-3 py-2"
                           placeholder="Nhập người liên hệ"
                         />
-                      </div>
+                      </div>}
+                      {!editingId && signingPartyType === 'SPONSOR' && <div className="md:col-span-2 rounded-xl border border-blue-100 bg-blue-50/50 p-4">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                          <div><div className="font-semibold text-gray-800">Phân bổ cho bệnh viện</div><p className="mt-1 text-xs text-gray-500">Nhập bệnh viện, phần cứng và số lượng tại từng dòng. Giá trị mỗi viện được chia theo số kiosk từ tổng tiền hợp đồng.</p></div>
+                          <button type="button" onClick={() => setAdditionalAllocations((rows) => [...rows, emptyContractAllocation()])} className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-sm font-medium text-blue-700">+ Thêm bệnh viện</button>
+                        </div>
+                        <div className="mb-3 rounded-lg border bg-white p-3">
+                          <div className="mb-2 text-sm font-semibold">Phân bổ #1</div>
+                          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                          <div className="relative hospital-dropdown-container text-xs font-medium text-gray-600">Bệnh viện
+                            <input type="text" autoComplete="off" value={hospitalSearchInput} onChange={(event) => { setHospitalSearchInput(event.target.value); setHospitalDropdownOpen(true); clearFieldError('selectedHospitalId'); }} onFocus={() => setHospitalDropdownOpen(true)} placeholder="Tìm kiếm bệnh viện..." className={`mt-1 w-full rounded border px-2.5 py-2 text-sm font-normal text-gray-900 ${fieldErrors.selectedHospitalId ? 'border-red-500' : ''}`} />
+                            {hospitalDropdownOpen && <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-52 overflow-y-auto rounded-md border bg-white py-1 shadow-lg">
+                              {hospitalOptions.length === 0 ? <div className="px-3 py-2 text-xs text-gray-500">{hospitalSearchInput.trim().length < 2 ? 'Nhập ít nhất 2 ký tự để tìm bệnh viện' : 'Không tìm thấy bệnh viện'}</div> : hospitalOptions.map((hospital) => <button key={hospital.id} type="button" onClick={() => { setSelectedHospitalId(hospital.id); setHospitalSearchInput(hospital.label); setHospitalDropdownOpen(false); clearFieldError('selectedHospitalId'); api.get(`/api/v1/auth/hospitals/${hospital.id}`).then((response) => { const data = response.data || {}; setSelectedHospitalPhone(data.contactNumber || data.contact_number || data.contactPhone || data.contact_phone || null); }).catch(() => setSelectedHospitalPhone(null)); }} className={`block w-full px-3 py-2 text-left text-sm text-gray-800 hover:bg-blue-50 ${selectedHospitalId === hospital.id ? 'bg-blue-100' : ''}`}>{hospital.label}</button>)}
+                            </div>}
+                          </div>
+                          <label className="text-xs font-medium text-gray-600">Phần cứng<select value={selectedHardwareId ?? ''} onChange={(event) => { const value = event.target.value; setSelectedHardwareId(value ? Number(value) : null); clearFieldError('selectedHardwareId'); const hardware = hardwareOptions.find((item) => String(item.id) === value); if (hardware) { getHardwareById(hardware.id).then((response) => { const price = response?.price != null ? Number(response.price) : null; setSelectedHardwarePrice(price); if (price != null) { setUnitPrice(price); setLastEdited('price'); } }).catch(() => { setSelectedHardwarePrice(null); setUnitPrice(''); }); } else { setSelectedHardwarePrice(null); setUnitPrice(''); } }} className={`mt-1 w-full rounded border px-2.5 py-2 text-sm ${fieldErrors.selectedHardwareId ? 'border-red-500' : ''}`}><option value="">— Chọn phần cứng —</option>{hardwareOptions.map((hardware) => <option key={hardware.id} value={hardware.id}>{hardware.label}{hardware.subLabel ? ` — ${hardware.subLabel}` : ''}</option>)}</select></label>
+                          <label className="text-xs font-medium text-gray-600">Số lượng cây<input type="number" min="1" value={quantity} onChange={(event) => handleQuantityChange(event.target.value ? Number(event.target.value) : '')} className={`mt-1 w-full rounded border px-2.5 py-2 text-sm ${fieldErrors.quantity ? 'border-red-500' : ''}`} /></label>
+                          <div className="text-xs font-medium text-gray-600">Đơn giá bình quân/kiosk<div className="mt-1 rounded border bg-gray-50 px-2.5 py-2 text-sm text-gray-800">{sponsorAverageUnitPrice.toLocaleString('vi-VN', { maximumFractionDigits: 2 })} ₫</div></div>
+                          <label className="text-xs font-medium text-gray-600">Đơn giá NET<input type="number" min="0" value={unitPriceNet} onChange={(event) => setUnitPriceNet(event.target.value ? Number(event.target.value) : '')} className="mt-1 w-full rounded border px-2.5 py-2 text-sm" /></label>
+                          </div>
+                          {fieldErrors.selectedHospitalId && <div className="mt-1 text-sm text-red-600">{fieldErrors.selectedHospitalId}</div>}
+                          {(fieldErrors.selectedHardwareId || fieldErrors.quantity || fieldErrors.selectedPicId) && <div className="mt-1 text-sm text-red-600">{fieldErrors.selectedHardwareId || fieldErrors.quantity || fieldErrors.selectedPicId}</div>}
+                          {selectedHospitalPhone && <div className="mt-1 text-xs text-gray-600">Số điện thoại bệnh viện: {selectedHospitalPhone}</div>}
+                          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs"><label className="inline-flex items-center gap-2"><input type="checkbox" checked={warrantyEnabled} onChange={(event) => setWarrantyEnabled(event.target.checked)} />Có bảo hành</label>{warrantyEnabled && <><input aria-label="Ngày bắt đầu bảo hành" type="datetime-local" value={warrantyStartDateValue} onChange={(event) => setWarrantyStartDateValue(event.target.value)} className="rounded border px-2 py-1" /><input aria-label="Ngày kết thúc bảo hành" type="datetime-local" value={warrantyEndDateValue} onChange={(event) => setWarrantyEndDateValue(event.target.value)} className="rounded border px-2 py-1" /></>}</div>
+                          {(fieldErrors.warrantyStartDateValue || fieldErrors.warrantyEndDateValue) && <div className="mt-1 text-sm text-red-600">{fieldErrors.warrantyStartDateValue || fieldErrors.warrantyEndDateValue}</div>}
+                          <div className="mt-2 text-right text-xs text-gray-500">Thành tiền: {(sponsorAllocationValues[0] || 0).toLocaleString('vi-VN')} ₫</div>
+                        </div>
+                        {additionalAllocations.length === 0 ? <p className="text-sm text-gray-500">Chưa thêm bệnh viện phân bổ bổ sung.</p> : <div className="space-y-3">
+                          {additionalAllocations.map((allocation, index) => <div key={allocation.draftId} className="rounded-lg border bg-white p-3">
+                            <div className="mb-2 flex items-center justify-between"><span className="text-sm font-semibold">Phân bổ #{index + 2}</span><button type="button" onClick={() => { setAdditionalAllocations((rows) => rows.filter((row) => row.draftId !== allocation.draftId)); setAdditionalHospitalOptions((options) => { const next = { ...options }; delete next[allocation.draftId]; return next; }); }} className="text-sm text-red-600">Xóa</button></div>
+                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                              <div className="relative text-xs font-medium text-gray-600">Bệnh viện<input type="text" autoComplete="off" value={allocation.hospitalSearch} onChange={(event) => { void searchAdditionalAllocationHospitals(allocation.draftId, event.target.value); }} placeholder="Tìm kiếm bệnh viện..." className="mt-1 w-full rounded border px-2.5 py-2 text-sm font-normal text-gray-900" />
+                                {allocation.hospitalSearch.trim().length > 0 && !allocation.hospitalId && <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-52 overflow-y-auto rounded-md border bg-white py-1 shadow-lg">
+                                  {allocation.hospitalSearch.trim().length < 2 ? <div className="px-3 py-2 text-xs text-gray-500">Nhập ít nhất 2 ký tự để tìm bệnh viện</div> : (additionalHospitalOptions[allocation.draftId] || []).length > 0 ? (additionalHospitalOptions[allocation.draftId] || []).map((hospital) => <button key={hospital.id} type="button" onClick={() => selectAdditionalAllocationHospital(allocation.draftId, hospital)} className="block w-full px-3 py-2 text-left text-sm text-gray-800 hover:bg-blue-50">{hospital.label}</button>) : <div className="px-3 py-2 text-xs text-gray-500">Không tìm thấy bệnh viện</div>}
+                                </div>}
+                              </div>
+                              <label className="text-xs font-medium text-gray-600">Phần cứng<select value={allocation.hardwareId} onChange={(event) => setAdditionalAllocations((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, hardwareId: event.target.value ? Number(event.target.value) : '' } : row))} className="mt-1 w-full rounded border px-2.5 py-2 text-sm"><option value="">— Chọn phần cứng —</option>{hardwareOptions.map((hardware) => <option key={hardware.id} value={hardware.id}>{hardware.label}</option>)}</select></label>
+                              <label className="text-xs font-medium text-gray-600">Số lượng cây<input type="number" min="1" value={allocation.quantity} onChange={(event) => setAdditionalAllocations((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, quantity: event.target.value ? Number(event.target.value) : '' } : row))} className="mt-1 w-full rounded border px-2.5 py-2 text-sm" /></label>
+                              <div className="text-xs font-medium text-gray-600">Đơn giá bình quân/kiosk<div className="mt-1 rounded border bg-gray-50 px-2.5 py-2 text-sm text-gray-800">{sponsorAverageUnitPrice.toLocaleString('vi-VN', { maximumFractionDigits: 2 })} ₫</div></div>
+                              <label className="text-xs font-medium text-gray-600">Đơn giá NET<input type="number" min="0" value={allocation.unitPriceNet} onChange={(event) => setAdditionalAllocations((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, unitPriceNet: event.target.value ? Number(event.target.value) : '' } : row))} className="mt-1 w-full rounded border px-2.5 py-2 text-sm" /></label>
+                            </div>
+                            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs"><label className="inline-flex items-center gap-2"><input type="checkbox" checked={allocation.hasWarranty} onChange={(event) => setAdditionalAllocations((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, hasWarranty: event.target.checked } : row))} />Có bảo hành</label>{allocation.hasWarranty && <><input aria-label="Ngày bắt đầu bảo hành" type="datetime-local" value={allocation.warrantyStartDate} onChange={(event) => setAdditionalAllocations((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, warrantyStartDate: event.target.value } : row))} className="rounded border px-2 py-1" /><input aria-label="Ngày kết thúc bảo hành" type="datetime-local" value={allocation.warrantyEndDate} onChange={(event) => setAdditionalAllocations((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, warrantyEndDate: event.target.value } : row))} className="rounded border px-2 py-1" /></>}</div>
+                            <div className="mt-2 text-right text-xs text-gray-500">Thành tiền: {(sponsorAllocationValues[index + 1] || 0).toLocaleString('vi-VN')} ₫</div>
+                          </div>)}
+                          {fieldErrors.additionalAllocations && <div className="text-sm text-red-600">{fieldErrors.additionalAllocations}</div>}
+                        </div>}
+                        <div className="mt-3 flex flex-wrap justify-end gap-5 border-t pt-3 text-sm"><span>Tổng số lượng: <b>{newContractTotalQuantity}</b></span><span>Tổng giá trị: <b>{newContractTotalValue.toLocaleString('vi-VN')} ₫</b></span></div>
+                      </div>}
 
-                      <div>
+                      {(Boolean(editingId) || signingPartyType === 'HOSPITAL') && <div>
                         <label className="block text-sm font-medium mb-1">Đơn giá 1 sản phẩm</label>
                         <div className="flex items-center gap-2">
                           <input
@@ -2952,7 +3563,7 @@ const BusinessPage: React.FC = () => {
                           />
                         </div>
                         {fieldErrors.unitPrice && <div className="mt-1 text-sm text-red-600">{fieldErrors.unitPrice}</div>}
-                      </div>
+                      </div>}
                       <div>
                         <label className="block text-sm font-semibold mb-1 text-blue-600">Tổng tiền hợp đồng</label>
                         <div className="flex items-center gap-2">
@@ -2973,7 +3584,7 @@ const BusinessPage: React.FC = () => {
                         </div>
                         {fieldErrors.totalContractValue && <div className="mt-1 text-sm text-red-600">{fieldErrors.totalContractValue}</div>}
                       </div>
-                      <div>
+                      {(Boolean(editingId) || signingPartyType === 'HOSPITAL') && <div>
                         <label className="block text-sm font-medium mb-1">Đơn giá (NET)</label>
                         <div className="flex items-center gap-2">
                           <input
@@ -2994,7 +3605,7 @@ const BusinessPage: React.FC = () => {
                           />
                         </div>
                         {fieldErrors.unitPriceNet && <div className="mt-1 text-sm text-red-600">{fieldErrors.unitPriceNet}</div>}
-                      </div>
+                      </div>}
 
                       {/* Trạng thái thanh toán */}
                       <div>
@@ -3339,7 +3950,7 @@ const BusinessPage: React.FC = () => {
           )}
 
           <div>
-            <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
+            <div style={{ display: contractView ? 'none' : undefined }} className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
               <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-800">
                 <h3 className="text-base font-medium text-gray-800 dark:text-white/90">
                   Danh sách Kinh doanh
