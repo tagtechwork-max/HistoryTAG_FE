@@ -1402,7 +1402,7 @@ const BusinessPage: React.FC = () => {
         signingPartyName: signingPartyType === 'SPONSOR' ? bankName.trim() : undefined,
         signingPartyContactName: signingPartyType === 'SPONSOR' ? bankContactPerson.trim() || undefined : undefined,
         signingHospitalId: signingPartyType === 'HOSPITAL' ? selectedHospitalId : null,
-        status: 'CARING',
+        status: statusValue,
         totalQuantity: newContractTotalQuantity,
         totalPrice: newContractTotalValue,
         paymentStatus: paymentStatusValue,
@@ -3410,7 +3410,7 @@ const BusinessPage: React.FC = () => {
                       </div>}
                       <div>
                         <label className="block text-sm font-medium mb-1">Trạng thái</label>
-                        <select value={statusValue} onChange={handleStatusChange} disabled={!editingId} className="w-full rounded border px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500">
+                        <select value={statusValue} onChange={handleStatusChange} className="w-full rounded border px-3 py-2">
                           <option value="CARING">Đang chăm sóc</option>
                           <option value="CONTRACTED">Ký hợp đồng</option>
                           <option value="CANCELLED">Hủy</option>
