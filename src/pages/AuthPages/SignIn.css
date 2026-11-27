@@ -15,65 +15,71 @@ body:has(.sign-in-page) {
   overflow: hidden;
   padding: 2rem 1rem;
   color-scheme: light;
-  background:
-    radial-gradient(ellipse at 77% 2%, #f5f9fe, transparent 40%),
-    radial-gradient(ellipse at 37% 57%, #f2f6fc, transparent 66%),
-    linear-gradient(145deg, #cce1f9, #e6f0fc 56%, #c6e0fb);
+  background: #88bdf1 url("/noel.png") center / cover no-repeat;
 }
 
-.sign-in-waves,
-.sign-in-contours {
-  position: absolute;
-  z-index: -1;
-  pointer-events: none;
-}
-
-.sign-in-waves {
-  inset: auto 0 0;
-  width: 100%;
-  height: clamp(10rem, 62vh, 38rem);
-}
-
-.sign-in-contours {
-  top: 0;
-  left: 0;
-  width: min(23vw, 25rem);
-  height: min(16vw, 14rem);
-  background: repeating-radial-gradient(ellipse at 0 0, transparent 0 12px, #fff9 13px 14px, transparent 15px 19px);
-  mask-image: radial-gradient(ellipse at 0 -85%, #000 51%, transparent 74%);
-}
-
-@media (max-width: 640px) {
-  .sign-in-waves {
-    height: 35vh;
-  }
+.sign-in-frame {
+  position: relative;
+  width: min(100%, 36rem);
 }
 
 .sign-in-card {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  width: min(100%, 32rem);
-  padding: clamp(1.25rem, 5vw, 2rem);
+  padding: clamp(1.25rem, 6vw, 3.25rem);
   border: 2px solid #fff;
-  border-radius: clamp(1.25rem, 4vw, 1.75rem);
-  background: radial-gradient(ellipse at 35% 24%, #fafcff, #eaf2fdf5 74%);
-  box-shadow: 0 24px 44px -13px #3179cd91;
+  border-radius: clamp(1.25rem, 4vw, 2rem);
+  background: linear-gradient(155deg, #f8fbfffa, #ecf4fffa);
+  box-shadow: 0 24px 44px -13px #14589f85;
 }
 
-.sign-in-card::before {
+.sign-in-frame::before {
   position: absolute;
-  z-index: -1;
-  top: 0;
-  right: 0;
-  width: 28%;
-  height: 25%;
-  background:
-    radial-gradient(ellipse at 0 100%, transparent 70%, #168af6 71%),
-    linear-gradient(150deg, #bddcfc, #73bff4);
-  clip-path: polygon(0 0, 100% 0, 100% 100%);
+  z-index: 1;
+  top: -0.5rem;
+  left: 0.75rem;
+  width: 40%;
+  height: 1.3rem;
+  border-radius: 55% 40% 60% 35% / 72% 48% 60% 40%;
+  background: radial-gradient(ellipse at 42% 0%, white 42%, #dfedfb 80%);
+  filter: drop-shadow(0 4px 3px #437bbd35);
   content: "";
   pointer-events: none;
+}
+
+.sign-in-santa-hat {
+  position: absolute;
+  z-index: 2;
+  top: -1.55rem;
+  right: 0.1rem;
+  width: clamp(4.2rem, 15vw, 7.65rem);
+  aspect-ratio: 1.65;
+  border-radius: 62% 56% 18% 12% / 95% 78% 25% 10%;
+  background: linear-gradient(168deg, #ff5267, #c30825 56%, #7f061c);
+  box-shadow: inset 0 3px 8px #fff4, 0 5px 10px #173e6e30;
+  transform: rotate(25deg);
+  pointer-events: none;
+}
+
+.sign-in-santa-hat::before,
+.sign-in-santa-hat::after {
+  position: absolute;
+  background: radial-gradient(circle at 40% 25%, white 29%, #e4eef9 78%);
+  content: "";
+}
+
+.sign-in-santa-hat::before {
+  bottom: -0.18rem;
+  left: -4%;
+  width: 93%;
+  height: 31%;
+  border-radius: 1rem;
+}
+
+.sign-in-santa-hat::after {
+  right: -8%;
+  bottom: -12%;
+  width: 25%;
+  aspect-ratio: 1;
+  border-radius: 50%;
 }
 
 .sign-in-field {
@@ -124,7 +130,7 @@ body:has(.sign-in-page) {
   gap: 0.75rem;
   margin-top: clamp(1.5rem, 4vw, 2rem);
   border-radius: 0.75rem;
-  background: linear-gradient(105deg, #233FF7, #096dc9 55%, #008795);
+  background: linear-gradient(105deg, #1729ef, #066fc7 55%, #008995);
   color: white;
   font-size: 1.125rem;
   font-weight: 700;
