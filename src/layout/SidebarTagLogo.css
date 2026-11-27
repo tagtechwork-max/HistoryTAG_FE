@@ -1,10 +1,10 @@
-.superadmin-sidebar-noel-logo {
+.sidebar-noel-logo {
   position: relative;
   display: block;
 }
 
-.superadmin-sidebar-noel-logo::before,
-.superadmin-sidebar-noel-logo::after {
+.sidebar-noel-logo::before,
+.sidebar-noel-logo::after {
   position: absolute;
   background-image: url("/noel-sign-in-ornaments.png");
   background-repeat: no-repeat;
@@ -12,7 +12,7 @@
   content: "";
 }
 
-.superadmin-sidebar-noel-logo::before {
+.sidebar-noel-logo::before {
   top: 10px;
   left: 4px;
   width: 45px;
@@ -22,7 +22,7 @@
   filter: drop-shadow(0 1px 1px #4177ac45);
 }
 
-.superadmin-sidebar-noel-logo::after {
+.sidebar-noel-logo::after {
   top: 2px;
   right: 0;
   width: 44px;
