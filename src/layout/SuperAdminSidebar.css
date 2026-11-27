@@ -1,0 +1,33 @@
+.superadmin-sidebar-noel-logo {
+  position: relative;
+  display: block;
+}
+
+.superadmin-sidebar-noel-logo::before,
+.superadmin-sidebar-noel-logo::after {
+  position: absolute;
+  background-image: url("/noel-sign-in-ornaments.png");
+  background-repeat: no-repeat;
+  pointer-events: none;
+  content: "";
+}
+
+.superadmin-sidebar-noel-logo::before {
+  top: 10px;
+  left: 4px;
+  width: 45px;
+  aspect-ratio: 2.55;
+  background-position: left 37%;
+  background-size: 200% auto;
+  filter: drop-shadow(0 1px 1px #4177ac45);
+}
+
+.superadmin-sidebar-noel-logo::after {
+  top: 2px;
+  right: 0;
+  width: 44px;
+  aspect-ratio: 1.18;
+  background-position: right center;
+  background-size: 252% auto;
+  filter: drop-shadow(0 2px 2px #2b5d9540);
+}

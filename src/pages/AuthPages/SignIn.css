@@ -13,67 +13,136 @@ body:has(.sign-in-page) {
   min-height: 100dvh;
   place-items: center;
   overflow: hidden;
-  padding: 2rem 1rem;
+  padding: clamp(3rem, 7vw, 4rem) 1rem 2rem;
   color-scheme: light;
-  background:
-    radial-gradient(ellipse at 77% 2%, #f5f9fe, transparent 40%),
-    radial-gradient(ellipse at 37% 57%, #f2f6fc, transparent 66%),
-    linear-gradient(145deg, #cce1f9, #e6f0fc 56%, #c6e0fb);
+  background: #88bdf1 url("/noel.png") center / cover no-repeat;
 }
 
-.sign-in-waves,
-.sign-in-contours {
+.sign-in-christmas-effects {
   position: absolute;
-  z-index: -1;
+  inset: 0;
+  container-type: size;
   pointer-events: none;
 }
 
-.sign-in-waves {
-  inset: auto 0 0;
-  width: 100%;
-  height: clamp(10rem, 62vh, 38rem);
+.sign-in-christmas-image-map {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  /* Match the centered cover sizing of the 1672 × 941 background image. */
+  width: max(100cqw, calc(100cqh * 1672 / 941));
+  aspect-ratio: 1672 / 941;
+  transform: translate(-50%, -50%);
 }
 
-.sign-in-contours {
-  top: 0;
-  left: 0;
-  width: min(23vw, 25rem);
-  height: min(16vw, 14rem);
-  background: repeating-radial-gradient(ellipse at 0 0, transparent 0 12px, #fff9 13px 14px, transparent 15px 19px);
-  mask-image: radial-gradient(ellipse at 0 -85%, #000 51%, transparent 74%);
+.sign-in-gift {
+  position: absolute;
+  inset: 0;
+  background: url("/noel.png") center / 100% 100% no-repeat;
+  animation: sign-in-gift-wiggle 1.2s linear infinite;
 }
 
-@media (max-width: 640px) {
-  .sign-in-waves {
-    height: 35vh;
+/* Trace each gift and its bow in the coordinates of noel.png. */
+.sign-in-gift-snowman-large {
+  clip-path: polygon(18.24% 82.89%, 19.26% 82.57%, 19.56% 81.30%, 20.51% 80.13%, 21.17% 81.51%, 21.65% 80.55%, 22.31% 80.23%, 23.15% 81.83%, 22.97% 83.21%, 24.70% 84.27%, 24.52% 90.22%, 23.21% 92.03%, 18.72% 91.07%, 18.84% 86.18%, 18.24% 85.65%);
+  transform-origin: 21.83% 91.29%;
+  animation-delay: -0.00s;
+}
+
+.sign-in-gift-snowman-small {
+  clip-path: polygon(24.10% 87.46%, 25.06% 87.25%, 24.88% 86.18%, 25.42% 85.12%, 26.26% 85.97%, 26.91% 85.33%, 27.39% 86.50%, 27.09% 87.35%, 28.17% 87.99%, 27.99% 91.29%, 26.97% 92.14%, 24.10% 91.29%);
+  transform-origin: 26.26% 91.60%;
+  animation-delay: -0.27s;
+}
+
+.sign-in-gift-tree-left {
+  clip-path: polygon(76.38% 81.30%, 77.57% 80.87%, 77.45% 79.81%, 78.11% 78.85%, 78.77% 78.64%, 79.67% 79.91%, 80.38% 78.75%, 80.98% 78.53%, 81.40% 79.70%, 81.22% 80.98%, 82.36% 81.72%, 82.12% 86.08%, 79.78% 87.57%, 76.50% 86.50%);
+  transform-origin: 79.55% 86.82%;
+  animation-delay: -0.54s;
+}
+
+.sign-in-gift-tree-center {
+  clip-path: polygon(82.12% 82.04%, 83.43% 81.30%, 83.25% 80.13%, 83.91% 78.75%, 84.75% 78.53%, 85.41% 79.81%, 86.24% 78.75%, 87.02% 78.85%, 87.56% 80.02%, 87.32% 81.40%, 88.88% 82.25%, 88.64% 87.57%, 86.18% 88.63%, 82.18% 87.57%);
+  transform-origin: 85.53% 87.99%;
+  animation-delay: -0.81s;
+}
+
+.sign-in-gift-tree-right {
+  clip-path: polygon(88.64% 82.15%, 89.89% 81.51%, 90.01% 80.13%, 90.73% 79.06%, 91.39% 79.28%, 92.34% 80.23%, 93.06% 78.75%, 93.96% 78.96%, 94.56% 80.02%, 94.56% 81.19%, 96.59% 82.15%, 96.41% 87.14%, 93.60% 89.05%, 88.82% 88.10%);
+  transform-origin: 92.70% 88.31%;
+  animation-delay: -1.08s;
+}
+
+@keyframes sign-in-gift-wiggle {
+  0%, 38%, 100% { transform: rotate(0); }
+  6%, 18% { transform: rotate(-1.35deg); }
+  12%, 24% { transform: rotate(1.35deg); }
+  30% { transform: rotate(-0.65deg); }
+}
+
+.sign-in-christmas-light {
+  position: absolute;
+  width: 2.8%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fffde3 0%, #ffdd83c4 15%, #ffb73552 40%, transparent 72%);
+  transform: translate(-50%, -50%);
+  animation: sign-in-christmas-twinkle 1.5s ease-in-out infinite;
+}
+
+@keyframes sign-in-christmas-twinkle {
+  0%, 100% { opacity: 0; }
+  48% { opacity: 0.95; }
+  68% { opacity: 0.25; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sign-in-christmas-effects {
+    display: none;
   }
 }
 
-.sign-in-card {
+.sign-in-frame {
   position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  width: min(100%, 32rem);
-  padding: clamp(1.25rem, 5vw, 2rem);
-  border: 2px solid #fff;
-  border-radius: clamp(1.25rem, 4vw, 1.75rem);
-  background: radial-gradient(ellipse at 35% 24%, #fafcff, #eaf2fdf5 74%);
-  box-shadow: 0 24px 44px -13px #3179cd91;
+  width: min(100%, 36rem);
 }
 
-.sign-in-card::before {
+.sign-in-card {
+  padding: clamp(1.25rem, 6vw, 3.25rem);
+  border: 2px solid #fff;
+  border-radius: clamp(1.25rem, 4vw, 2rem);
+  background: linear-gradient(155deg, #f8fbfffa, #ecf4fffa);
+  box-shadow: 0 24px 44px -13px #14589f85;
+}
+
+.sign-in-frame::before,
+.sign-in-santa-hat {
   position: absolute;
-  z-index: -1;
-  top: 0;
-  right: 0;
-  width: 28%;
-  height: 25%;
-  background:
-    radial-gradient(ellipse at 0 100%, transparent 70%, #168af6 71%),
-    linear-gradient(150deg, #bddcfc, #73bff4);
-  clip-path: polygon(0 0, 100% 0, 100% 100%);
-  content: "";
+  z-index: 1;
+  background-image: url("/noel-sign-in-ornaments.png");
+  background-repeat: no-repeat;
   pointer-events: none;
+}
+
+.sign-in-frame::before {
+  top: -0.65rem;
+  left: -0.75rem;
+  width: 35%;
+  aspect-ratio: 2.55;
+  background-position: left 37%;
+  background-size: 200% auto;
+  filter: drop-shadow(0 3px 3px #4177ac3d);
+  content: "";
+}
+
+.sign-in-santa-hat {
+  top: clamp(-3.25rem, -7vw, -1.875rem);
+  right: -0.75rem;
+  width: 34%;
+  aspect-ratio: 1.18;
+  background-position: right center;
+  background-size: 252% auto;
+  filter: drop-shadow(0 6px 8px #2b5d9540);
 }
 
 .sign-in-field {
@@ -124,7 +193,7 @@ body:has(.sign-in-page) {
   gap: 0.75rem;
   margin-top: clamp(1.5rem, 4vw, 2rem);
   border-radius: 0.75rem;
-  background: linear-gradient(105deg, #233FF7, #096dc9 55%, #008795);
+  background: linear-gradient(105deg, #1729ef, #066fc7 55%, #008995);
   color: white;
   font-size: 1.125rem;
   font-weight: 700;

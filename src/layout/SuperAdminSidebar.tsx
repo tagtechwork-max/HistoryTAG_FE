@@ -1,3 +1,4 @@
+import "./SuperAdminSidebar.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
 import {
@@ -326,27 +327,19 @@ const SuperAdminSidebar: React.FC = () => {
       <div className="py-8 flex justify-center">
         <Link to="/superadmin/home" className="block">
           {isExpanded || isHovered || isMobileOpen ? (
-            <>
+            <span className="superadmin-sidebar-noel-logo">
               <img
-                className="dark:hidden mx-auto"
                 src="/images/logo/logo.png"
-                alt="Logo"
+                alt="TAG Technology Group"
                 width={150}
                 height={40}
               />
-              <img
-                className="hidden dark:block mx-auto"
-                src="/images/logo/logo.png"
-                alt="Logo"
-                width={150}
-                height={40}
-              />
-            </>
+            </span>
           ) : (
             <img
               className="mx-auto"
               src="/images/logo/logo.png"
-              alt="Logo"
+              alt="TAG Technology Group"
               width={32}
               height={32}
             />
