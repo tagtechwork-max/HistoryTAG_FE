@@ -1,6 +1,6 @@
-import "./SuperAdminSidebar.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
+import SidebarTagLogo from "./SidebarTagLogo";
 import {
   ChevronDownIcon,
   GridIcon,
@@ -326,24 +326,7 @@ const SuperAdminSidebar: React.FC = () => {
     >
       <div className="py-8 flex justify-center">
         <Link to="/superadmin/home" className="block">
-          {isExpanded || isHovered || isMobileOpen ? (
-            <span className="superadmin-sidebar-noel-logo">
-              <img
-                src="/images/logo/logo.png"
-                alt="TAG Technology Group"
-                width={150}
-                height={40}
-              />
-            </span>
-          ) : (
-            <img
-              className="mx-auto"
-              src="/images/logo/logo.png"
-              alt="TAG Technology Group"
-              width={32}
-              height={32}
-            />
-          )}
+          <SidebarTagLogo expanded={isExpanded || isHovered || isMobileOpen} />
         </Link>
       </div>
 

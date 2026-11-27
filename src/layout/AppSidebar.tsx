@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
+import SidebarTagLogo from "./SidebarTagLogo";
 
 // Giả sử các icon này được import từ một thư viện icon
 import {
@@ -514,32 +515,7 @@ const AppSidebar: React.FC = () => {
     >
       <div className="py-8 flex justify-center">
         <Link to={resolveNavPathForRole("/home", isSuperAdmin)} className="block">
-          {isExpanded || isHovered || isMobileOpen ? (
-            <>
-              <img
-                className="dark:hidden mx-auto"
-                src="/images/logo/logo.png"
-                alt="Logo"
-                width={150}
-                height={40}
-              />
-              <img
-                className="hidden dark:block mx-auto"
-                src="/images/logo/logo.png"
-                alt="Logo"
-                width={150}
-                height={40}
-              />
-            </>
-          ) : (
-            <img
-              className="mx-auto"
-              src="/images/logo/logo.png"
-              alt="Logo"
-              width={32}
-              height={32}
-            />
-          )}
+          <SidebarTagLogo expanded={isExpanded || isHovered || isMobileOpen} />
         </Link>
       </div>
 
